@@ -80,7 +80,7 @@ export default function Accounts() {
 
   const handleEdit = (account: Account) => {
     setEditingAccount(account);
-    setFormData({ name: account.name, type: account.type });
+    setFormData({ name: account.name, type: account.type as typeof formData.type });
     setDialogOpen(true);
   };
 
@@ -142,7 +142,7 @@ export default function Accounts() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="type">Account Type</Label>
-                  <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
+                  <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value as typeof formData.type })}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
