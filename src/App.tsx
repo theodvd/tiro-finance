@@ -10,6 +10,9 @@ import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Accounts from "./pages/Accounts";
 import Securities from "./pages/Securities";
+import Holdings from "./pages/Holdings";
+import MarketData from "./pages/MarketData";
+import History from "./pages/History";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -49,6 +52,36 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <Securities />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/holdings"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Holdings />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/market-data"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <MarketData />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/history"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <History />
                   </Layout>
                 </ProtectedRoute>
               }

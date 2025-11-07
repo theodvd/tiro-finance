@@ -10,8 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-
-const ACCOUNT_TYPES = ["CTO", "PEA", "AV", "CRYPTO", "LIVRETS", "OTHER"];
+import { ACCOUNT_TYPES, AccountType } from "@/constants";
 
 interface Account {
   id: string;
@@ -80,7 +79,7 @@ export default function Accounts() {
 
   const handleEdit = (account: Account) => {
     setEditingAccount(account);
-    setFormData({ name: account.name, type: account.type as typeof formData.type });
+    setFormData({ name: account.name, type: account.type as AccountType });
     setDialogOpen(true);
   };
 
