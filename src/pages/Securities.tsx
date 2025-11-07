@@ -10,9 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-
-const ASSET_CLASSES = ["EQUITY", "ETF", "CRYPTO", "BOND", "REIT", "CASH"];
-const PRICING_SOURCES = ["YFINANCE", "COINGECKO", "MANUAL"];
+import { ASSET_CLASSES, PRICING_SOURCES, AssetClass, PricingSource } from "@/constants";
 
 interface Security {
   id: string;
@@ -99,9 +97,9 @@ export default function Securities() {
     setFormData({
       name: security.name,
       symbol: security.symbol,
-      asset_class: security.asset_class as typeof formData.asset_class,
+      asset_class: security.asset_class as AssetClass,
       currency_quote: security.currency_quote,
-      pricing_source: security.pricing_source as typeof formData.pricing_source,
+      pricing_source: security.pricing_source as PricingSource,
     });
     setDialogOpen(true);
   };
