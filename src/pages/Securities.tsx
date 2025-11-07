@@ -99,9 +99,9 @@ export default function Securities() {
     setFormData({
       name: security.name,
       symbol: security.symbol,
-      asset_class: security.asset_class,
+      asset_class: security.asset_class as typeof formData.asset_class,
       currency_quote: security.currency_quote,
-      pricing_source: security.pricing_source,
+      pricing_source: security.pricing_source as typeof formData.pricing_source,
     });
     setDialogOpen(true);
   };
@@ -174,7 +174,7 @@ export default function Securities() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="asset_class">Asset Class</Label>
-                  <Select value={formData.asset_class} onValueChange={(value) => setFormData({ ...formData, asset_class: value })}>
+                  <Select value={formData.asset_class} onValueChange={(value) => setFormData({ ...formData, asset_class: value as typeof formData.asset_class })}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -197,7 +197,7 @@ export default function Securities() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="pricing_source">Pricing Source</Label>
-                  <Select value={formData.pricing_source} onValueChange={(value) => setFormData({ ...formData, pricing_source: value })}>
+                  <Select value={formData.pricing_source} onValueChange={(value) => setFormData({ ...formData, pricing_source: value as typeof formData.pricing_source })}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
