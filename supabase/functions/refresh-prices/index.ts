@@ -41,15 +41,30 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Fetch and parse ECB rates once
+    let ecbRates: Record<string, number> = {};
+    try {
+      const ecbRes = await fetch('https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml');
+      const xml = await ecbRes.text();
+      const matches = [...xml.matchAll(/currency=["']([A-Z]{3})["']\s+rate=["']([\d.]+)["']/g)];
+      for (const m of matches) {
+        ecbRates[m[1]] = Number(m[2]);
+      }
+    } catch (e) {
+      console.error('Error fetching ECB rates:', e);
+    }
+
     // Helper function to get FX rate to EUR
     const getFxToEUR = async (quote: string): Promise<number> => {
-      if (!quote || quote.toUpperCase() === 'EUR') return 1;
+      const q = quote.toUpperCase();
+      if (!q || q === 'EUR') return 1;
 
+      // Check cache first
       const { data: fxData } = await supabase
         .from('fx_rates')
         .select('*')
         .eq('base', 'EUR')
-        .eq('quote', quote.toUpperCase())
+        .eq('quote', q)
         .order('asof', { ascending: false })
         .limit(1);
 
@@ -57,25 +72,16 @@ Deno.serve(async (req) => {
         return Number(fxData[0].rate);
       }
 
-      // Fetch from ECB if not available
-      try {
-        const ecbRes = await fetch('https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml');
-        const ecbText = await ecbRes.text();
-        
-        // Simple XML parsing for USD rate
-        const usdMatch = ecbText.match(/currency=['"]USD['"][^>]*rate=['"]([0-9.]+)['"]/);
-        if (usdMatch && quote.toUpperCase() === 'USD') {
-          const rate = parseFloat(usdMatch[1]);
-          await supabase.from('fx_rates').upsert({
-            base: 'EUR',
-            quote: 'USD',
-            asof: new Date().toISOString().slice(0, 10),
-            rate: rate
-          }, { onConflict: 'base,quote,asof' });
-          return rate;
-        }
-      } catch (e) {
-        console.error('Error fetching ECB rates:', e);
+      // Use ECB rate if available
+      const rate = ecbRates[q];
+      if (rate) {
+        await supabase.from('fx_rates').upsert({
+          base: 'EUR',
+          quote: q,
+          rate,
+          asof: new Date().toISOString().slice(0, 10)
+        }, { onConflict: 'base,quote,asof' });
+        return rate;
       }
 
       return 1; // Fallback
@@ -87,6 +93,8 @@ Deno.serve(async (req) => {
       'SOL': 'solana'
     };
 
+    const results: any[] = [];
+
     // Process each security
     for (const sec of securities || []) {
       try {
@@ -95,14 +103,38 @@ Deno.serve(async (req) => {
         const lastCloseDt = new Date().toISOString();
 
         if (sec.pricing_source === 'YFINANCE') {
-          // Use Yahoo Finance API (free tier)
+          // Use Yahoo Finance API with fallbacks
           const yRes = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${sec.symbol}`);
           const yData = await yRes.json();
           
           if (yData?.chart?.result?.[0]) {
             const result = yData.chart.result[0];
-            lastPxNative = result.meta?.regularMarketPrice || result.meta?.previousClose || 0;
-            nativeCcy = result.meta?.currency || sec.currency_quote || 'EUR';
+            const meta = result.meta ?? {};
+            const quoteCloses = result.indicators?.quote?.[0]?.close ?? [];
+            const adjCloses = result.indicators?.adjclose?.[0]?.adjclose ?? [];
+
+            // Try multiple price sources in order
+            let px = Number(meta.regularMarketPrice ?? NaN);
+            
+            // Fallback to last non-null close
+            if (!isFinite(px)) {
+              const lastClose = [...quoteCloses].filter((x: any) => x != null).at(-1);
+              px = Number(lastClose ?? NaN);
+            }
+            
+            // Fallback to last non-null adjusted close
+            if (!isFinite(px)) {
+              const lastAdj = [...adjCloses].filter((x: any) => x != null).at(-1);
+              px = Number(lastAdj ?? NaN);
+            }
+            
+            // Final fallback to previous close
+            if (!isFinite(px)) {
+              px = Number(meta.previousClose ?? 0);
+            }
+
+            lastPxNative = px || 0;
+            nativeCcy = (meta.currency || sec.currency_quote || 'EUR').toUpperCase();
           }
         } else if (sec.pricing_source === 'COINGECKO') {
           const cgId = cgMap[sec.symbol.toUpperCase()];
@@ -129,13 +161,21 @@ Deno.serve(async (req) => {
           updated_at: new Date().toISOString()
         }, { onConflict: 'security_id' });
 
+        results.push({
+          symbol: sec.symbol,
+          native_ccy: nativeCcy,
+          last_px_native: lastPxNative,
+          eur_fx: fx,
+          last_px_eur: lastPxEur
+        });
+
         console.log(`Updated ${sec.symbol}: ${lastPxEur} EUR`);
       } catch (e: any) {
         console.error(`Error processing ${sec.symbol}:`, e.message);
       }
     }
 
-    return new Response(JSON.stringify({ ok: true, processed: securities?.length || 0 }), {
+    return new Response(JSON.stringify({ ok: true, processed: securities?.length || 0, results }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
