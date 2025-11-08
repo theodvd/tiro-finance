@@ -186,10 +186,12 @@ export default function Holdings() {
     });
   };
 
-  const handleDialogClose = () => {
-    setDialogOpen(false);
-    setEditingHolding(null);
-    resetForm();
+  const handleDialogOpenChange = (open: boolean) => {
+    setDialogOpen(open);
+    if (!open) {
+      setEditingHolding(null);
+      resetForm();
+    }
   };
 
   const formatCurrency = (value: number | null | undefined) => {
@@ -215,9 +217,9 @@ export default function Holdings() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Holdings</h1>
-        <Dialog open={dialogOpen} onOpenChange={handleDialogClose}>
+        <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
           <DialogTrigger asChild>
-            <Button onClick={() => setDialogOpen(true)}>
+            <Button>
               <Plus className="mr-2 h-4 w-4" />
               Add Holding
             </Button>
@@ -279,7 +281,7 @@ export default function Holdings() {
                 />
               </div>
               <div className="flex justify-end space-x-2">
-                <Button type="button" variant="outline" onClick={handleDialogClose}>
+                <Button type="button" variant="outline" onClick={() => handleDialogOpenChange(false)}>
                   Cancel
                 </Button>
                 <Button type="submit">{editingHolding ? "Update" : "Create"}</Button>
