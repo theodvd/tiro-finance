@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, RefreshCw } from "lucide-react";
 
 interface Account {
   id: string;
@@ -41,6 +41,7 @@ export default function Holdings() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [securities, setSecurities] = useState<Security[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingHolding, setEditingHolding] = useState<Holding | null>(null);
   const [formData, setFormData] = useState({
@@ -194,6 +195,35 @@ export default function Holdings() {
     }
   };
 
+  const handleRefreshPrices = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      toast({ title: 'Error', description: 'Not authenticated', variant: 'destructive' });
+      return;
+    }
+    setRefreshing(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/refresh-prices`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const body = await res.text();
+      if (!res.ok) {
+        toast({ title: 'Error', description: body || 'Refresh failed', variant: 'destructive' });
+      } else {
+        toast({ title: 'Success', description: 'Prices refreshed' });
+        await fetchData();
+      }
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const formatCurrency = (value: number | null | undefined) => {
     if (value === null || value === undefined) return "—";
     return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value);
@@ -302,7 +332,13 @@ export default function Holdings() {
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle>Your Holdings</CardTitle>
+            <div className="flex justify-between items-center">
+              <CardTitle>Your Holdings</CardTitle>
+              <Button variant="outline" size="sm" onClick={handleRefreshPrices} disabled={refreshing}>
+                <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                Refresh Prices
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <Table>
