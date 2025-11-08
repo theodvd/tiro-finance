@@ -40,6 +40,7 @@ export default function Holdings() {
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [securities, setSecurities] = useState<Security[]>([]);
+  const [priceMap, setPriceMap] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -78,6 +79,28 @@ export default function Holdings() {
       toast({ title: "Error", description: holdingsError.message, variant: "destructive" });
     } else {
       setHoldings((holdingsData || []) as any);
+      
+      // Fetch market_data prices separately
+      const secIds = (holdingsData || [])
+        .map((h: any) => h?.security?.id)
+        .filter((id: string | undefined): id is string => Boolean(id));
+
+      if (secIds.length > 0) {
+        const { data: mdRows, error: mdError } = await supabase
+          .from('market_data')
+          .select('security_id, last_px_eur, updated_at')
+          .in('security_id', secIds);
+
+        if (mdError) {
+          toast({ title: 'Error', description: mdError.message, variant: 'destructive' });
+        } else {
+          const map: Record<string, number> = {};
+          (mdRows || []).forEach((r: any) => {
+            if (r.security_id != null) map[r.security_id] = Number(r.last_px_eur);
+          });
+          setPriceMap(map);
+        }
+      }
     }
 
     // Fetch accounts
@@ -230,9 +253,16 @@ export default function Holdings() {
   };
 
   const calculateMarketValue = (holding: Holding) => {
-    const price = holding.security?.market_data?.[0]?.last_px_eur;
-    if (!price) return null;
-    return holding.shares * price;
+    const secId = holding.security?.id;
+    const priceFromMap = secId ? priceMap[secId] : undefined;
+    const nestedPrice = holding.security?.market_data?.[0]?.last_px_eur as any;
+
+    const price = Number(
+      typeof priceFromMap === 'number' ? priceFromMap : nestedPrice
+    );
+
+    if (!Number.isFinite(price) || price <= 0) return null;
+    return Number(holding.shares) * price;
   };
 
   if (loading) {
