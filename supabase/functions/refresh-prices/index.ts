@@ -55,33 +55,35 @@ Deno.serve(async (req) => {
     }
 
     // Helper function to get FX rate to EUR
+    // Returns EUR per 1 unit of quote currency (inverts ECB convention)
     const getFxToEUR = async (quote: string): Promise<number> => {
-      const q = quote.toUpperCase();
-      if (!q || q === 'EUR') return 1;
+      const q = (quote || 'EUR').toUpperCase();
+      if (q === 'EUR') return 1;
 
-      // Check cache first
+      // Check cache first - fx_rates stores DEV per 1 EUR (ECB convention)
       const { data: fxData } = await supabase
         .from('fx_rates')
-        .select('*')
+        .select('rate')
         .eq('base', 'EUR')
         .eq('quote', q)
         .order('asof', { ascending: false })
         .limit(1);
 
       if (fxData && fxData.length > 0) {
-        return Number(fxData[0].rate);
+        const eurPerQuote = 1 / Number(fxData[0].rate); // invert ECB rate
+        return eurPerQuote;
       }
 
-      // Use ECB rate if available
+      // Use ECB rate if available - ECB format: 1 EUR = X DEV
       const rate = ecbRates[q];
       if (rate) {
         await supabase.from('fx_rates').upsert({
           base: 'EUR',
           quote: q,
-          rate,
+          rate, // keep ECB convention in DB
           asof: new Date().toISOString().slice(0, 10)
         }, { onConflict: 'base,quote,asof' });
-        return rate;
+        return 1 / rate; // return EUR per 1 QUOTE
       }
 
       return 1; // Fallback
@@ -148,14 +150,14 @@ Deno.serve(async (req) => {
           continue; // MANUAL - skip
         }
 
-        const fx = await getFxToEUR(nativeCcy);
-        const lastPxEur = lastPxNative * fx;
+        const fxToEUR = await getFxToEUR(nativeCcy); // EUR per 1 native unit
+        const lastPxEur = lastPxNative * fxToEUR;
 
         await supabase.from('market_data').upsert({
           security_id: sec.id,
           native_ccy: nativeCcy,
           last_px_native: lastPxNative,
-          eur_fx: fx,
+          eur_fx: fxToEUR, // EUR per 1 native unit
           last_px_eur: lastPxEur,
           last_close_dt: lastCloseDt,
           updated_at: new Date().toISOString()
@@ -165,7 +167,7 @@ Deno.serve(async (req) => {
           symbol: sec.symbol,
           native_ccy: nativeCcy,
           last_px_native: lastPxNative,
-          eur_fx: fx,
+          eur_fx: fxToEUR,
           last_px_eur: lastPxEur
         });
 
