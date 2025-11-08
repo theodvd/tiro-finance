@@ -28,44 +28,45 @@ export default function Dashboard() {
     if (!user) return;
 
     try {
-      // Fetch holdings with market data
-      const { data: holdings, error } = await supabase
-        .from("holdings")
+      // holdings -> security -> market_data (nested select)
+      const { data: rows, error } = await supabase
+        .from('holdings')
         .select(`
-          *,
-          securities (*),
-          market_data (*)
+          id,
+          shares,
+          amount_invested_eur,
+          security:securities(
+            id,
+            symbol,
+            name,
+            market_data(
+              last_px_eur
+            )
+          )
         `)
-        .eq("user_id", user.id);
+        .eq('user_id', user.id);
 
       if (error) throw error;
 
       let totalValue = 0;
       let totalInvested = 0;
 
-      holdings?.forEach((holding: any) => {
-        const marketData = holding.market_data?.[0];
-        const shares = parseFloat(holding.shares || 0);
-        const invested = parseFloat(holding.amount_invested_eur || 0);
+      for (const h of rows ?? []) {
+        const px = Number(h?.security?.market_data?.[0]?.last_px_eur ?? 0);
+        const shares = Number(h?.shares ?? 0);
+        const invested = Number(h?.amount_invested_eur ?? 0);
 
-        if (marketData) {
-          totalValue += shares * parseFloat(marketData.last_px_eur || 0);
-        }
+        totalValue += shares * px;
         totalInvested += invested;
-      });
+      }
 
       const pnl = totalValue - totalInvested;
       const pnlPercent = totalInvested > 0 ? (pnl / totalInvested) * 100 : 0;
 
-      setSummary({
-        totalValue,
-        totalInvested,
-        pnl,
-        pnlPercent,
-      });
-    } catch (error: any) {
-      console.error("Error fetching summary:", error);
-      toast.error("Failed to load portfolio summary");
+      setSummary({ totalValue, totalInvested, pnl, pnlPercent });
+    } catch (err) {
+      console.error('Error fetching summary:', err);
+      toast.error('Failed to load portfolio summary');
     } finally {
       setLoading(false);
     }
@@ -77,8 +78,35 @@ export default function Dashboard() {
 
   const handleRefreshPrices = async () => {
     setRefreshing(true);
-    toast.info("Price refresh feature coming soon!");
-    setRefreshing(false);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        toast.error('Not authenticated');
+        setRefreshing(false);
+        return;
+      }
+
+      // Supabase Edge Functions route
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/refresh-prices`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        const msg = await res.text();
+        toast.error(msg || 'Refresh failed');
+      } else {
+        toast.success('Prices refreshed');
+        await fetchSummary(); // recompute totals with fresh prices
+      }
+    } catch (e: any) {
+      toast.error(e?.message || 'Refresh failed');
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleTakeSnapshot = async () => {
