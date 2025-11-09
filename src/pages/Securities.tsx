@@ -184,14 +184,16 @@ export default function Securities() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="currency">Currency</Label>
-                  <Input
-                    id="currency"
-                    placeholder="EUR, USD, GBP..."
-                    value={formData.currency_quote}
-                    onChange={(e) => setFormData({ ...formData, currency_quote: e.target.value.toUpperCase() })}
-                    required
-                  />
+                  <Label htmlFor="currency">Currency *</Label>
+                  <Select value={formData.currency_quote} onValueChange={(value) => setFormData({ ...formData, currency_quote: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select currency..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="EUR">EUR</SelectItem>
+                      <SelectItem value="USD">USD</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="pricing_source">Pricing Source</Label>
