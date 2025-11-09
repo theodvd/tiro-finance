@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
      * Returns EUR per 1 unit of quote currency (what we want to multiply native prices by).
      * ECB publishes QUOTE per 1 EUR, so we invert it.
      */
-    const getEurPerQuote = (quote: string): number => {
+    const eurPer = (quote: string): number => {
       const q = (quote || 'EUR').toUpperCase();
       if (q === 'EUR') return 1;
       const quotePerEur = ecbRates[q];            // e.g. USD: 1.1561 USD per 1 EUR
@@ -127,7 +127,13 @@ Deno.serve(async (req) => {
           continue; // MANUAL - skip
         }
 
-        const fxToEUR = getEurPerQuote(nativeCcy);    // EUR per 1 native unit
+        let fxToEUR = eurPer(nativeCcy);    // EUR per 1 native unit
+
+        // Safety guard: if not EUR and fxToEUR looks inverted (>1.05), flip it
+        if (nativeCcy !== 'EUR' && fxToEUR > 1.05) {
+          fxToEUR = 1 / fxToEUR;
+        }
+
         const lastPxEur = lastPxNative * fxToEUR;
 
         // Optional: cache ECB rate for auditing (ECB convention: QUOTE per 1 EUR)
