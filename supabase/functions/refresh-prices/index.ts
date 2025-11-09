@@ -54,42 +54,16 @@ Deno.serve(async (req) => {
       console.error('Error fetching ECB rates:', e);
     }
 
-    // EUR per 1 unit of quote currency (invert ECB)
-    const getFxToEUR = async (quote: string): Promise<number> => {
+    /**
+     * Returns EUR per 1 unit of quote currency (what we want to multiply native prices by).
+     * ECB publishes QUOTE per 1 EUR, so we invert it.
+     */
+    const getEurPerQuote = (quote: string): number => {
       const q = (quote || 'EUR').toUpperCase();
       if (q === 'EUR') return 1;
-
-      // 1) Try cached ECB convention (QUOTE per 1 EUR)
-      const { data: fxData, error: fxErr } = await supabase
-        .from('fx_rates')
-        .select('rate')           // rate = QUOTE per 1 EUR
-        .eq('base', 'EUR')
-        .eq('quote', q)
-        .order('asof', { ascending: false })
-        .limit(1);
-
-      if (!fxErr && fxData?.length) {
-        const quotePerEUR = Number(fxData[0].rate);
-        const eurPerQuote = 1 / quotePerEUR; // invert
-        return eurPerQuote;
-      }
-
-      // 2) Use fresh ECB (rate = QUOTE per 1 EUR)
-      const quotePerEUR = ecbRates[q];
-      if (quotePerEUR) {
-        // cache ECB convention in db
-        await supabase.from('fx_rates').upsert({
-          base: 'EUR',
-          quote: q,
-          rate: quotePerEUR,
-          asof: new Date().toISOString().slice(0, 10)
-        }, { onConflict: 'base,quote,asof' });
-
-        return 1 / quotePerEUR; // EUR per 1 QUOTE
-      }
-
-      // 3) Fallback
-      return 1;
+      const quotePerEur = ecbRates[q];            // e.g. USD: 1.1561 USD per 1 EUR
+      if (!Number.isFinite(quotePerEur) || quotePerEur <= 0) return 1;
+      return 1 / quotePerEur;                     // EUR per 1 USD
     };
 
     const cgMap: Record<string, string> = {
@@ -153,14 +127,25 @@ Deno.serve(async (req) => {
           continue; // MANUAL - skip
         }
 
-        const fxToEUR = await getFxToEUR(nativeCcy);    // EUR per 1 native unit
+        const fxToEUR = getEurPerQuote(nativeCcy);    // EUR per 1 native unit
         const lastPxEur = lastPxNative * fxToEUR;
+
+        // Optional: cache ECB rate for auditing (ECB convention: QUOTE per 1 EUR)
+        const quotePerEur = ecbRates[nativeCcy.toUpperCase()];
+        if (quotePerEur) {
+          await supabase.from('fx_rates').upsert({
+            base: 'EUR',
+            quote: nativeCcy.toUpperCase(),
+            rate: quotePerEur,
+            asof: new Date().toISOString().slice(0, 10)
+          }, { onConflict: 'base,quote,asof' });
+        }
 
         await supabase.from('market_data').upsert({
           security_id: sec.id,
           native_ccy: nativeCcy,
           last_px_native: lastPxNative,
-          eur_fx: fxToEUR,            // store EUR per native unit
+          eur_fx: fxToEUR,           // EUR per 1 native unit
           last_px_eur: lastPxEur,
           last_close_dt: lastCloseDt,
           updated_at: new Date().toISOString()
