@@ -139,7 +139,7 @@ export default function MarketData() {
                   <TableHead>Name</TableHead>
                   <TableHead>Currency</TableHead>
                   <TableHead className="text-right">Price (Native)</TableHead>
-                  <TableHead className="text-right">EUR FX</TableHead>
+                  <TableHead className="text-right">EUR / 1 unit</TableHead>
                   <TableHead className="text-right">Price (EUR)</TableHead>
                   <TableHead className="text-right">Last Close</TableHead>
                   <TableHead className="text-right">Updated</TableHead>
