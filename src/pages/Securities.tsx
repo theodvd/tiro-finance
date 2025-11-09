@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { ASSET_CLASSES, PRICING_SOURCES, AssetClass, PricingSource } from "@/constants";
+import { ASSET_CLASSES, PRICING_SOURCES, ASSET_CLASS_LABEL, AssetClass, PricingSource } from "@/constants";
 
 interface Security {
   id: string;
@@ -31,13 +31,13 @@ export default function Securities() {
   const [formData, setFormData] = useState<{
     name: string;
     symbol: string;
-    asset_class: "EQUITY" | "ETF" | "CRYPTO" | "BOND" | "REIT" | "CASH";
+    asset_class: AssetClass;
     currency_quote: string;
-    pricing_source: "YFINANCE" | "COINGECKO" | "MANUAL";
+    pricing_source: PricingSource;
   }>({
     name: "",
     symbol: "",
-    asset_class: "ETF",
+    asset_class: "STOCK",
     currency_quote: "EUR",
     pricing_source: "YFINANCE",
   });
@@ -84,7 +84,7 @@ export default function Securities() {
         toast.success("Security created successfully");
       }
       setDialogOpen(false);
-      setFormData({ name: "", symbol: "", asset_class: "ETF", currency_quote: "EUR", pricing_source: "YFINANCE" });
+      setFormData({ name: "", symbol: "", asset_class: "STOCK", currency_quote: "EUR", pricing_source: "YFINANCE" });
       setEditingSecurity(null);
       fetchSecurities();
     } catch (error: any) {
@@ -94,10 +94,14 @@ export default function Securities() {
 
   const handleEdit = (security: Security) => {
     setEditingSecurity(security);
+    const normalizedClass = (security.asset_class?.toUpperCase() === 'EQUITY')
+      ? 'STOCK'
+      : (security.asset_class?.toUpperCase() as AssetClass);
+
     setFormData({
       name: security.name,
       symbol: security.symbol,
-      asset_class: security.asset_class as AssetClass,
+      asset_class: normalizedClass,
       currency_quote: security.currency_quote,
       pricing_source: security.pricing_source as PricingSource,
     });
@@ -132,7 +136,7 @@ export default function Securities() {
           setDialogOpen(open);
           if (!open) {
             setEditingSecurity(null);
-            setFormData({ name: "", symbol: "", asset_class: "ETF", currency_quote: "EUR", pricing_source: "YFINANCE" });
+            setFormData({ name: "", symbol: "", asset_class: "STOCK", currency_quote: "EUR", pricing_source: "YFINANCE" });
           }
         }}>
           <DialogTrigger asChild>
@@ -178,7 +182,7 @@ export default function Securities() {
                     </SelectTrigger>
                     <SelectContent>
                       {ASSET_CLASSES.map((ac) => (
-                        <SelectItem key={ac} value={ac}>{ac}</SelectItem>
+                        <SelectItem key={ac} value={ac}>{ASSET_CLASS_LABEL[ac]}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -249,7 +253,7 @@ export default function Securities() {
                       <TableCell className="font-mono text-sm">{security.symbol}</TableCell>
                       <TableCell>
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-accent/10 text-accent-foreground">
-                          {security.asset_class}
+                          {ASSET_CLASS_LABEL[(security.asset_class as any) ?? 'STOCK']}
                         </span>
                       </TableCell>
                       <TableCell>{security.currency_quote}</TableCell>
