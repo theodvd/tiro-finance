@@ -54,39 +54,42 @@ Deno.serve(async (req) => {
       console.error('Error fetching ECB rates:', e);
     }
 
-    // Helper function to get FX rate to EUR
-    // Returns EUR per 1 unit of quote currency (inverts ECB convention)
+    // EUR per 1 unit of quote currency (invert ECB)
     const getFxToEUR = async (quote: string): Promise<number> => {
       const q = (quote || 'EUR').toUpperCase();
       if (q === 'EUR') return 1;
 
-      // Check cache first - fx_rates stores DEV per 1 EUR (ECB convention)
-      const { data: fxData } = await supabase
+      // 1) Try cached ECB convention (QUOTE per 1 EUR)
+      const { data: fxData, error: fxErr } = await supabase
         .from('fx_rates')
-        .select('rate')
+        .select('rate')           // rate = QUOTE per 1 EUR
         .eq('base', 'EUR')
         .eq('quote', q)
         .order('asof', { ascending: false })
         .limit(1);
 
-      if (fxData && fxData.length > 0) {
-        const eurPerQuote = 1 / Number(fxData[0].rate); // invert ECB rate
+      if (!fxErr && fxData?.length) {
+        const quotePerEUR = Number(fxData[0].rate);
+        const eurPerQuote = 1 / quotePerEUR; // invert
         return eurPerQuote;
       }
 
-      // Use ECB rate if available - ECB format: 1 EUR = X DEV
-      const rate = ecbRates[q];
-      if (rate) {
+      // 2) Use fresh ECB (rate = QUOTE per 1 EUR)
+      const quotePerEUR = ecbRates[q];
+      if (quotePerEUR) {
+        // cache ECB convention in db
         await supabase.from('fx_rates').upsert({
           base: 'EUR',
           quote: q,
-          rate, // keep ECB convention in DB
+          rate: quotePerEUR,
           asof: new Date().toISOString().slice(0, 10)
         }, { onConflict: 'base,quote,asof' });
-        return 1 / rate; // return EUR per 1 QUOTE
+
+        return 1 / quotePerEUR; // EUR per 1 QUOTE
       }
 
-      return 1; // Fallback
+      // 3) Fallback
+      return 1;
     };
 
     const cgMap: Record<string, string> = {
@@ -150,14 +153,14 @@ Deno.serve(async (req) => {
           continue; // MANUAL - skip
         }
 
-        const fxToEUR = await getFxToEUR(nativeCcy); // EUR per 1 native unit
+        const fxToEUR = await getFxToEUR(nativeCcy);    // EUR per 1 native unit
         const lastPxEur = lastPxNative * fxToEUR;
 
         await supabase.from('market_data').upsert({
           security_id: sec.id,
           native_ccy: nativeCcy,
           last_px_native: lastPxNative,
-          eur_fx: fxToEUR, // EUR per 1 native unit
+          eur_fx: fxToEUR,            // store EUR per native unit
           last_px_eur: lastPxEur,
           last_close_dt: lastCloseDt,
           updated_at: new Date().toISOString()
@@ -171,7 +174,8 @@ Deno.serve(async (req) => {
           last_px_eur: lastPxEur
         });
 
-        console.log(`Updated ${sec.symbol}: ${lastPxEur} EUR`);
+        console.log(`[FX] ${nativeCcy}: fxToEUR=${fxToEUR}`);
+        console.log(`[PX] ${sec.symbol}: ${lastPxNative} ${nativeCcy} -> ${lastPxEur} EUR`);
       } catch (e: any) {
         console.error(`Error processing ${sec.symbol}:`, e.message);
       }

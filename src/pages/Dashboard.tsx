@@ -26,33 +26,43 @@ export default function Dashboard() {
 
   const fetchSummary = async () => {
     if (!user) return;
-
+    setLoading(true);
     try {
-      // holdings -> security -> market_data (nested select)
+      // 1) holdings + security ids
       const { data: rows, error } = await supabase
         .from('holdings')
         .select(`
           id,
           shares,
           amount_invested_eur,
-          security:securities(
-            id,
-            symbol,
-            name,
-            market_data(
-              last_px_eur
-            )
-          )
+          security:securities(id)
         `)
         .eq('user_id', user.id);
 
       if (error) throw error;
 
+      const secIds = (rows ?? [])
+        .map(h => h?.security?.id)
+        .filter((x): x is string => Boolean(x));
+
+      // 2) latest EUR prices
+      let priceMap: Record<string, number> = {};
+      if (secIds.length) {
+        const { data: mdRows, error: mdError } = await supabase
+          .from('market_data')
+          .select('security_id, last_px_eur')
+          .in('security_id', secIds);
+
+        if (mdError) throw mdError;
+        (mdRows ?? []).forEach(r => { priceMap[r.security_id] = Number(r.last_px_eur) || 0; });
+      }
+
+      // 3) compute totals
       let totalValue = 0;
       let totalInvested = 0;
-
       for (const h of rows ?? []) {
-        const px = Number(h?.security?.market_data?.[0]?.last_px_eur ?? 0);
+        const secId = h?.security?.id as string | undefined;
+        const px = secId ? priceMap[secId] ?? 0 : 0;
         const shares = Number(h?.shares ?? 0);
         const invested = Number(h?.amount_invested_eur ?? 0);
 
@@ -64,8 +74,8 @@ export default function Dashboard() {
       const pnlPercent = totalInvested > 0 ? (pnl / totalInvested) * 100 : 0;
 
       setSummary({ totalValue, totalInvested, pnl, pnlPercent });
-    } catch (err) {
-      console.error('Error fetching summary:', err);
+    } catch (e) {
+      console.error('Error fetching summary:', e);
       toast.error('Failed to load portfolio summary');
     } finally {
       setLoading(false);
