@@ -116,13 +116,21 @@ Deno.serve(async (req) => {
             nativeCcy = (meta.currency || sec.currency_quote || 'EUR').toUpperCase();
           }
         } else if (sec.pricing_source === 'COINGECKO') {
-          const cgId = cgMap[sec.symbol.toUpperCase()];
-          if (cgId) {
-            const cgRes = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${cgId}&vs_currencies=usd`);
-            const cgData = await cgRes.json();
-            lastPxNative = Number(cgData?.[cgId]?.usd ?? 0);
-            nativeCcy = 'USD';
+          const cgId = cgMap[(sec.symbol || '').toUpperCase()];
+          if (!cgId) {
+            console.error(`Unknown CoinGecko ID for symbol ${sec.symbol}`);
+            continue;
           }
+
+          // Get price directly in EUR (no FX conversion afterward)
+          const cgRes = await fetch(
+            `https://api.coingecko.com/api/v3/simple/price?ids=${cgId}&vs_currencies=eur`
+          );
+          const cgData = await cgRes.json();
+          const px = Number(cgData?.[cgId]?.eur ?? 0);
+
+          lastPxNative = px;
+          nativeCcy = 'EUR';
         } else {
           continue; // MANUAL - skip
         }
