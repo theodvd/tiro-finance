@@ -206,7 +206,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          asset_class: Database["public"]["Enums"]["asset_class"]
+          asset_class?: Database["public"]["Enums"]["asset_class"]
           created_at?: string
           currency_quote: string
           id?: string
@@ -292,7 +292,7 @@ export type Database = {
     }
     Enums: {
       account_type: "CTO" | "PEA" | "AV" | "CRYPTO" | "LIVRETS" | "OTHER"
-      asset_class: "EQUITY" | "ETF" | "CRYPTO" | "BOND" | "REIT" | "CASH"
+      asset_class: "STOCK" | "ETF" | "CRYPTO" | "BOND" | "REIT" | "CASH"
       import_job_status: "PENDING" | "OK" | "ERROR"
       import_job_type: "PRICE_REFRESH" | "SNAPSHOT" | "CSV_IMPORT"
       pricing_source: "YFINANCE" | "COINGECKO" | "MANUAL"
@@ -424,7 +424,7 @@ export const Constants = {
   public: {
     Enums: {
       account_type: ["CTO", "PEA", "AV", "CRYPTO", "LIVRETS", "OTHER"],
-      asset_class: ["EQUITY", "ETF", "CRYPTO", "BOND", "REIT", "CASH"],
+      asset_class: ["STOCK", "ETF", "CRYPTO", "BOND", "REIT", "CASH"],
       import_job_status: ["PENDING", "OK", "ERROR"],
       import_job_type: ["PRICE_REFRESH", "SNAPSHOT", "CSV_IMPORT"],
       pricing_source: ["YFINANCE", "COINGECKO", "MANUAL"],
