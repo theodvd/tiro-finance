@@ -135,21 +135,32 @@ Deno.serve(async (req) => {
           continue; // MANUAL - skip
         }
 
-        let fxToEUR = eurPer(nativeCcy);    // EUR per 1 native unit
+        // Use the form's currency selection, fall back to detected native
+        const fxCcy = (sec.currency_quote || nativeCcy || 'EUR').toUpperCase();
 
-        // Safety guard: if not EUR and fxToEUR looks inverted (>1.05), flip it
-        if (nativeCcy !== 'EUR' && fxToEUR > 1.05) {
-          fxToEUR = 1 / fxToEUR;
+        // Calculate EUR per 1 unit of fxCcy
+        let fxToEUR: number;
+        if (fxCcy === 'EUR') {
+          fxToEUR = 1;
+        } else if (fxCcy === 'GBP') {
+          fxToEUR = 1.13;  // Hard override as requested
+        } else {
+          fxToEUR = eurPer(fxCcy);  // USD dynamic via ECB
+        }
+
+        // Defensive: convert pence to GBP for London listings
+        if (fxCcy === 'GBP' && String(sec.symbol).endsWith('.L') && lastPxNative > 200) {
+          lastPxNative = lastPxNative / 100;
         }
 
         const lastPxEur = lastPxNative * fxToEUR;
 
         // Optional: cache ECB rate for auditing (ECB convention: QUOTE per 1 EUR)
-        const quotePerEur = ecbRates[nativeCcy.toUpperCase()];
+        const quotePerEur = ecbRates[fxCcy];
         if (quotePerEur) {
           await supabase.from('fx_rates').upsert({
             base: 'EUR',
-            quote: nativeCcy.toUpperCase(),
+            quote: fxCcy,
             rate: quotePerEur,
             asof: new Date().toISOString().slice(0, 10)
           }, { onConflict: 'base,quote,asof' });
@@ -157,7 +168,7 @@ Deno.serve(async (req) => {
 
         await supabase.from('market_data').upsert({
           security_id: sec.id,
-          native_ccy: nativeCcy,
+          native_ccy: fxCcy,
           last_px_native: lastPxNative,
           eur_fx: fxToEUR,           // EUR per 1 native unit
           last_px_eur: lastPxEur,
@@ -167,14 +178,14 @@ Deno.serve(async (req) => {
 
         results.push({
           symbol: sec.symbol,
-          native_ccy: nativeCcy,
+          native_ccy: fxCcy,
           last_px_native: lastPxNative,
           eur_fx: fxToEUR,
           last_px_eur: lastPxEur
         });
 
-        console.log(`[FX] ${nativeCcy}: fxToEUR=${fxToEUR}`);
-        console.log(`[PX] ${sec.symbol}: ${lastPxNative} ${nativeCcy} -> ${lastPxEur} EUR`);
+        console.log(`[FX] ${fxCcy}: fxToEUR=${fxToEUR}`);
+        console.log(`[PX] ${sec.symbol}: ${lastPxNative} ${fxCcy} -> ${lastPxEur} EUR`);
       } catch (e: any) {
         console.error(`Error processing ${sec.symbol}:`, e.message);
       }
