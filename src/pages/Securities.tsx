@@ -207,6 +207,7 @@ export default function Securities() {
                     <SelectContent>
                       <SelectItem value="EUR">EUR</SelectItem>
                       <SelectItem value="USD">USD</SelectItem>
+                      <SelectItem value="GBP">GBP</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
