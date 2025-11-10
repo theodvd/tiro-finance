@@ -176,7 +176,18 @@ export default function Securities() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="asset_class">Asset Class</Label>
-                  <Select value={formData.asset_class} onValueChange={(value) => setFormData({ ...formData, asset_class: value as typeof formData.asset_class })}>
+                  <Select 
+                    value={formData.asset_class} 
+                    onValueChange={(value) => {
+                      const updates: any = { asset_class: value as typeof formData.asset_class };
+                      // Auto-set optimal defaults for crypto
+                      if (value === 'CRYPTO') {
+                        updates.pricing_source = 'COINGECKO';
+                        updates.currency_quote = 'EUR';
+                      }
+                      setFormData({ ...formData, ...updates });
+                    }}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
