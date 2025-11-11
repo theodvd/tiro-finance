@@ -27,23 +27,13 @@ Deno.serve(async (req) => {
       return new Response('Unauthorized', { status: 401, headers: corsHeaders });
     }
 
-    // Parse body for optional valuation_date
-    let body: any = {};
-    try {
-      body = await req.json();
-    } catch {
-      // No body or invalid JSON
-    }
-    
-    const valuationDate = body?.valuation_date ?? new Date().toISOString().slice(0, 10);
-
-    // Fetch holdings with nested data
+    // 1) Fetch holdings with nested data including region and sector
     const { data: holdings, error: holdingsError } = await supabase
       .from('holdings')
       .select(`
         id, shares, amount_invested_eur, account_id, security_id,
-        account:accounts(id, name, type),
-        security:securities(id, name, symbol, market_data(last_px_eur))
+        accounts(id, name, type),
+        security:securities(id, name, symbol, asset_class, region, sector)
       `)
       .eq('user_id', user.id);
 
@@ -55,47 +45,103 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Create snapshot lines
-    const snapshots = [];
-    for (const h of (holdings as any) || []) {
-      const price = Number((h.security?.market_data?.[0]?.last_px_eur || h.security?.market_data?.last_px_eur) ?? 0);
-      const shares = Number(h.shares ?? 0);
-      const marketValue = shares * price;
-      const cost = h.amount_invested_eur ?? null;
+    // Get security IDs to fetch prices
+    const securityIds = holdings?.map(h => h.security_id).filter(Boolean) || [];
+    
+    // Fetch market data
+    const { data: marketData, error: mdError } = await supabase
+      .from('market_data')
+      .select('security_id, last_px_eur')
+      .in('security_id', securityIds);
 
-      snapshots.push({
-        user_id: user.id,
-        valuation_date: valuationDate,
-        account_id: h.account_id,
-        security_id: h.security_id,
-        shares: shares,
-        last_px_eur: price,
-        market_value_eur: marketValue,
-        cost_eur: cost
+    if (mdError) {
+      console.error('Error fetching market data:', mdError);
+      return new Response(JSON.stringify({ error: mdError.message }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    if (snapshots.length > 0) {
-      const { error: insertError } = await supabase
-        .from('snapshot_lines')
-        .upsert(snapshots, { 
-          onConflict: 'user_id,valuation_date,account_id,security_id',
-          ignoreDuplicates: false 
-        });
+    // Build price map
+    const priceMap = new Map<string, number>();
+    marketData?.forEach(md => {
+      priceMap.set(md.security_id, Number(md.last_px_eur || 0));
+    });
 
-      if (insertError) {
-        console.error('Error inserting snapshots:', insertError);
-        return new Response(JSON.stringify({ error: insertError.message }), {
+    // 2) Calculate totals and prepare snapshot lines
+    let totalInvested = 0;
+    let totalValue = 0;
+    const lines: any[] = [];
+
+    for (const h of holdings || []) {
+      const shares = Number(h.shares || 0);
+      const invested = Number(h.amount_invested_eur || 0);
+      const price = priceMap.get(h.security_id) || 0;
+      const marketValue = shares * price;
+
+      totalInvested += invested;
+      totalValue += marketValue;
+
+      lines.push({
+        user_id: user.id,
+        account_id: h.account_id || null,
+        security_id: h.security_id || null,
+        asset_class: (h.security as any)?.asset_class || null,
+        region: (h.security as any)?.region || null,
+        sector: (h.security as any)?.sector || null,
+        shares: shares,
+        cost_eur: invested,
+        market_value_eur: marketValue,
+      });
+    }
+
+    const pnl = totalValue - totalInvested;
+    const pnlPct = totalInvested > 0 ? (pnl / totalInvested) * 100 : 0;
+
+    // 3) Insert snapshot header (append-only, no upsert)
+    const { data: snapshot, error: snapError } = await supabase
+      .from('snapshots')
+      .insert([{
+        user_id: user.id,
+        total_invested_eur: totalInvested,
+        total_value_eur: totalValue,
+        pnl_eur: pnl,
+        pnl_pct: pnlPct,
+        meta: {}
+      }])
+      .select()
+      .single();
+
+    if (snapError) {
+      console.error('Error inserting snapshot:', snapError);
+      return new Response(JSON.stringify({ error: snapError.message }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // 4) Insert snapshot lines
+    const linesWithSnap = lines.map(l => ({ ...l, snapshot_id: snapshot.id }));
+    if (linesWithSnap.length > 0) {
+      const { error: linesError } = await supabase
+        .from('snapshot_lines')
+        .insert(linesWithSnap);
+
+      if (linesError) {
+        console.error('Error inserting snapshot lines:', linesError);
+        return new Response(JSON.stringify({ error: linesError.message }), {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }
     }
 
+    console.log(`Snapshot created: ${snapshot.id}, ${linesWithSnap.length} lines`);
+
     return new Response(JSON.stringify({ 
       ok: true, 
-      valuation_date: valuationDate,
-      snapshots_created: snapshots.length 
+      snapshot_id: snapshot.id,
+      lines_created: linesWithSnap.length
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }

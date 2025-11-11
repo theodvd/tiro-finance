@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
-import { RefreshCw, AlertCircle } from 'lucide-react';
+import { RefreshCw, AlertCircle, Camera } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { usePortfolioData } from '@/hooks/usePortfolioData';
@@ -46,6 +46,37 @@ export default function Dashboard() {
     }
   };
 
+  const handleTakeSnapshot = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Not authenticated');
+
+      toast({ title: 'Taking snapshot...', description: 'Capturing portfolio state' });
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/take-snapshot`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) throw new Error('Failed to take snapshot');
+
+      toast({ title: 'Snapshot created successfully' });
+      await portfolioData.refetch();
+    } catch (err: any) {
+      toast({
+        title: 'Error taking snapshot',
+        description: err.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
   if (portfolioData.loading) {
     return (
       <div className="flex-1 space-y-6 p-6 md:p-8">
@@ -84,10 +115,16 @@ export default function Dashboard() {
     <div className="flex-1 space-y-6 p-6 md:p-8">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <Button onClick={handleRefreshPrices}>
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Refresh Prices
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={handleTakeSnapshot} variant="outline">
+            <Camera className="h-4 w-4 mr-2" />
+            Take Snapshot
+          </Button>
+          <Button onClick={handleRefreshPrices}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh Prices
+          </Button>
+        </div>
       </div>
 
       <PortfolioSummary
