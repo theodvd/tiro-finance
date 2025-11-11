@@ -1,17 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { Camera } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { toast } from '@/hooks/use-toast';
 
 export function PortfolioHistory() {
   const { user } = useAuth();
   const [snapshots, setSnapshots] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
 
   const fetchSnapshots = async () => {
     if (!user) return;
@@ -55,49 +51,14 @@ export function PortfolioHistory() {
     fetchSnapshots();
   }, [user]);
 
-  const handleTakeSnapshot = async () => {
-    setLoading(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error('Not authenticated');
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/take-snapshot`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      if (!response.ok) throw new Error('Failed to create snapshot');
-
-      toast({ title: 'Snapshot created successfully' });
-      await fetchSnapshots();
-    } catch (err: any) {
-      toast({
-        title: 'Error creating snapshot',
-        description: err.message,
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat('en-EU', { style: 'currency', currency: 'EUR', notation: 'compact' }).format(value);
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-6">
+      <CardHeader>
         <CardTitle>Portfolio History</CardTitle>
-        <Button onClick={handleTakeSnapshot} disabled={loading} size="sm">
-          <Camera className="h-4 w-4 mr-2" />
-          Take Snapshot
-        </Button>
       </CardHeader>
       <CardContent>
         {snapshots.length === 0 ? (

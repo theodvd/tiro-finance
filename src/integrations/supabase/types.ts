@@ -201,6 +201,8 @@ export type Database = {
           id: string
           name: string
           pricing_source: Database["public"]["Enums"]["pricing_source"]
+          region: string | null
+          sector: string | null
           symbol: string
           updated_at: string
           user_id: string
@@ -212,6 +214,8 @@ export type Database = {
           id?: string
           name: string
           pricing_source: Database["public"]["Enums"]["pricing_source"]
+          region?: string | null
+          sector?: string | null
           symbol: string
           updated_at?: string
           user_id: string
@@ -223,6 +227,8 @@ export type Database = {
           id?: string
           name?: string
           pricing_source?: Database["public"]["Enums"]["pricing_source"]
+          region?: string | null
+          sector?: string | null
           symbol?: string
           updated_at?: string
           user_id?: string
@@ -232,37 +238,49 @@ export type Database = {
       snapshot_lines: {
         Row: {
           account_id: string
+          asset_class: Database["public"]["Enums"]["asset_class"] | null
           cost_eur: number | null
           created_at: string
           id: string
           last_px_eur: number
           market_value_eur: number
+          region: string | null
+          sector: string | null
           security_id: string
           shares: number
+          snapshot_id: string | null
           user_id: string
           valuation_date: string
         }
         Insert: {
           account_id: string
+          asset_class?: Database["public"]["Enums"]["asset_class"] | null
           cost_eur?: number | null
           created_at?: string
           id?: string
           last_px_eur: number
           market_value_eur: number
+          region?: string | null
+          sector?: string | null
           security_id: string
           shares: number
+          snapshot_id?: string | null
           user_id: string
           valuation_date: string
         }
         Update: {
           account_id?: string
+          asset_class?: Database["public"]["Enums"]["asset_class"] | null
           cost_eur?: number | null
           created_at?: string
           id?: string
           last_px_eur?: number
           market_value_eur?: number
+          region?: string | null
+          sector?: string | null
           security_id?: string
           shares?: number
+          snapshot_id?: string | null
           user_id?: string
           valuation_date?: string
         }
@@ -281,11 +299,159 @@ export type Database = {
             referencedRelation: "securities"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "snapshot_lines_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "snapshots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "snapshot_lines_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "v_latest_snapshot"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      snapshots: {
+        Row: {
+          created_at: string
+          id: string
+          meta: Json
+          pnl_eur: number
+          pnl_pct: number
+          snapshot_ts: string
+          total_invested_eur: number
+          total_value_eur: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          meta?: Json
+          pnl_eur?: number
+          pnl_pct?: number
+          snapshot_ts?: string
+          total_invested_eur?: number
+          total_value_eur?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          meta?: Json
+          pnl_eur?: number
+          pnl_pct?: number
+          snapshot_ts?: string
+          total_invested_eur?: number
+          total_value_eur?: number
+          user_id?: string
+        }
+        Relationships: []
       }
     }
     Views: {
-      [_ in never]: never
+      v_latest_alloc_by_account: {
+        Row: {
+          account_id: string | null
+          account_name: string | null
+          account_type: string | null
+          user_id: string | null
+          value_eur: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "snapshot_lines_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_latest_alloc_by_asset_class: {
+        Row: {
+          asset_class: string | null
+          user_id: string | null
+          value_eur: number | null
+        }
+        Relationships: []
+      }
+      v_latest_alloc_by_region: {
+        Row: {
+          region: string | null
+          user_id: string | null
+          value_eur: number | null
+        }
+        Relationships: []
+      }
+      v_latest_alloc_by_sector: {
+        Row: {
+          sector: string | null
+          user_id: string | null
+          value_eur: number | null
+        }
+        Relationships: []
+      }
+      v_latest_snapshot: {
+        Row: {
+          created_at: string | null
+          id: string | null
+          meta: Json | null
+          pnl_eur: number | null
+          pnl_pct: number | null
+          snapshot_ts: string | null
+          total_invested_eur: number | null
+          total_value_eur: number | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string | null
+          meta?: Json | null
+          pnl_eur?: number | null
+          pnl_pct?: number | null
+          snapshot_ts?: string | null
+          total_invested_eur?: number | null
+          total_value_eur?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string | null
+          meta?: Json | null
+          pnl_eur?: number | null
+          pnl_pct?: number | null
+          snapshot_ts?: string | null
+          total_invested_eur?: number | null
+          total_value_eur?: number | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      v_snapshot_totals: {
+        Row: {
+          d: string | null
+          total_invested_eur: number | null
+          total_value_eur: number | null
+          user_id: string | null
+        }
+        Insert: {
+          d?: never
+          total_invested_eur?: number | null
+          total_value_eur?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          d?: never
+          total_invested_eur?: number | null
+          total_value_eur?: number | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       [_ in never]: never
