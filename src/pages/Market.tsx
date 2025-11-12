@@ -22,7 +22,7 @@ interface MarketDataRow {
   };
 }
 
-export default function MarketData() {
+export function Market() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [marketData, setMarketData] = useState<MarketDataRow[]>([]);
@@ -109,10 +109,13 @@ export default function MarketData() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Market Data</h1>
-        <Button onClick={handleRefreshPrices} disabled={refreshing}>
+    <div className="max-w-6xl mx-auto space-y-6 p-6 md:p-8">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight">Market</h1>
+          <p className="text-sm text-muted-foreground">Current market prices and FX rates</p>
+        </div>
+        <Button onClick={handleRefreshPrices} disabled={refreshing} size="sm">
           <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
           Refresh Prices
         </Button>
@@ -127,42 +130,46 @@ export default function MarketData() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <Card className="transition-all duration-300 hover:shadow-[0_0_25px_rgba(234,179,8,0.1)] hover:border-primary/10">
           <CardHeader>
-            <CardTitle>Current Market Prices</CardTitle>
+            <CardTitle className="text-lg">Current Market Prices</CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Symbol</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Currency</TableHead>
-                  <TableHead className="text-right">Price (Native)</TableHead>
-                  <TableHead className="text-right">EUR / 1 unit</TableHead>
-                  <TableHead className="text-right">Price (EUR)</TableHead>
-                  <TableHead className="text-right">Last Close</TableHead>
-                  <TableHead className="text-right">Updated</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {marketData.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell className="font-medium">{row.security.symbol}</TableCell>
-                    <TableCell>{row.security.name}</TableCell>
-                    <TableCell>{row.native_ccy}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(row.last_px_native, row.native_ccy)}</TableCell>
-                    <TableCell className="text-right">{row.eur_fx.toFixed(4)}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(row.last_px_eur, 'EUR')}</TableCell>
-                    <TableCell className="text-right">{formatDate(row.last_close_dt)}</TableCell>
-                    <TableCell className="text-right">{formatDate(row.updated_at)}</TableCell>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Symbol</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Currency</TableHead>
+                    <TableHead className="text-right">Price (Native)</TableHead>
+                    <TableHead className="text-right">EUR / 1 unit</TableHead>
+                    <TableHead className="text-right">Price (EUR)</TableHead>
+                    <TableHead className="text-right">Last Close</TableHead>
+                    <TableHead className="text-right">Updated</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {marketData.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell className="font-medium">{row.security.symbol}</TableCell>
+                      <TableCell>{row.security.name}</TableCell>
+                      <TableCell>{row.native_ccy}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatCurrency(row.last_px_native, row.native_ccy)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{row.eur_fx.toFixed(4)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatCurrency(row.last_px_eur, 'EUR')}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatDate(row.last_close_dt)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatDate(row.updated_at)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
       )}
     </div>
   );
 }
+
+export default Market;

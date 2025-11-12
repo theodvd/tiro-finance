@@ -30,7 +30,7 @@ const COLORS = [
   'hsl(var(--success))',
 ];
 
-export default function History() {
+export function Insights() {
   const { loading, error, series, snapshots, allocByAccount, allocByClass, allocByRegion, allocBySector } = useSnapshots();
 
   const formatCurrency = (value: number) =>
@@ -41,11 +41,11 @@ export default function History() {
 
   if (loading) {
     return (
-      <div className="flex-1 space-y-6 p-6 md:p-8">
-        <h1 className="text-3xl font-bold tracking-tight">Portfolio History</h1>
+      <div className="max-w-6xl mx-auto space-y-6 p-6 md:p-8">
+        <h1 className="text-xl font-bold tracking-tight">Insights</h1>
         <div className="grid gap-6">
           <Skeleton className="h-96" />
-          <div className="grid gap-6 md:grid-cols-2">
+          <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
             <Skeleton className="h-96" />
             <Skeleton className="h-96" />
           </div>
@@ -56,8 +56,8 @@ export default function History() {
 
   if (error) {
     return (
-      <div className="flex-1 space-y-6 p-6 md:p-8">
-        <h1 className="text-3xl font-bold tracking-tight">Portfolio History</h1>
+      <div className="max-w-6xl mx-auto space-y-6 p-6 md:p-8">
+        <h1 className="text-xl font-bold tracking-tight">Insights</h1>
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>{error}</AlertDescription>
@@ -67,8 +67,8 @@ export default function History() {
   }
 
   return (
-    <div className="flex-1 space-y-6 p-6 md:p-8">
-      <h1 className="text-3xl font-bold tracking-tight">Portfolio History</h1>
+    <div className="max-w-6xl mx-auto space-y-6 p-6 md:p-8">
+      <h1 className="text-xl font-bold tracking-tight">Insights</h1>
 
       {/* Time Series Chart */}
       <Card>
@@ -377,3 +377,5 @@ export default function History() {
     </div>
   );
 }
+
+export default Insights;
