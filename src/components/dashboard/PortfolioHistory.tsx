@@ -55,7 +55,7 @@ export function PortfolioHistory() {
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value);
 
   return (
-    <Card className="rounded-2xl shadow-sm border border-[#E6EAF0] bg-white">
+    <Card className="rounded-2xl shadow-sm border border-border bg-card">
       <CardHeader>
         <CardTitle>Portfolio History</CardTitle>
       </CardHeader>
@@ -68,10 +68,10 @@ export function PortfolioHistory() {
           <ChartContainer config={{}} className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={snapshots}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E6EAF0" />
-                <XAxis dataKey="date" stroke="#64748B" fontSize={12} />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={12} />
                 <YAxis
-                  stroke="#64748B"
+                  stroke="hsl(var(--muted-foreground))"
                   fontSize={12}
                   tickFormatter={(v: number) =>
                     new Intl.NumberFormat('fr-FR', {
@@ -87,7 +87,7 @@ export function PortfolioHistory() {
                 <Line
                   type="monotone"
                   dataKey="invested"
-                  stroke="#94A3B8"
+                  stroke="hsl(var(--muted-foreground))"
                   strokeWidth={1}
                   strokeDasharray="5 5"
                   dot={false}
@@ -95,7 +95,7 @@ export function PortfolioHistory() {
                 <Line
                   type="monotone"
                   dataKey="value"
-                  stroke="#334155"
+                  stroke="hsl(var(--primary))"
                   strokeWidth={2}
                   dot={false}
                 />

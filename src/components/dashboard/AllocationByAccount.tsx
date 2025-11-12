@@ -6,7 +6,7 @@ interface AllocationByAccountProps {
   accountAllocations: Array<{ name: string; value: number; type: string }>;
 }
 
-const COLORS = ['#1F2937','#334155','#475569','#64748B','#94A3B8','#CBD5E1'];
+const COLORS = ['hsl(var(--chart-2))','hsl(var(--chart-3))','hsl(var(--chart-4))','hsl(var(--chart-5))','hsl(var(--muted))'];
 
 export function AllocationByAccount({ accountAllocations }: AllocationByAccountProps) {
   const totalValue = accountAllocations.reduce((s, a) => s + a.value, 0);
@@ -17,7 +17,7 @@ export function AllocationByAccount({ accountAllocations }: AllocationByAccountP
   }));
 
   return (
-    <Card className="rounded-2xl shadow-sm border border-[#E6EAF0] bg-white">
+    <Card className="rounded-2xl shadow-sm border border-border bg-card">
       <CardHeader><CardTitle>Allocation by Account</CardTitle></CardHeader>
       <CardContent>
         {chartData.length === 0 ? (
@@ -43,9 +43,9 @@ export function AllocationByAccount({ accountAllocations }: AllocationByAccountP
                 <div key={i} className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-2">
                     <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: d.fill }} />
-                    <span className="text-slate-700">{d.name}</span>
+                    <span className="text-foreground">{d.name}</span>
                   </div>
-                  <div className="text-slate-600 tabular-nums">
+                  <div className="text-muted-foreground tabular-nums">
                     {d.percentage.toFixed(1)}%
                   </div>
                 </div>

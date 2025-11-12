@@ -9,8 +9,8 @@ interface ProfitAndLossChartProps {
 }
 
 export function ProfitAndLossChart({ totalInvested, pnl, pnlPct }: ProfitAndLossChartProps) {
-  const track = '#E5E7EB';
-  const accent = pnl >= 0 ? '#22C55E' : '#EF4444';
+  const track = 'hsl(var(--border))';
+  const accent = pnl >= 0 ? 'hsl(var(--primary))' : 'hsl(var(--destructive))';
 
   const chartData = [
     { name: 'Track', value: totalInvested, fill: track },
@@ -18,7 +18,7 @@ export function ProfitAndLossChart({ totalInvested, pnl, pnlPct }: ProfitAndLoss
   ];
 
   return (
-    <Card className="rounded-2xl shadow-sm border border-[#E6EAF0] bg-white">
+    <Card className="rounded-2xl shadow-sm border border-border bg-card">
       <CardHeader><CardTitle>Performance</CardTitle></CardHeader>
       <CardContent>
         <ChartContainer className="h-[300px]" config={{}}>
@@ -41,7 +41,7 @@ export function ProfitAndLossChart({ totalInvested, pnl, pnlPct }: ProfitAndLoss
                 new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(Number(v))
               }/>} />
               <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle"
-                className="fill-slate-900 text-3xl font-semibold tabular-nums">
+                className="fill-foreground text-3xl font-semibold tabular-nums">
                 {pnl >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%
               </text>
             </PieChart>
