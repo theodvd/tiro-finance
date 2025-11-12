@@ -69,13 +69,25 @@ Deno.serve(async (req) => {
       const ids = Array.from(new Set(cryptos.map((s) => CG_MAP[s.symbol?.toUpperCase?.() || ""]).filter(Boolean)));
 
       if (ids.length > 0) {
-        const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids.join(",")}&vs_currencies=eur`;
-        const res = await fetch(url, { headers: { accept: "application/json" } });
-        if (!res.ok) {
-          const t = await res.text();
-          throw new Error(`CoinGecko error: ${res.status} ${t}`);
+        const apiKey = Deno.env.get("COINGECKO_API_KEY");
+        const headers: Record<string, string> = { accept: "application/json" };
+        if (apiKey) {
+          headers["x-cg-demo-api-key"] = apiKey;
         }
-        const prices = await res.json(); // { bitcoin: { eur: 65000 }, ... }
+        
+        const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids.join(",")}&vs_currencies=eur`;
+        console.log(`[CoinGecko] Fetching prices for: ${ids.join(", ")}`);
+        
+        const res = await fetch(url, { headers });
+        const responseText = await res.text();
+        
+        if (!res.ok) {
+          console.error(`[CoinGecko] API error ${res.status}: ${responseText}`);
+          throw new Error(`CoinGecko error: ${res.status} ${responseText}`);
+        }
+        
+        const prices = JSON.parse(responseText);
+        console.log(`[CoinGecko] Response:`, JSON.stringify(prices));
 
         // 4) Upsert dans market_data (1 ligne par security)
         // Convention: native_ccy='EUR', eur_fx=1, last_close_dt = now
