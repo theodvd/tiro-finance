@@ -57,11 +57,11 @@ export function Insights() {
       if (error) throw error;
 
       toast.success(data.message || 'Métadonnées enrichies avec succès', {
-        description: `${data.updated} actifs mis à jour sur ${data.total}`,
+        description: `${data.updated} actifs mis à jour sur ${data.total}. Prenez un nouveau snapshot pour voir les changements dans les graphiques.`,
+        duration: 6000,
       });
 
-      // Refetch snapshots to update charts
-      await refetch();
+      // Don't refetch yet - user needs to take a new snapshot first
     } catch (error: any) {
       console.error('Error enriching metadata:', error);
       toast.error('Erreur lors de l\'enrichissement des métadonnées', {

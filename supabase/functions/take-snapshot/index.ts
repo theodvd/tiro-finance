@@ -49,7 +49,22 @@ Deno.serve(async (req) => {
       ts: r.updated_at as string
     }));
 
-    // 3) Calculate totals and prepare lines
+    // 3) Get security metadata (region, sector, asset_class)
+    const { data: securities, error: secErr } = await supabase
+      .from('securities')
+      .select('id, region, sector, asset_class')
+      .in('id', securityIds);
+
+    if (secErr) throw secErr;
+
+    const securityMap = new Map<string, { region: string; sector: string; asset_class: string }>();
+    (securities ?? []).forEach(s => securityMap.set(s.id as string, {
+      region: s.region || 'Non défini',
+      sector: s.sector || 'Diversifié',
+      asset_class: s.asset_class || 'OTHER'
+    }));
+
+    // 4) Calculate totals and prepare lines
     let totalInvested = 0;
     let totalValue = 0;
     const lines: any[] = [];
@@ -58,6 +73,7 @@ Deno.serve(async (req) => {
       const px = priceMap.get(h.security_id)?.px ?? 0;
       const mv = Number(h.shares ?? 0) * px;
       const cost = Number(h.amount_invested_eur ?? 0);
+      const secMeta = securityMap.get(h.security_id);
 
       totalInvested += cost;
       totalValue += mv;
@@ -69,14 +85,17 @@ Deno.serve(async (req) => {
         shares: h.shares ?? 0,
         last_px_eur: px,
         market_value_eur: mv,
-        cost_eur: cost
+        cost_eur: cost,
+        region: secMeta?.region || 'Non défini',
+        sector: secMeta?.sector || 'Diversifié',
+        asset_class: secMeta?.asset_class || 'OTHER'
       });
     }
 
     const pnl = totalValue - totalInvested;
     const pnlPct = totalInvested > 0 ? (pnl / totalInvested) * 100 : 0;
 
-    // 4) Insert snapshot header (append-only)
+    // 5) Insert snapshot header (append-only)
     const { data: snap, error: sErr } = await supabase
       .from('snapshots')
       .insert([{
@@ -92,7 +111,7 @@ Deno.serve(async (req) => {
 
     if (sErr) throw sErr;
 
-    // 5) Insert snapshot lines with snapshot_id
+    // 6) Insert snapshot lines with snapshot_id
     const withSnap = lines.map(l => ({ ...l, snapshot_id: snap.id }));
     if (withSnap.length > 0) {
       const { error: lErr } = await supabase.from('snapshot_lines').insert(withSnap);
