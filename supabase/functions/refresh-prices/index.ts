@@ -46,57 +46,28 @@ Deno.serve(async (req) => {
     // Si tu avais déjà une logique Yahoo/EOD pour actions/ETF, garde-la.
     // (Optionnel) await refreshNonCryptoPrices(nonCryptos);
 
-    // 2) CRYPTO: mapping symbol -> id CoinCap (free API, no auth needed)
-    const COINCAP_MAP: Record<string, string> = {
-      BTC: "bitcoin",
-      ETH: "ethereum",
-      SOL: "solana",
-      BNB: "binance-coin",
-      XRP: "xrp",
-      ADA: "cardano",
-      DOGE: "dogecoin",
-      MATIC: "polygon",
-      DOT: "polkadot",
-      LINK: "chainlink",
-      LTC: "litecoin",
-      ATOM: "cosmos",
-      AVAX: "avalanche",
-      // complète au besoin
-    };
+    // 2) Fetch crypto prices (CryptoCompare supports direct symbol lookup)
 
-    // 3) Construire la requête CoinCap (free API, no rate limit issues)
+    // 3) Fetch crypto prices using CryptoCompare (free API, stable with edge functions)
     if (cryptos.length > 0) {
-      const ids = Array.from(new Set(cryptos.map((s) => COINCAP_MAP[s.symbol?.toUpperCase?.() || ""]).filter(Boolean)));
+      const symbols = Array.from(new Set(cryptos.map((s) => s.symbol?.toUpperCase?.()).filter(Boolean)));
 
-      if (ids.length > 0) {
-        const url = `https://api.coincap.io/v2/assets?ids=${ids.join(",")}`;
-        console.log(`[CoinCap] Fetching prices for: ${ids.join(", ")}`);
+      if (symbols.length > 0) {
+        // CryptoCompare API: multi-symbol fetch
+        const fsyms = symbols.join(",");
+        const url = `https://min-api.cryptocompare.com/data/pricemulti?fsyms=${fsyms}&tsyms=EUR`;
+        console.log(`[CryptoCompare] Fetching prices for: ${fsyms}`);
         
         const res = await fetch(url, { headers: { accept: "application/json" } });
         const responseText = await res.text();
         
         if (!res.ok) {
-          console.error(`[CoinCap] API error ${res.status}: ${responseText}`);
-          throw new Error(`CoinCap error: ${res.status} ${responseText}`);
+          console.error(`[CryptoCompare] API error ${res.status}: ${responseText}`);
+          throw new Error(`CryptoCompare error: ${res.status} ${responseText}`);
         }
         
-        const data = JSON.parse(responseText);
-        console.log(`[CoinCap] Response:`, JSON.stringify(data));
-        
-        // CoinCap returns prices in USD, need to convert to EUR
-        // Get EUR/USD rate (approximate: 1 USD = 0.92 EUR, but could fetch live rate)
-        const usdToEur = 0.92; // You could fetch this from ECB or another source
-        
-        // Build a map of id -> price in EUR
-        const prices: Record<string, { eur: number }> = {};
-        if (data.data && Array.isArray(data.data)) {
-          data.data.forEach((asset: any) => {
-            if (asset.priceUsd) {
-              prices[asset.id] = { eur: parseFloat(asset.priceUsd) * usdToEur };
-            }
-          });
-        }
-        console.log(`[CoinCap] Converted prices to EUR:`, JSON.stringify(prices));
+        const prices = JSON.parse(responseText);
+        console.log(`[CryptoCompare] Response:`, JSON.stringify(prices));
 
         // 4) Upsert dans market_data (1 ligne par security)
         // Convention: native_ccy='EUR', eur_fx=1, last_close_dt = now
@@ -105,8 +76,8 @@ Deno.serve(async (req) => {
         // Option: batched inserts pour minimiser les round-trips
         const rows = cryptos
           .map((s) => {
-            const id = COINCAP_MAP[s.symbol.toUpperCase()];
-            const px = prices?.[id]?.eur ?? null;
+            const symbol = s.symbol.toUpperCase();
+            const px = prices?.[symbol]?.EUR ?? null;
             return px
               ? {
                   user_id: user.id,
