@@ -80,37 +80,47 @@ const mapSector = (sector: string | undefined, industry: string | undefined): st
 
 // Fetch metadata from Yahoo Finance API
 async function fetchYahooFinanceMetadata(symbol: string): Promise<SecurityMetadata> {
-  console.log(`Fetching metadata for ${symbol}`);
+  console.log(`[ENRICH] Fetching metadata for ${symbol}`);
   
   try {
     // Use Yahoo Finance API v8 (unofficial but public)
     const url = `https://query2.finance.yahoo.com/v8/finance/chart/${symbol}`;
+    console.log(`[ENRICH] Calling ${url}`);
+    
     const response = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0',
       },
     });
 
+    console.log(`[ENRICH] Chart API response status: ${response.status}`);
+
     if (!response.ok) {
-      console.warn(`Yahoo Finance API returned ${response.status} for ${symbol}`);
-      return { symbol };
+      console.warn(`[ENRICH] Yahoo Finance API returned ${response.status} for ${symbol}`);
+      return { symbol, region: 'Monde', sector: 'Diversifié', currency: 'EUR' };
     }
 
     const data = await response.json();
     const meta = data?.chart?.result?.[0]?.meta;
 
     if (!meta) {
-      console.warn(`No metadata found for ${symbol}`);
-      return { symbol };
+      console.warn(`[ENRICH] No metadata found for ${symbol}`);
+      return { symbol, region: 'Monde', sector: 'Diversifié', currency: 'EUR' };
     }
+
+    console.log(`[ENRICH] Meta currency: ${meta.currency}`);
 
     // Fetch additional quote data for sector information
     const quoteUrl = `https://query2.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`;
+    console.log(`[ENRICH] Calling ${quoteUrl}`);
+    
     const quoteResponse = await fetch(quoteUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0',
       },
     });
+
+    console.log(`[ENRICH] Quote API response status: ${quoteResponse.status}`);
 
     let sector = 'Diversifié';
     let region = 'Monde';
@@ -118,6 +128,14 @@ async function fetchYahooFinanceMetadata(symbol: string): Promise<SecurityMetada
     if (quoteResponse.ok) {
       const quoteData = await quoteResponse.json();
       const quote = quoteData?.quoteResponse?.result?.[0];
+      
+      console.log(`[ENRICH] Quote data:`, JSON.stringify({
+        quoteType: quote?.quoteType,
+        country: quote?.country,
+        exchange: quote?.exchange,
+        sector: quote?.sector,
+        industry: quote?.industry
+      }));
       
       if (quote) {
         region = mapRegion(quote.country, quote.exchange);
@@ -128,20 +146,26 @@ async function fetchYahooFinanceMetadata(symbol: string): Promise<SecurityMetada
         } else {
           sector = mapSector(quote.sector, quote.industry);
         }
+        
+        console.log(`[ENRICH] Mapped region: ${region}, sector: ${sector}`);
       }
     }
 
     const currency = meta.currency || 'EUR';
 
-    return {
+    const result = {
       symbol,
       region,
       sector,
       currency,
     };
+    
+    console.log(`[ENRICH] Final result for ${symbol}:`, JSON.stringify(result));
+
+    return result;
   } catch (error) {
-    console.error(`Error fetching metadata for ${symbol}:`, error);
-    return { symbol };
+    console.error(`[ENRICH] Error fetching metadata for ${symbol}:`, error);
+    return { symbol, region: 'Monde', sector: 'Diversifié', currency: 'EUR' };
   }
 }
 
@@ -205,37 +229,43 @@ Deno.serve(async (req) => {
       const metadata = await fetchYahooFinanceMetadata(security.symbol);
 
       // Update the security with enriched metadata
-      if (metadata.region || metadata.sector) {
-        const { error: updateError } = await supabase
-          .from('securities')
-          .update({
-            region: metadata.region || security.region || 'Monde',
-            sector: metadata.sector || security.sector || 'Diversifié',
-            currency_quote: metadata.currency || security.asset_class,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', security.id);
+      console.log(`[ENRICH] Updating ${security.symbol} with:`, {
+        region: metadata.region,
+        sector: metadata.sector,
+        currency: metadata.currency
+      });
+      
+      const { error: updateError } = await supabase
+        .from('securities')
+        .update({
+          region: metadata.region || 'Monde',
+          sector: metadata.sector || 'Diversifié',
+          currency_quote: metadata.currency || 'EUR',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', security.id);
 
-        if (updateError) {
-          console.error(`Error updating ${security.symbol}:`, updateError);
-          results.push({
-            symbol: security.symbol,
-            success: false,
-            error: updateError.message,
-          });
-        } else {
-          console.log(`Successfully updated ${security.symbol}`);
-          results.push({
-            symbol: security.symbol,
-            success: true,
-          });
-          updated++;
-        }
+      if (updateError) {
+        console.error(`[ENRICH] Error updating ${security.symbol}:`, updateError);
+        results.push({
+          symbol: security.symbol,
+          success: false,
+          error: updateError.message,
+        });
+      } else {
+        console.log(`[ENRICH] Successfully updated ${security.symbol}`);
+        results.push({
+          symbol: security.symbol,
+          success: true,
+        });
+        updated++;
       }
 
       // Add delay to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
+
+    console.log(`[ENRICH] Enrichment complete: ${updated}/${securities.length} securities updated`);
 
     return new Response(
       JSON.stringify({
@@ -248,7 +278,7 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error: any) {
-    console.error('Error in enrich-securities function:', error);
+    console.error('[ENRICH] Error in enrich-securities function:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
       { 
