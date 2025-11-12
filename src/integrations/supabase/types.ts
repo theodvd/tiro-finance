@@ -351,6 +351,102 @@ export type Database = {
         }
         Relationships: []
       }
+      user_profile: {
+        Row: {
+          committed: boolean | null
+          concrete_project: string | null
+          created_at: string
+          current_status: string | null
+          emergency_fund: number | null
+          existing_investments: string[] | null
+          financial_dream: string | null
+          financial_goals: string[] | null
+          five_year_goal: string | null
+          id: string
+          investment_exclusions: string[] | null
+          investment_experience: string | null
+          investment_horizon: string | null
+          learning_priorities: string[] | null
+          main_difficulty: string | null
+          main_motivation: string | null
+          management_style: string | null
+          monthly_expenses: number | null
+          monthly_income: number | null
+          monthly_saving_capacity: number | null
+          one_year_goal: string | null
+          planned_expenses: string | null
+          preferred_assets: string[] | null
+          responsible_investing: boolean | null
+          risk_tolerance: string | null
+          time_commitment: string | null
+          updated_at: string
+          user_id: string
+          wants_reminders: boolean | null
+        }
+        Insert: {
+          committed?: boolean | null
+          concrete_project?: string | null
+          created_at?: string
+          current_status?: string | null
+          emergency_fund?: number | null
+          existing_investments?: string[] | null
+          financial_dream?: string | null
+          financial_goals?: string[] | null
+          five_year_goal?: string | null
+          id?: string
+          investment_exclusions?: string[] | null
+          investment_experience?: string | null
+          investment_horizon?: string | null
+          learning_priorities?: string[] | null
+          main_difficulty?: string | null
+          main_motivation?: string | null
+          management_style?: string | null
+          monthly_expenses?: number | null
+          monthly_income?: number | null
+          monthly_saving_capacity?: number | null
+          one_year_goal?: string | null
+          planned_expenses?: string | null
+          preferred_assets?: string[] | null
+          responsible_investing?: boolean | null
+          risk_tolerance?: string | null
+          time_commitment?: string | null
+          updated_at?: string
+          user_id: string
+          wants_reminders?: boolean | null
+        }
+        Update: {
+          committed?: boolean | null
+          concrete_project?: string | null
+          created_at?: string
+          current_status?: string | null
+          emergency_fund?: number | null
+          existing_investments?: string[] | null
+          financial_dream?: string | null
+          financial_goals?: string[] | null
+          five_year_goal?: string | null
+          id?: string
+          investment_exclusions?: string[] | null
+          investment_experience?: string | null
+          investment_horizon?: string | null
+          learning_priorities?: string[] | null
+          main_difficulty?: string | null
+          main_motivation?: string | null
+          management_style?: string | null
+          monthly_expenses?: number | null
+          monthly_income?: number | null
+          monthly_saving_capacity?: number | null
+          one_year_goal?: string | null
+          planned_expenses?: string | null
+          preferred_assets?: string[] | null
+          responsible_investing?: boolean | null
+          risk_tolerance?: string | null
+          time_commitment?: string | null
+          updated_at?: string
+          user_id?: string
+          wants_reminders?: boolean | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       v_latest_alloc_by_account: {

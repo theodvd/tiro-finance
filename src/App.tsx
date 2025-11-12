@@ -12,6 +12,7 @@ import Accounts from "./pages/Accounts";
 import Investments from "./pages/Investments";
 import Market from "./pages/Market";
 import Insights from "./pages/Insights";
+import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -71,6 +72,16 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <Insights />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Profile />
                   </Layout>
                 </ProtectedRoute>
               }

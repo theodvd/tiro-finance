@@ -1,4 +1,4 @@
-import { Home, Briefcase, Building2, TrendingUp, BarChart3, LogOut } from "lucide-react";
+import { Home, Briefcase, Building2, TrendingUp, BarChart3, User, LogOut } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -19,6 +19,7 @@ const menuItems = [
   { title: "Accounts", url: "/accounts", icon: Building2 },
   { title: "Market", url: "/market", icon: TrendingUp },
   { title: "Insights", url: "/insights", icon: BarChart3 },
+  { title: "Profil", url: "/profile", icon: User },
 ];
 
 export function AppSidebar() {
