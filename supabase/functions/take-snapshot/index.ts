@@ -6,15 +6,11 @@ const corsHeaders = {
 };
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response('Unauthorized', { status: 401, headers: corsHeaders });
-    }
+    if (!authHeader) return new Response('Unauthorized', { status: 401, headers: corsHeaders });
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -23,74 +19,100 @@ Deno.serve(async (req) => {
     );
 
     const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      return new Response('Unauthorized', { status: 401, headers: corsHeaders });
-    }
+    if (userError || !user) return new Response('Unauthorized', { status: 401, headers: corsHeaders });
 
-    const body = await req.json().catch(() => ({}));
-    const valuationDate = body?.valuation_date ?? new Date().toISOString().slice(0, 10);
-
-    // Fetch holdings with nested security and market_data
-    const { data: holdings, error: holdingsError } = await supabase
+    // 1) Holdings (no nested queries)
+    const { data: holdings, error: hErr } = await supabase
       .from('holdings')
-      .select(`
-        id, shares, amount_invested_eur, account_id, security_id,
-        security:securities(
-          id,
-          market_data(last_px_eur)
-        )
-      `)
+      .select('id, shares, amount_invested_eur, account_id, security_id')
       .eq('user_id', user.id);
 
-    if (holdingsError) {
-      console.error('Error fetching holdings:', holdingsError);
-      return new Response(JSON.stringify({ error: holdingsError.message }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    if (hErr) throw hErr;
+    if (!holdings || holdings.length === 0) {
+      return new Response(JSON.stringify({ ok: true, snapshot_id: null, lines_created: 0 }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    let linesCreated = 0;
+    // 2) Latest prices via view (no nested queries)
+    const securityIds = [...new Set(holdings.map(h => h.security_id).filter(Boolean))];
+    const { data: latest, error: pErr } = await supabase
+      .from('v_latest_market_price')
+      .select('security_id, last_px_eur, updated_at')
+      .in('security_id', securityIds);
 
-    for (const h of holdings ?? []) {
-      const px = Number((h.security as any)?.market_data?.[0]?.last_px_eur ?? 0);
+    if (pErr) throw pErr;
+
+    const priceMap = new Map<string, { px: number; ts: string }>();
+    (latest ?? []).forEach(r => priceMap.set(r.security_id as string, {
+      px: Number(r.last_px_eur ?? 0),
+      ts: r.updated_at as string
+    }));
+
+    // 3) Calculate totals and prepare lines
+    let totalInvested = 0;
+    let totalValue = 0;
+    const lines: any[] = [];
+
+    for (const h of holdings) {
+      const px = priceMap.get(h.security_id)?.px ?? 0;
       const mv = Number(h.shares ?? 0) * px;
-      const cost = h.amount_invested_eur ?? null;
+      const cost = Number(h.amount_invested_eur ?? 0);
 
-      const { error: upsertError } = await supabase.from('snapshot_lines').upsert({
+      totalInvested += cost;
+      totalValue += mv;
+
+      lines.push({
         user_id: user.id,
-        valuation_date: valuationDate,
         account_id: h.account_id,
         security_id: h.security_id,
         shares: h.shares ?? 0,
         last_px_eur: px,
         market_value_eur: mv,
         cost_eur: cost
-      }, { 
-        onConflict: 'user_id,valuation_date,account_id,security_id' 
       });
-
-      if (upsertError) {
-        console.error('Snapshot line upsert error:', upsertError.message);
-      } else {
-        linesCreated++;
-      }
     }
 
-    console.log(`Snapshot created: ${valuationDate}, ${linesCreated} lines`);
+    const pnl = totalValue - totalInvested;
+    const pnlPct = totalInvested > 0 ? (pnl / totalInvested) * 100 : 0;
+
+    // 4) Insert snapshot header (append-only)
+    const { data: snap, error: sErr } = await supabase
+      .from('snapshots')
+      .insert([{
+        user_id: user.id,
+        total_invested_eur: totalInvested,
+        total_value_eur: totalValue,
+        pnl_eur: pnl,
+        pnl_pct: pnlPct,
+        meta: {}
+      }])
+      .select()
+      .single();
+
+    if (sErr) throw sErr;
+
+    // 5) Insert snapshot lines with snapshot_id
+    const withSnap = lines.map(l => ({ ...l, snapshot_id: snap.id }));
+    if (withSnap.length > 0) {
+      const { error: lErr } = await supabase.from('snapshot_lines').insert(withSnap);
+      if (lErr) throw lErr;
+    }
+
+    console.log(`Snapshot created: ${snap.id}, ${withSnap.length} lines`);
 
     return new Response(JSON.stringify({ 
       ok: true, 
-      valuation_date: valuationDate,
-      lines_created: linesCreated
+      snapshot_id: snap.id,
+      lines_created: withSnap.length
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
-  } catch (error: any) {
-    console.error('Error in take-snapshot:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+  } catch (e: any) {
+    console.error('Error in take-snapshot:', e);
+    return new Response(JSON.stringify({ error: e.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });

@@ -43,7 +43,7 @@ export function usePortfolioData() {
     try {
       setData(prev => ({ ...prev, loading: true, error: null }));
 
-      // Fetch holdings with nested market_data
+      // Fetch holdings (no nested market_data)
       const { data: holdings, error: holdingsError } = await supabase
         .from('holdings')
         .select(`
@@ -52,13 +52,7 @@ export function usePortfolioData() {
           amount_invested_eur,
           account_id,
           accounts(id, name, type),
-          security:securities(
-            id,
-            symbol,
-            name,
-            asset_class,
-            market_data(last_px_eur, updated_at)
-          )
+          security:securities(id, symbol, name)
         `)
         .eq('user_id', user.id);
 
@@ -78,6 +72,23 @@ export function usePortfolioData() {
         return;
       }
 
+      // Fetch latest prices via view
+      const securityIds = holdings.map(h => (h.security as any)?.id).filter(Boolean) as string[];
+      const { data: latest, error: mdError } = await supabase
+        .from('v_latest_market_price')
+        .select('security_id, last_px_eur, updated_at')
+        .in('security_id', securityIds);
+
+      if (mdError) throw mdError;
+
+      const priceMap = new Map<string, { price: number; updated: string }>();
+      (latest ?? []).forEach(md => {
+        priceMap.set(md.security_id as string, {
+          price: Number(md.last_px_eur ?? 0),
+          updated: md.updated_at as string
+        });
+      });
+
       // Compute totals and allocations
       let totalInvested = 0;
       let totalValue = 0;
@@ -95,13 +106,14 @@ export function usePortfolioData() {
       holdings.forEach(holding => {
         const invested = Number(holding.amount_invested_eur || 0);
         const shares = Number(holding.shares || 0);
-        const price = Number((holding.security as any)?.market_data?.[0]?.last_px_eur ?? 0);
+        const securityId = (holding.security as any)?.id || '';
+        const price = priceMap.get(securityId)?.price ?? 0;
         const marketValue = shares * price;
 
         totalInvested += invested;
         totalValue += marketValue;
 
-        const updated = (holding.security as any)?.market_data?.[0]?.updated_at;
+        const updated = priceMap.get(securityId)?.updated;
         if (updated && (!lastUpdated || updated > lastUpdated)) {
           lastUpdated = updated;
         }
@@ -118,8 +130,8 @@ export function usePortfolioData() {
 
         // Holdings data
         holdingsData.push({
-          name: holding.security?.name || '',
-          symbol: holding.security?.symbol || '',
+          name: (holding.security as any)?.name || '',
+          symbol: (holding.security as any)?.symbol || '',
           marketValue,
           perfPct: invested > 0 ? ((marketValue - invested) / invested) * 100 : 0,
           accountName,
