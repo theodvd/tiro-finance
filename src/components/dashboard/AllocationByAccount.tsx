@@ -7,14 +7,7 @@ interface AllocationByAccountProps {
   accountAllocations: Array<{ name: string; value: number; type: string }>;
 }
 
-const COLORS = [
-  'hsl(var(--primary))',
-  'hsl(var(--secondary))',
-  'hsl(var(--accent))',
-  'hsl(var(--muted))',
-  'hsl(221 83% 53%)',
-  'hsl(142 76% 36%)',
-];
+const COLORS = ['#3B82F6', '#10B981', '#FACC15', '#9333EA', '#64748B', '#EF4444'];
 
 export function AllocationByAccount({ accountAllocations }: AllocationByAccountProps) {
   const totalValue = accountAllocations.reduce((sum, acc) => sum + acc.value, 0);
@@ -31,7 +24,7 @@ export function AllocationByAccount({ accountAllocations }: AllocationByAccountP
     new Intl.NumberFormat('en-EU', { style: 'currency', currency: 'EUR' }).format(value);
 
   return (
-    <Card>
+    <Card className="rounded-2xl shadow-md border border-slate-200 bg-white">
       <CardHeader>
         <CardTitle>Allocation by Account</CardTitle>
       </CardHeader>
@@ -76,11 +69,11 @@ export function AllocationByAccount({ accountAllocations }: AllocationByAccountP
                   />
                   <Legend
                     verticalAlign="bottom"
-                    height={36}
+                    height={40}
                     formatter={(value, entry: any) => (
                       <span className="text-sm">
-                        {value}{' '}
-                        <Badge variant="outline" className="ml-1 text-xs">
+                        {value}
+                        <Badge variant="outline" className="ml-2 text-[10px] tracking-wide">
                           {entry.payload.type}
                         </Badge>
                       </span>

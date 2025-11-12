@@ -16,9 +16,10 @@ interface TopHoldingsTableProps {
     perfPct: number;
     accountName: string;
   }>;
+  totalValue?: number;
 }
 
-export function TopHoldingsTable({ topHoldings }: TopHoldingsTableProps) {
+export function TopHoldingsTable({ topHoldings, totalValue }: TopHoldingsTableProps) {
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat('en-EU', { style: 'currency', currency: 'EUR' }).format(value);
 
@@ -26,7 +27,7 @@ export function TopHoldingsTable({ topHoldings }: TopHoldingsTableProps) {
     `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
 
   return (
-    <Card>
+    <Card className="rounded-2xl shadow-md border border-slate-200 bg-white">
       <CardHeader>
         <CardTitle>Top Holdings</CardTitle>
       </CardHeader>
@@ -43,31 +44,46 @@ export function TopHoldingsTable({ topHoldings }: TopHoldingsTableProps) {
                 <TableHead>Ticker</TableHead>
                 <TableHead className="text-right">Market Value</TableHead>
                 <TableHead className="text-right">Performance</TableHead>
+                <TableHead className="text-right">Weight</TableHead>
                 <TableHead>Account</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {topHoldings.map((holding, idx) => (
-                <TableRow key={idx}>
-                  <TableCell className="font-medium">{holding.name}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {holding.symbol}
-                  </TableCell>
-                  <TableCell className="text-right font-mono">
-                    {formatCurrency(holding.marketValue)}
-                  </TableCell>
-                  <TableCell
-                    className={`text-right font-mono ${
-                      holding.perfPct >= 0 ? 'text-green-600' : 'text-red-600'
-                    }`}
-                  >
-                    {formatPercent(holding.perfPct)}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {holding.accountName}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {topHoldings.map((holding, idx) => {
+                const weight = totalValue && totalValue > 0 ? (holding.marketValue / totalValue) * 100 : 0;
+                return (
+                  <TableRow key={idx}>
+                    <TableCell className="font-medium">{holding.name}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {holding.symbol}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatCurrency(holding.marketValue)}
+                    </TableCell>
+                    <TableCell
+                      className={`text-right font-mono ${
+                        holding.perfPct >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                      }`}
+                    >
+                      {formatPercent(holding.perfPct)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center gap-2 justify-end">
+                        <span className="tabular-nums text-sm">{weight.toFixed(1)}%</span>
+                        <div className="w-24 h-1.5 bg-slate-200 rounded">
+                          <div
+                            className="h-1.5 bg-slate-600 rounded"
+                            style={{ width: `${Math.min(100, weight)}%` }}
+                          />
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {holding.accountName}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         )}

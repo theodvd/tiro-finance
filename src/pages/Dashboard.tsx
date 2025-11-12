@@ -152,7 +152,7 @@ export default function Dashboard() {
 
       <PortfolioHistory />
 
-      <TopHoldingsTable topHoldings={portfolioData.topHoldings} />
+      <TopHoldingsTable topHoldings={portfolioData.topHoldings} totalValue={portfolioData.totalValue} />
     </div>
   );
 }
