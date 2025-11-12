@@ -20,24 +20,24 @@ import { AlertCircle } from 'lucide-react';
 import { useSnapshots } from '@/hooks/useSnapshots';
 
 const COLORS = [
+  'hsl(var(--chart-1))',
+  'hsl(var(--chart-2))',
+  'hsl(var(--chart-3))',
+  'hsl(var(--chart-4))',
+  'hsl(var(--chart-5))',
   'hsl(var(--primary))',
-  'hsl(var(--secondary))',
   'hsl(var(--accent))',
-  'hsl(var(--muted))',
-  'hsl(221 83% 53%)',
-  'hsl(142 76% 36%)',
-  'hsl(262 83% 58%)',
-  'hsl(346 77% 50%)',
+  'hsl(var(--success))',
 ];
 
 export default function History() {
   const { loading, error, series, snapshots, allocByAccount, allocByClass, allocByRegion, allocBySector } = useSnapshots();
 
   const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('en-EU', { style: 'currency', currency: 'EUR', notation: 'compact' }).format(value);
+    new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', notation: 'compact' }).format(value);
 
   const formatCurrencyFull = (value: number) =>
-    new Intl.NumberFormat('en-EU', { style: 'currency', currency: 'EUR' }).format(value);
+    new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value);
 
   if (loading) {
     return (
@@ -157,7 +157,7 @@ export default function History() {
                           dataKey="value"
                         >
                           {allocByAccount.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="hsl(var(--card))" strokeWidth={2} fillOpacity={0.85} />
                           ))}
                         </Pie>
                         <ChartTooltip
@@ -210,7 +210,7 @@ export default function History() {
                           dataKey="value"
                         >
                           {allocByClass.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="hsl(var(--card))" strokeWidth={2} fillOpacity={0.85} />
                           ))}
                         </Pie>
                         <ChartTooltip
@@ -250,7 +250,7 @@ export default function History() {
                           dataKey="value"
                         >
                           {allocByRegion.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="hsl(var(--card))" strokeWidth={2} fillOpacity={0.85} />
                           ))}
                         </Pie>
                         <ChartTooltip
@@ -290,7 +290,7 @@ export default function History() {
                           dataKey="value"
                         >
                           {allocBySector.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="hsl(var(--card))" strokeWidth={2} fillOpacity={0.85} />
                           ))}
                         </Pie>
                         <ChartTooltip
@@ -336,7 +336,7 @@ export default function History() {
                     return (
                       <tr key={snap.id} className="border-b">
                         <td className="py-2 px-4">
-                          {new Date(snap.snapshot_ts).toLocaleDateString('en-EU', {
+                          {new Date(snap.snapshot_ts).toLocaleDateString('fr-FR', {
                             year: 'numeric',
                             month: 'short',
                             day: 'numeric',
@@ -352,14 +352,14 @@ export default function History() {
                         </td>
                         <td
                           className={`text-right py-2 px-4 ${
-                            pnl >= 0 ? 'text-green-600' : 'text-red-600'
+                            pnl >= 0 ? 'text-success' : 'text-destructive'
                           }`}
                         >
                           {formatCurrencyFull(pnl)}
                         </td>
                         <td
                           className={`text-right py-2 px-4 ${
-                            pnlPct >= 0 ? 'text-green-600' : 'text-red-600'
+                            pnlPct >= 0 ? 'text-success' : 'text-destructive'
                           }`}
                         >
                           {pnlPct >= 0 ? '+' : ''}

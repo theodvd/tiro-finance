@@ -6,7 +6,13 @@ interface AllocationByAccountProps {
   accountAllocations: Array<{ name: string; value: number; type: string }>;
 }
 
-const COLORS = ['hsl(var(--chart-2))','hsl(var(--chart-3))','hsl(var(--chart-4))','hsl(var(--chart-5))','hsl(var(--muted))'];
+const COLORS = [
+  'hsl(var(--chart-1))',
+  'hsl(var(--chart-2))',
+  'hsl(var(--chart-3))',
+  'hsl(var(--chart-4))',
+  'hsl(var(--chart-5))',
+];
 
 export function AllocationByAccount({ accountAllocations }: AllocationByAccountProps) {
   const totalValue = accountAllocations.reduce((s, a) => s + a.value, 0);
@@ -28,7 +34,7 @@ export function AllocationByAccount({ accountAllocations }: AllocationByAccountP
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie data={chartData} cx="50%" cy="50%" outerRadius={90} dataKey="value" labelLine={false}>
-                    {chartData.map((d, i) => <Cell key={i} fill={d.fill} stroke="none" />)}
+                    {chartData.map((d, i) => <Cell key={i} fill={d.fill} stroke="hsl(var(--card))" strokeWidth={2} fillOpacity={0.85} />)}
                   </Pie>
                   <ChartTooltip content={<ChartTooltipContent formatter={(v) =>
                     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(Number(v))

@@ -10,7 +10,7 @@ interface ProfitAndLossChartProps {
 
 export function ProfitAndLossChart({ totalInvested, pnl, pnlPct }: ProfitAndLossChartProps) {
   const track = 'hsl(var(--border))';
-  const accent = pnl >= 0 ? 'hsl(var(--primary))' : 'hsl(var(--destructive))';
+  const accent = pnl >= 0 ? 'hsl(var(--success))' : 'hsl(var(--destructive))';
 
   const chartData = [
     { name: 'Track', value: totalInvested, fill: track },
@@ -35,7 +35,7 @@ export function ProfitAndLossChart({ totalInvested, pnl, pnlPct }: ProfitAndLoss
                 isAnimationActive
                 animationDuration={500}
               >
-                {chartData.map((d, i) => <Cell key={i} fill={d.fill} stroke="none" />)}
+                {chartData.map((d, i) => <Cell key={i} fill={d.fill} stroke="hsl(var(--card))" strokeWidth={3} fillOpacity={0.85} />)}
               </Pie>
               <ChartTooltip content={<ChartTooltipContent formatter={(v) =>
                 new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(Number(v))
