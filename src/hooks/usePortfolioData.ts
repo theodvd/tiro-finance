@@ -43,7 +43,7 @@ export function usePortfolioData() {
     try {
       setData(prev => ({ ...prev, loading: true, error: null }));
 
-      // Fetch holdings with related data
+      // Fetch holdings with nested market_data
       const { data: holdings, error: holdingsError } = await supabase
         .from('holdings')
         .select(`
@@ -52,7 +52,13 @@ export function usePortfolioData() {
           amount_invested_eur,
           account_id,
           accounts(id, name, type),
-          security:securities(id, symbol, name, asset_class)
+          security:securities(
+            id,
+            symbol,
+            name,
+            asset_class,
+            market_data(last_px_eur, updated_at)
+          )
         `)
         .eq('user_id', user.id);
 
@@ -72,27 +78,6 @@ export function usePortfolioData() {
         return;
       }
 
-      // Fetch market data for all securities
-      const securityIds = holdings
-        .map(h => h.security?.id)
-        .filter(Boolean) as string[];
-
-      const { data: marketData, error: mdError } = await supabase
-        .from('market_data')
-        .select('security_id, last_px_eur, updated_at')
-        .in('security_id', securityIds);
-
-      if (mdError) throw mdError;
-
-      // Build price map
-      const priceMap = new Map<string, { price: number; updated: string }>();
-      marketData?.forEach(md => {
-        priceMap.set(md.security_id, {
-          price: Number(md.last_px_eur || 0),
-          updated: md.updated_at || '',
-        });
-      });
-
       // Compute totals and allocations
       let totalInvested = 0;
       let totalValue = 0;
@@ -110,15 +95,15 @@ export function usePortfolioData() {
       holdings.forEach(holding => {
         const invested = Number(holding.amount_invested_eur || 0);
         const shares = Number(holding.shares || 0);
-        const priceData = priceMap.get(holding.security?.id || '');
-        const price = priceData?.price || 0;
+        const price = Number((holding.security as any)?.market_data?.[0]?.last_px_eur ?? 0);
         const marketValue = shares * price;
 
         totalInvested += invested;
         totalValue += marketValue;
 
-        if (priceData?.updated && (!lastUpdated || priceData.updated > lastUpdated)) {
-          lastUpdated = priceData.updated;
+        const updated = (holding.security as any)?.market_data?.[0]?.updated_at;
+        if (updated && (!lastUpdated || updated > lastUpdated)) {
+          lastUpdated = updated;
         }
 
         // Account allocation
