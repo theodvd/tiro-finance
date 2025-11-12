@@ -55,24 +55,24 @@ export function PortfolioHistory() {
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value);
 
   return (
-    <Card className="rounded-2xl shadow-sm border border-border bg-card transition-all duration-300 hover:shadow-[0_0_25px_rgba(234,179,8,0.1)] hover:border-primary/10">
+    <Card className="rounded-2xl shadow-sm border border-border bg-card transition-all duration-300 hover:shadow-[0_0_25px_rgba(234,179,8,0.1)] hover:border-primary/10 min-w-0">
       <CardHeader>
         <CardTitle className="text-base sm:text-lg">Portfolio History</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="w-full">
         {snapshots.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">
             No historical data. Take your first snapshot to track performance over time.
           </p>
         ) : (
-          <ChartContainer config={{}} className="h-[250px] sm:h-[300px]">
+          <ChartContainer config={{}} className="h-[200px] sm:h-[250px] lg:h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={snapshots}>
+              <LineChart data={snapshots} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis 
                   dataKey="date" 
                   stroke="hsl(var(--muted-foreground))" 
-                  fontSize={10} 
+                  fontSize={9} 
                   className="sm:text-xs"
                   angle={-45}
                   textAnchor="end"
@@ -80,8 +80,9 @@ export function PortfolioHistory() {
                 />
                 <YAxis
                   stroke="hsl(var(--muted-foreground))"
-                  fontSize={10}
+                  fontSize={9}
                   className="sm:text-xs"
+                  width={50}
                   tickFormatter={(v: number) =>
                     new Intl.NumberFormat('fr-FR', {
                       notation: 'compact',
