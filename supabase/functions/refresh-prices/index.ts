@@ -22,6 +22,12 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
+    // Create service role client for fx_rates operations (restricted table)
+    const serviceSupabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
       return new Response('Unauthorized', { status: 401, headers: corsHeaders });
@@ -158,7 +164,8 @@ Deno.serve(async (req) => {
         // Optional: cache ECB rate for auditing (ECB convention: QUOTE per 1 EUR)
         const quotePerEur = ecbRates[fxCcy];
         if (quotePerEur) {
-          await supabase.from('fx_rates').upsert({
+          // Use service role client for fx_rates (security: only backend can write)
+          await serviceSupabase.from('fx_rates').upsert({
             base: 'EUR',
             quote: fxCcy,
             rate: quotePerEur,
