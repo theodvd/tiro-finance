@@ -24,35 +24,35 @@ export function PortfolioSummary({
       : 'Jamais';
 
   const kpiCard = (label: string, value: number, icon?: React.ReactNode, colored?: boolean) => (
-    <Card className="rounded-2xl shadow-sm border border-[#E6EAF0] bg-white">
+    <Card className="rounded-2xl shadow-sm border border-border bg-card">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-xs font-medium text-slate-500">{label}</CardTitle>
+        <CardTitle className="text-xs font-medium text-muted-foreground">{label}</CardTitle>
         {icon}
       </CardHeader>
       <CardContent>
-        <div className={`text-[28px] font-semibold tracking-tight tabular-nums ${colored ? (pnl >= 0 ? 'text-emerald-600' : 'text-rose-600') : 'text-slate-900'}`}>
+        <div className={`text-[28px] font-semibold tracking-tight tabular-nums ${colored ? (pnl >= 0 ? 'text-[hsl(var(--success))]' : 'text-[hsl(var(--destructive))]') : 'text-foreground'}`}>
           <CountUp end={value} duration={0.8} decimals={2} decimal="," separator=" " />
           <span className="ml-1">€</span>
         </div>
-        <p className="text-xs text-slate-500 mt-1">Mise à jour : {formatDate(lastUpdated)}</p>
+        <p className="text-xs text-muted-foreground mt-1">Mise à jour : {formatDate(lastUpdated)}</p>
       </CardContent>
     </Card>
   );
 
   return (
     <div className="grid gap-4 md:grid-cols-3">
-      {kpiCard('Total Invested', totalInvested, <Wallet className="h-4 w-4 text-slate-400" />)}
-      {kpiCard('Current Value', totalValue, <TrendingUp className="h-4 w-4 text-slate-400" />)}
-      <Card className="rounded-2xl shadow-sm border border-[#E6EAF0] bg-white">
+      {kpiCard('Total Invested', totalInvested, <Wallet className="h-4 w-4 text-muted-foreground" />)}
+      {kpiCard('Current Value', totalValue, <TrendingUp className="h-4 w-4 text-muted-foreground" />)}
+      <Card className="rounded-2xl shadow-sm border border-border bg-card">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-xs font-medium text-slate-500">Profit / Loss</CardTitle>
-          {pnl >= 0 ? <TrendingUp className="h-4 w-4 text-emerald-600" /> : <TrendingDown className="h-4 w-4 text-rose-600" />}
+          <CardTitle className="text-xs font-medium text-muted-foreground">Profit / Loss</CardTitle>
+          {pnl >= 0 ? <TrendingUp className="h-4 w-4 text-[hsl(var(--success))]" /> : <TrendingDown className="h-4 w-4 text-[hsl(var(--destructive))]" />}
         </CardHeader>
         <CardContent>
-          <div className={`text-[28px] font-semibold tabular-nums ${pnl >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+          <div className={`text-[28px] font-semibold tabular-nums ${pnl >= 0 ? 'text-[hsl(var(--success))]' : 'text-[hsl(var(--destructive))]'}`}>
             {fmtEUR(pnl)}
           </div>
-          <p className={`text-xs font-medium mt-1 ${pnl >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+          <p className={`text-xs font-medium mt-1 ${pnl >= 0 ? 'text-[hsl(var(--success))]' : 'text-[hsl(var(--destructive))]'}`}>
             {fmtPct(pnlPct)}
           </p>
         </CardContent>

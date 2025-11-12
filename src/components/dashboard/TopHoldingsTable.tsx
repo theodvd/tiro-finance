@@ -27,7 +27,7 @@ export function TopHoldingsTable({ topHoldings, totalValue }: TopHoldingsTablePr
     `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
 
   return (
-    <Card className="rounded-2xl shadow-sm border border-[#E6EAF0] bg-white">
+    <Card className="rounded-2xl shadow-sm border border-border bg-card">
       <CardHeader>
         <CardTitle>Top Holdings</CardTitle>
       </CardHeader>
@@ -62,7 +62,7 @@ export function TopHoldingsTable({ topHoldings, totalValue }: TopHoldingsTablePr
                     </TableCell>
                     <TableCell
                       className={`text-right font-mono ${
-                        holding.perfPct >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                        holding.perfPct >= 0 ? 'text-[hsl(var(--success))]' : 'text-[hsl(var(--destructive))]'
                       }`}
                     >
                       {formatPercent(holding.perfPct)}
@@ -70,9 +70,9 @@ export function TopHoldingsTable({ topHoldings, totalValue }: TopHoldingsTablePr
                     <TableCell className="text-right">
                       <div className="flex items-center gap-2 justify-end">
                         <span className="tabular-nums text-sm">{weight.toFixed(1)}%</span>
-                        <div className="w-24 h-1.5 bg-slate-300 rounded">
+                        <div className="w-24 h-1.5 bg-border rounded">
                           <div
-                            className="h-1.5 bg-slate-600 rounded"
+                            className="h-1.5 bg-muted-foreground rounded"
                             style={{ width: `${Math.min(100, weight)}%` }}
                           />
                         </div>
