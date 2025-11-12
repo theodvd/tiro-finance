@@ -92,6 +92,20 @@ export default function Investments() {
     pricing_source: "YFINANCE",
   });
 
+  // Quick Add Investment form state
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [quickAddData, setQuickAddData] = useState({
+    account_id: "",
+    ticker: "",
+    quantity: "",
+    purchase_price: "",
+    // Auto-fill security details
+    name: "",
+    asset_class: "STOCK" as AssetClass,
+    currency: "EUR",
+    pricing_source: "YFINANCE" as PricingSource,
+  });
+
   useEffect(() => {
     if (user) {
       fetchData();
@@ -397,20 +411,6 @@ export default function Investments() {
       </div>
     );
   }
-
-  // Quick Add Investment form state
-  const [quickAddOpen, setQuickAddOpen] = useState(false);
-  const [quickAddData, setQuickAddData] = useState({
-    account_id: "",
-    ticker: "",
-    quantity: "",
-    purchase_price: "",
-    // Auto-fill security details
-    name: "",
-    asset_class: "STOCK" as AssetClass,
-    currency: "EUR",
-    pricing_source: "YFINANCE" as PricingSource,
-  });
 
   const handleQuickAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
