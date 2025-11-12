@@ -80,7 +80,6 @@ Deno.serve(async (req) => {
             const px = prices?.[symbol]?.EUR ?? null;
             return px
               ? {
-                  user_id: user.id,
                   security_id: s.id,
                   native_ccy: "EUR",
                   last_px_native: px,
