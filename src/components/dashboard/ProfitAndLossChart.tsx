@@ -18,8 +18,8 @@ export function ProfitAndLossChart({ totalInvested, pnl, pnlPct }: ProfitAndLoss
   ];
 
   return (
-    <Card className="rounded-2xl shadow-sm border border-border bg-card">
-      <CardHeader><CardTitle>Performance</CardTitle></CardHeader>
+    <Card className="rounded-2xl shadow-sm border border-border bg-card transition-all duration-300 hover:shadow-[0_0_25px_rgba(234,179,8,0.1)] hover:border-primary/10">
+      <CardHeader><CardTitle className="text-lg">Performance</CardTitle></CardHeader>
       <CardContent>
         <ChartContainer className="h-[300px]" config={{}}>
           <ResponsiveContainer width="100%" height="100%">

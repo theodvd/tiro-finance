@@ -39,19 +39,19 @@ export function Highlights({ pnlPct, accountAllocations, totalValue }: Highlight
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
       {highlights.map((highlight, idx) => {
         const Icon = highlight.icon;
         return (
-          <Card key={idx}>
+          <Card key={idx} className="transition-all duration-300 hover:shadow-[0_0_20px_rgba(234,179,8,0.1)] hover:border-primary/10">
             <CardContent className="pt-6">
               <div className="flex items-start gap-3">
                 <Icon
                   className={`h-5 w-5 mt-0.5 ${
                     highlight.variant === 'success'
-                      ? 'text-green-600'
+                      ? 'text-success'
                       : highlight.variant === 'warning'
-                      ? 'text-yellow-600'
+                      ? 'text-accent'
                       : 'text-muted-foreground'
                   }`}
                 />
