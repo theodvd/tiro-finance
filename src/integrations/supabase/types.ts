@@ -266,7 +266,7 @@ export type Database = {
           shares: number
           snapshot_id?: string | null
           user_id: string
-          valuation_date: string
+          valuation_date?: string
         }
         Update: {
           account_id?: string
@@ -395,6 +395,22 @@ export type Database = {
         }
         Relationships: []
       }
+      v_latest_market_price: {
+        Row: {
+          last_px_eur: number | null
+          security_id: string | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "market_data_security_id_fkey"
+            columns: ["security_id"]
+            isOneToOne: true
+            referencedRelation: "securities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_latest_snapshot: {
         Row: {
           created_at: string | null
@@ -454,7 +470,7 @@ export type Database = {
       }
     }
     Functions: {
-      [_ in never]: never
+      extract_date_immutable: { Args: { ts: string }; Returns: string }
     }
     Enums: {
       account_type: "CTO" | "PEA" | "AV" | "CRYPTO" | "LIVRETS" | "OTHER"
