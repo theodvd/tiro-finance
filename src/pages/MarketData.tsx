@@ -42,9 +42,9 @@ export default function MarketData() {
       .from('market_data')
       .select(`
         id, native_ccy, last_px_native, eur_fx, last_px_eur, last_close_dt, updated_at,
-        security:securities(id, symbol, name)
+        security:securities!inner(id, symbol, name, user_id)
       `)
-      .eq('securities.user_id', user!.id)
+      .eq('security.user_id', user!.id)
       .order('updated_at', { ascending: false });
 
     if (error) {
