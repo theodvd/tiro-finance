@@ -114,15 +114,17 @@ export default function Portfolio() {
   return (
     <div className="max-w-6xl mx-auto space-y-6 p-6 md:p-8">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h1 className="text-xl font-bold tracking-tight">Portfolio</h1>
-        <div className="flex gap-2 shadow-lg rounded-xl p-1 bg-card/50 backdrop-blur-sm border border-border/50">
-          <Button onClick={handleTakeSnapshot} variant="outline" size="sm">
+        <h1 className="text-2xl md:text-xl font-bold tracking-tight">Portfolio</h1>
+        <div className="flex flex-col sm:flex-row gap-2 shadow-lg rounded-xl p-1 bg-card/50 backdrop-blur-sm border border-border/50 w-full sm:w-auto">
+          <Button onClick={handleTakeSnapshot} variant="outline" size="sm" className="w-full sm:w-auto">
             <Camera className="h-4 w-4 mr-2" />
-            Take Snapshot
+            <span className="hidden sm:inline">Take Snapshot</span>
+            <span className="sm:hidden">Snapshot</span>
           </Button>
-          <Button onClick={handleRefreshPrices} size="sm">
+          <Button onClick={handleRefreshPrices} size="sm" className="w-full sm:w-auto">
             <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh Prices
+            <span className="hidden sm:inline">Refresh Prices</span>
+            <span className="sm:hidden">Refresh</span>
           </Button>
         </div>
       </div>
@@ -141,7 +143,7 @@ export default function Portfolio() {
         totalValue={portfolioData.totalValue}
       />
 
-      <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
+      <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2">
         <ProfitAndLossChart
           totalInvested={portfolioData.totalInvested}
           pnl={portfolioData.pnl}

@@ -19,17 +19,17 @@ export function ProfitAndLossChart({ totalInvested, pnl, pnlPct }: ProfitAndLoss
 
   return (
     <Card className="rounded-2xl shadow-sm border border-border bg-card transition-all duration-300 hover:shadow-[0_0_25px_rgba(234,179,8,0.1)] hover:border-primary/10">
-      <CardHeader><CardTitle className="text-lg">Performance</CardTitle></CardHeader>
+      <CardHeader><CardTitle className="text-base sm:text-lg">Performance</CardTitle></CardHeader>
       <CardContent>
-        <ChartContainer className="h-[300px]" config={{}}>
+        <ChartContainer className="h-[250px] sm:h-[300px]" config={{}}>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
                 data={chartData}
                 cx="50%"
                 cy="50%"
-                innerRadius={62}
-                outerRadius={92}
+                innerRadius={50}
+                outerRadius={75}
                 paddingAngle={2}
                 dataKey="value"
                 isAnimationActive
@@ -41,7 +41,7 @@ export function ProfitAndLossChart({ totalInvested, pnl, pnlPct }: ProfitAndLoss
                 new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(Number(v))
               }/>} />
               <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle"
-                className="fill-foreground text-3xl font-semibold tabular-nums">
+                className="fill-foreground text-2xl sm:text-3xl font-semibold tabular-nums">
                 {pnl >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%
               </text>
             </PieChart>
