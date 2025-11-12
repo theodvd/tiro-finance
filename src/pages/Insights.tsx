@@ -18,6 +18,7 @@ import {
 } from 'recharts';
 import { AlertCircle } from 'lucide-react';
 import { useSnapshots } from '@/hooks/useSnapshots';
+import { InsightsSummary } from '@/components/dashboard/InsightsSummary';
 
 const COLORS = [
   'hsl(var(--chart-1))',
@@ -66,12 +67,33 @@ export function Insights() {
     );
   }
 
+  // Get latest snapshot for summary
+  const latestSnapshot = snapshots[0];
+  const totalValue = latestSnapshot ? Number(latestSnapshot.total_value_eur || 0) : 0;
+  const totalInvested = latestSnapshot ? Number(latestSnapshot.total_invested_eur || 0) : 0;
+  const pnl = latestSnapshot ? Number(latestSnapshot.pnl_eur || 0) : 0;
+  const pnlPct = latestSnapshot ? Number(latestSnapshot.pnl_pct || 0) : 0;
+
   return (
     <div className="max-w-6xl mx-auto space-y-6 p-6 md:p-8">
       <h1 className="text-xl font-bold tracking-tight">Insights</h1>
 
+      {/* Auto-generated Summary */}
+      {series.length > 0 && (
+        <InsightsSummary
+          totalValue={totalValue}
+          totalInvested={totalInvested}
+          pnl={pnl}
+          pnlPct={pnlPct}
+          allocByClass={allocByClass}
+          allocByAccount={allocByAccount}
+          allocByRegion={allocByRegion}
+          allocBySector={allocBySector}
+        />
+      )}
+
       {/* Time Series Chart */}
-      <Card>
+      <Card className="hover:shadow-[0_0_30px_rgba(234,179,8,0.15)] hover:border-primary/20 transition-all duration-300">
         <CardHeader>
           <CardTitle>Portfolio Value Over Time</CardTitle>
         </CardHeader>
@@ -137,7 +159,7 @@ export function Insights() {
           </TabsList>
 
           <TabsContent value="account" className="space-y-4">
-            <Card>
+            <Card className="hover:shadow-[0_0_30px_rgba(234,179,8,0.15)] hover:border-primary/20 transition-all duration-300">
               <CardHeader>
                 <CardTitle>Allocation by Account</CardTitle>
               </CardHeader>
@@ -190,7 +212,7 @@ export function Insights() {
           </TabsContent>
 
           <TabsContent value="class" className="space-y-4">
-            <Card>
+            <Card className="hover:shadow-[0_0_30px_rgba(234,179,8,0.15)] hover:border-primary/20 transition-all duration-300">
               <CardHeader>
                 <CardTitle>Allocation by Asset Class</CardTitle>
               </CardHeader>
@@ -230,7 +252,7 @@ export function Insights() {
           </TabsContent>
 
           <TabsContent value="region" className="space-y-4">
-            <Card>
+            <Card className="hover:shadow-[0_0_30px_rgba(234,179,8,0.15)] hover:border-primary/20 transition-all duration-300">
               <CardHeader>
                 <CardTitle>Allocation by Region</CardTitle>
               </CardHeader>
@@ -270,7 +292,7 @@ export function Insights() {
           </TabsContent>
 
           <TabsContent value="sector" className="space-y-4">
-            <Card>
+            <Card className="hover:shadow-[0_0_30px_rgba(234,179,8,0.15)] hover:border-primary/20 transition-all duration-300">
               <CardHeader>
                 <CardTitle>Allocation by Sector</CardTitle>
               </CardHeader>
@@ -313,7 +335,7 @@ export function Insights() {
 
       {/* Snapshots List */}
       {series.length > 0 && (
-        <Card>
+        <Card className="hover:shadow-[0_0_30px_rgba(234,179,8,0.15)] hover:border-primary/20 transition-all duration-300">
           <CardHeader>
             <CardTitle>Recent Snapshots</CardTitle>
           </CardHeader>

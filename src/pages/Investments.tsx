@@ -398,6 +398,99 @@ export default function Investments() {
     );
   }
 
+  // Quick Add Investment form state
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [quickAddData, setQuickAddData] = useState({
+    account_id: "",
+    ticker: "",
+    quantity: "",
+    purchase_price: "",
+    // Auto-fill security details
+    name: "",
+    asset_class: "STOCK" as AssetClass,
+    currency: "EUR",
+    pricing_source: "YFINANCE" as PricingSource,
+  });
+
+  const handleQuickAddSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!quickAddData.account_id || !quickAddData.ticker || !quickAddData.quantity) {
+      toast({ title: "Error", description: "Please fill all required fields", variant: "destructive" });
+      return;
+    }
+
+    try {
+      // Check if security exists
+      const { data: existingSec, error: searchError } = await supabase
+        .from('securities')
+        .select('id')
+        .eq('user_id', user!.id)
+        .eq('symbol', quickAddData.ticker.toUpperCase())
+        .maybeSingle();
+
+      if (searchError) throw searchError;
+
+      let securityId = existingSec?.id;
+
+      // If security doesn't exist, create it
+      if (!securityId) {
+        const { data: newSec, error: createSecError } = await supabase
+          .from('securities')
+          .insert({
+            user_id: user!.id,
+            symbol: quickAddData.ticker.toUpperCase(),
+            name: quickAddData.name || quickAddData.ticker.toUpperCase(),
+            asset_class: quickAddData.asset_class,
+            currency_quote: quickAddData.currency,
+            pricing_source: quickAddData.pricing_source,
+          })
+          .select('id')
+          .single();
+
+        if (createSecError) throw createSecError;
+        securityId = newSec.id;
+      }
+
+      // Create holding
+      const holdingPayload = {
+        user_id: user!.id,
+        account_id: quickAddData.account_id,
+        security_id: securityId,
+        shares: parseFloat(quickAddData.quantity),
+        amount_invested_eur: quickAddData.purchase_price 
+          ? parseFloat(quickAddData.quantity) * parseFloat(quickAddData.purchase_price)
+          : null,
+      };
+
+      const validationResult = holdingSchema.safeParse(holdingPayload);
+      if (!validationResult.success) {
+        const errors = validationResult.error.errors.map(e => e.message).join(", ");
+        toast({ title: "Validation Error", description: errors, variant: "destructive" });
+        return;
+      }
+
+      const { error: insertError } = await supabase.from('holdings').insert(holdingPayload);
+      if (insertError) throw insertError;
+
+      toast({ title: "Success", description: "Investment added successfully" });
+      setQuickAddOpen(false);
+      setQuickAddData({
+        account_id: "",
+        ticker: "",
+        quantity: "",
+        purchase_price: "",
+        name: "",
+        asset_class: "STOCK",
+        currency: "EUR",
+        pricing_source: "YFINANCE",
+      });
+      fetchData();
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-6 p-6 md:p-8">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -405,17 +498,142 @@ export default function Investments() {
           <h1 className="text-xl font-bold tracking-tight">Investments</h1>
           <p className="text-sm text-muted-foreground">Manage your holdings and securities</p>
         </div>
-        <Button variant="outline" size="sm" onClick={handleRefreshPrices} disabled={refreshing}>
-          <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-          Refresh Prices
-        </Button>
+        <div className="flex gap-2">
+          <Dialog open={quickAddOpen} onOpenChange={setQuickAddOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Investment
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add Investment</DialogTitle>
+                <DialogDescription>
+                  Add a new investment quickly. If the security doesn't exist, it will be created automatically.
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleQuickAddSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="quick_account">Account *</Label>
+                  <Select value={quickAddData.account_id} onValueChange={(value) => setQuickAddData({ ...quickAddData, account_id: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select account..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accounts.map((acc) => (
+                        <SelectItem key={acc.id} value={acc.id}>
+                          {acc.name} ({acc.type})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="quick_ticker">Ticker *</Label>
+                  <Input
+                    id="quick_ticker"
+                    placeholder="e.g., CW8.PA, BTC"
+                    value={quickAddData.ticker}
+                    onChange={(e) => setQuickAddData({ ...quickAddData, ticker: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="quick_name">Security Name (optional)</Label>
+                  <Input
+                    id="quick_name"
+                    placeholder="e.g., MSCI World ETF"
+                    value={quickAddData.name}
+                    onChange={(e) => setQuickAddData({ ...quickAddData, name: e.target.value })}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="quick_quantity">Quantity *</Label>
+                    <Input
+                      id="quick_quantity"
+                      type="number"
+                      step="0.00000001"
+                      placeholder="10"
+                      value={quickAddData.quantity}
+                      onChange={(e) => setQuickAddData({ ...quickAddData, quantity: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="quick_price">Purchase Price (optional)</Label>
+                    <Input
+                      id="quick_price"
+                      type="number"
+                      step="0.01"
+                      placeholder="100.00"
+                      value={quickAddData.purchase_price}
+                      onChange={(e) => setQuickAddData({ ...quickAddData, purchase_price: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="quick_asset">Asset Class</Label>
+                    <Select value={quickAddData.asset_class} onValueChange={(value) => setQuickAddData({ ...quickAddData, asset_class: value as AssetClass })}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ASSET_CLASSES.map((cls) => (
+                          <SelectItem key={cls} value={cls}>
+                            {ASSET_CLASS_LABEL[cls]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="quick_currency">Currency</Label>
+                    <Select value={quickAddData.currency} onValueChange={(value) => setQuickAddData({ ...quickAddData, currency: value })}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="EUR">EUR</SelectItem>
+                        <SelectItem value="USD">USD</SelectItem>
+                        <SelectItem value="GBP">GBP</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button type="submit">Add Investment</Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+          <Button variant="outline" size="sm" onClick={handleRefreshPrices} disabled={refreshing}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh Prices
+          </Button>
+        </div>
       </div>
 
-      <Tabs defaultValue="holdings" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2">
+      <Tabs defaultValue="quick" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="quick">Quick Add</TabsTrigger>
           <TabsTrigger value="holdings">Holdings</TabsTrigger>
           <TabsTrigger value="securities">Securities</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="quick" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Quick Add Investment</CardTitle>
+              <CardDescription>
+                Use the "Add Investment" button above to quickly add a new holding. 
+                If the security doesn't exist in your database, it will be created automatically.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="holdings" className="space-y-4">
           <div className="flex justify-end">
