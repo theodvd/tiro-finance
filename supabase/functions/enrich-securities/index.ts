@@ -172,7 +172,7 @@ Deno.serve(async (req) => {
 
     console.log(`Enriching securities for user ${user.id}`);
 
-    // Fetch all securities for this user that need enrichment
+    // Fetch all securities for this user
     const { data: securities, error: fetchError } = await supabase
       .from('securities')
       .select('id, symbol, sector, region, asset_class')
@@ -195,17 +195,13 @@ Deno.serve(async (req) => {
 
     console.log(`Found ${securities.length} securities to enrich`);
 
-    // Enrich securities (limit to avoid rate limiting)
+    // Enrich securities
     const results: Array<{ symbol: string; success: boolean; error?: string }> = [];
     let updated = 0;
 
     for (const security of securities) {
-      // Skip if already has metadata
-      if (security.sector && security.sector !== 'Diversifié' && security.region && security.region !== 'Monde') {
-        console.log(`Skipping ${security.symbol} - already has metadata`);
-        continue;
-      }
-
+      console.log(`Processing ${security.symbol}...`);
+      
       const metadata = await fetchYahooFinanceMetadata(security.symbol);
 
       // Update the security with enriched metadata
