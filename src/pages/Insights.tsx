@@ -145,6 +145,21 @@ export function Insights() {
         />
       )}
 
+      {/* Instructions for metadata enrichment */}
+      {(allocByRegion.length === 0 || allocByRegion.every(a => a.name === 'Unknown')) && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Pour voir les allocations par région et secteur, suivez ces 2 étapes :
+            <ol className="list-decimal ml-6 mt-2 space-y-1">
+              <li>Cliquez sur "Enrichir les métadonnées" ci-dessus et attendez la fin</li>
+              <li>Retournez sur le Dashboard et cliquez sur "Take Snapshot"</li>
+              <li>Revenez ici pour voir les graphiques mis à jour</li>
+            </ol>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Time Series Chart */}
       <Card className="hover:shadow-[0_0_30px_rgba(234,179,8,0.15)] hover:border-primary/20 transition-all duration-300">
         <CardHeader>
