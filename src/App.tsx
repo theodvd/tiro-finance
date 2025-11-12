@@ -7,12 +7,11 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Layout } from "./components/Layout";
 import Auth from "./pages/Auth";
-import Dashboard from "./pages/Dashboard";
+import Portfolio from "./pages/Portfolio";
 import Accounts from "./pages/Accounts";
-import Securities from "./pages/Securities";
-import Holdings from "./pages/Holdings";
-import MarketData from "./pages/MarketData";
-import History from "./pages/History";
+import Investments from "./pages/Investments";
+import Market from "./pages/Market";
+import Insights from "./pages/Insights";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -31,7 +30,7 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Layout>
-                    <Dashboard />
+                    <Portfolio />
                   </Layout>
                 </ProtectedRoute>
               }
@@ -47,41 +46,31 @@ const App = () => (
               }
             />
             <Route
-              path="/securities"
+              path="/investments"
               element={
                 <ProtectedRoute>
                   <Layout>
-                    <Securities />
+                    <Investments />
                   </Layout>
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/holdings"
+              path="/market"
               element={
                 <ProtectedRoute>
                   <Layout>
-                    <Holdings />
+                    <Market />
                   </Layout>
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/market-data"
+              path="/insights"
               element={
                 <ProtectedRoute>
                   <Layout>
-                    <MarketData />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/history"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <History />
+                    <Insights />
                   </Layout>
                 </ProtectedRoute>
               }

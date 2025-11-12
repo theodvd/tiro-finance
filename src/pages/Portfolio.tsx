@@ -12,7 +12,7 @@ import { PortfolioHistory } from '@/components/dashboard/PortfolioHistory';
 import { TopHoldingsTable } from '@/components/dashboard/TopHoldingsTable';
 import { Highlights } from '@/components/dashboard/Highlights';
 
-export default function Dashboard() {
+export default function Portfolio() {
   const portfolioData = usePortfolioData();
 
   const handleRefreshPrices = async () => {
@@ -81,7 +81,7 @@ export default function Dashboard() {
     return (
       <div className="max-w-6xl mx-auto space-y-6 p-6 md:p-8">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <h1 className="text-xl font-bold tracking-tight">Dashboard</h1>
+          <h1 className="text-xl font-bold tracking-tight">Portfolio</h1>
           <Skeleton className="h-10 w-32" />
         </div>
         <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
@@ -101,7 +101,7 @@ export default function Dashboard() {
     return (
       <div className="max-w-6xl mx-auto space-y-6 p-6 md:p-8">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <h1 className="text-xl font-bold tracking-tight">Dashboard</h1>
+          <h1 className="text-xl font-bold tracking-tight">Portfolio</h1>
         </div>
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
@@ -114,7 +114,7 @@ export default function Dashboard() {
   return (
     <div className="max-w-6xl mx-auto space-y-6 p-6 md:p-8">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h1 className="text-xl font-bold tracking-tight">Dashboard</h1>
+        <h1 className="text-xl font-bold tracking-tight">Portfolio</h1>
         <div className="flex gap-2 shadow-lg rounded-xl p-1 bg-card/50 backdrop-blur-sm border border-border/50">
           <Button onClick={handleTakeSnapshot} variant="outline" size="sm">
             <Camera className="h-4 w-4 mr-2" />
