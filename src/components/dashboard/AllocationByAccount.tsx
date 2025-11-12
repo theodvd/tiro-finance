@@ -23,17 +23,17 @@ export function AllocationByAccount({ accountAllocations }: AllocationByAccountP
   }));
 
   return (
-    <Card className="rounded-2xl shadow-sm border border-border bg-card transition-all duration-300 hover:shadow-[0_0_25px_rgba(234,179,8,0.1)] hover:border-primary/10">
+    <Card className="rounded-2xl shadow-sm border border-border bg-card transition-all duration-300 hover:shadow-[0_0_25px_rgba(234,179,8,0.1)] hover:border-primary/10 min-w-0">
       <CardHeader><CardTitle className="text-base sm:text-lg">Allocation by Account</CardTitle></CardHeader>
-      <CardContent>
+      <CardContent className="w-full">
         {chartData.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">No holdings data available</p>
         ) : (
           <>
-            <ChartContainer className="h-[250px] sm:h-[300px]" config={{}}>
+            <ChartContainer className="h-[200px] sm:h-[250px] lg:h-[300px] w-full" config={{}}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={chartData} cx="50%" cy="50%" outerRadius={75} dataKey="value" labelLine={false}>
+                  <Pie data={chartData} cx="50%" cy="50%" outerRadius={65} dataKey="value" labelLine={false}>
                     {chartData.map((d, i) => <Cell key={i} fill={d.fill} stroke="hsl(var(--card))" strokeWidth={2} fillOpacity={0.85} />)}
                   </Pie>
                   <ChartTooltip content={<ChartTooltipContent formatter={(v) =>
@@ -47,11 +47,11 @@ export function AllocationByAccount({ accountAllocations }: AllocationByAccountP
             <div className="mt-4 space-y-2">
               {chartData.map((d, i) => (
                 <div key={i} className="flex items-center justify-between text-xs sm:text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: d.fill }} />
-                    <span className="text-foreground">{d.name}</span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="inline-block h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ background: d.fill }} />
+                    <span className="text-foreground truncate">{d.name}</span>
                   </div>
-                  <div className="text-muted-foreground tabular-nums">
+                  <div className="text-muted-foreground tabular-nums flex-shrink-0">
                     {d.percentage.toFixed(1)}%
                   </div>
                 </div>
