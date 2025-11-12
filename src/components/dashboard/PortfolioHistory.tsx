@@ -57,7 +57,7 @@ export function PortfolioHistory() {
   return (
     <Card className="rounded-2xl shadow-sm border border-border bg-card transition-all duration-300 hover:shadow-[0_0_25px_rgba(234,179,8,0.1)] hover:border-primary/10">
       <CardHeader>
-        <CardTitle className="text-lg">Portfolio History</CardTitle>
+        <CardTitle className="text-base sm:text-lg">Portfolio History</CardTitle>
       </CardHeader>
       <CardContent>
         {snapshots.length === 0 ? (
@@ -65,14 +65,23 @@ export function PortfolioHistory() {
             No historical data. Take your first snapshot to track performance over time.
           </p>
         ) : (
-          <ChartContainer config={{}} className="h-[300px]">
+          <ChartContainer config={{}} className="h-[250px] sm:h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={snapshots}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                <XAxis 
+                  dataKey="date" 
+                  stroke="hsl(var(--muted-foreground))" 
+                  fontSize={10} 
+                  className="sm:text-xs"
+                  angle={-45}
+                  textAnchor="end"
+                  height={60}
+                />
                 <YAxis
                   stroke="hsl(var(--muted-foreground))"
-                  fontSize={12}
+                  fontSize={10}
+                  className="sm:text-xs"
                   tickFormatter={(v: number) =>
                     new Intl.NumberFormat('fr-FR', {
                       notation: 'compact',

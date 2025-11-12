@@ -39,7 +39,7 @@ export function Highlights({ pnlPct, accountAllocations, totalValue }: Highlight
   }
 
   return (
-    <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
       {highlights.map((highlight, idx) => {
         const Icon = highlight.icon;
         return (
@@ -47,7 +47,7 @@ export function Highlights({ pnlPct, accountAllocations, totalValue }: Highlight
             <CardContent className="pt-6">
               <div className="flex items-start gap-3">
                 <Icon
-                  className={`h-5 w-5 mt-0.5 ${
+                  className={`h-5 w-5 mt-0.5 flex-shrink-0 ${
                     highlight.variant === 'success'
                       ? 'text-success'
                       : highlight.variant === 'warning'
@@ -55,7 +55,7 @@ export function Highlights({ pnlPct, accountAllocations, totalValue }: Highlight
                       : 'text-muted-foreground'
                   }`}
                 />
-                <p className="text-sm">{highlight.text}</p>
+                <p className="text-xs sm:text-sm">{highlight.text}</p>
               </div>
             </CardContent>
           </Card>
