@@ -21,13 +21,13 @@ interface TopHoldingsTableProps {
 
 export function TopHoldingsTable({ topHoldings, totalValue }: TopHoldingsTableProps) {
   const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('en-EU', { style: 'currency', currency: 'EUR' }).format(value);
+    new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value);
 
   const formatPercent = (value: number) =>
     `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
 
   return (
-    <Card className="rounded-2xl shadow-md border border-slate-200 bg-white">
+    <Card className="rounded-2xl shadow-sm border border-[#E6EAF0] bg-white">
       <CardHeader>
         <CardTitle>Top Holdings</CardTitle>
       </CardHeader>
@@ -70,7 +70,7 @@ export function TopHoldingsTable({ topHoldings, totalValue }: TopHoldingsTablePr
                     <TableCell className="text-right">
                       <div className="flex items-center gap-2 justify-end">
                         <span className="tabular-nums text-sm">{weight.toFixed(1)}%</span>
-                        <div className="w-24 h-1.5 bg-slate-200 rounded">
+                        <div className="w-24 h-1.5 bg-slate-300 rounded">
                           <div
                             className="h-1.5 bg-slate-600 rounded"
                             style={{ width: `${Math.min(100, weight)}%` }}

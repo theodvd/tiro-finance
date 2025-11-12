@@ -18,78 +18,41 @@ export function PortfolioSummary({
   pnlPct,
   lastUpdated,
 }: PortfolioSummaryProps) {
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('en-EU', { style: 'currency', currency: 'EUR' }).format(value);
+  const formatDate = (date: string | null) =>
+    date
+      ? new Date(date).toLocaleString('fr-FR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+      : 'Jamais';
 
-  const formatPercent = (value: number) =>
-    `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
-
-  const formatDate = (date: string | null) => {
-    if (!date) return 'Never';
-    return new Date(date).toLocaleString('en-EU', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
+  const kpiCard = (label: string, value: number, icon?: React.ReactNode, colored?: boolean) => (
+    <Card className="rounded-2xl shadow-sm border border-[#E6EAF0] bg-white">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-xs font-medium text-slate-500">{label}</CardTitle>
+        {icon}
+      </CardHeader>
+      <CardContent>
+        <div className={`text-[28px] font-semibold tracking-tight tabular-nums ${colored ? (pnl >= 0 ? 'text-emerald-600' : 'text-rose-600') : 'text-slate-900'}`}>
+          <CountUp end={value} duration={0.8} decimals={2} decimal="," separator=" " />
+          <span className="ml-1">€</span>
+        </div>
+        <p className="text-xs text-slate-500 mt-1">Mise à jour : {formatDate(lastUpdated)}</p>
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div className="grid gap-4 md:grid-cols-3">
-      <Card className="rounded-2xl shadow-md border border-slate-200 bg-white">
+      {kpiCard('Total Invested', totalInvested, <Wallet className="h-4 w-4 text-slate-400" />)}
+      {kpiCard('Current Value', totalValue, <TrendingUp className="h-4 w-4 text-slate-400" />)}
+      <Card className="rounded-2xl shadow-sm border border-[#E6EAF0] bg-white">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium text-slate-600">Total Invested</CardTitle>
-          <Wallet className="h-4 w-4 text-muted-foreground" />
+          <CardTitle className="text-xs font-medium text-slate-500">Profit / Loss</CardTitle>
+          {pnl >= 0 ? <TrendingUp className="h-4 w-4 text-emerald-600" /> : <TrendingDown className="h-4 w-4 text-rose-600" />}
         </CardHeader>
         <CardContent>
-          <div className="text-[28px] font-semibold tracking-tight tabular-nums">
-            <CountUp end={totalInvested} duration={0.8} decimals={2} separator=" " />
-            <span className="ml-1">€</span>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Updated: {formatDate(lastUpdated)}
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card className="rounded-2xl shadow-md border border-slate-200 bg-white">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium text-slate-600">Current Value</CardTitle>
-          <TrendingUp className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-[28px] font-semibold tracking-tight tabular-nums">
-            <CountUp end={totalValue} duration={0.8} decimals={2} separator=" " />
-            <span className="ml-1">€</span>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Updated: {formatDate(lastUpdated)}
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card className="rounded-2xl shadow-md border border-slate-200 bg-white">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium text-slate-600">Profit / Loss</CardTitle>
-          {pnl >= 0 ? (
-            <TrendingUp className="h-4 w-4 text-emerald-600" />
-          ) : (
-            <TrendingDown className="h-4 w-4 text-rose-600" />
-          )}
-        </CardHeader>
-        <CardContent>
-          <div
-            className={`text-[28px] font-semibold tabular-nums ${
-              pnl >= 0 ? 'text-emerald-600' : 'text-rose-600'
-            }`}
-          >
+          <div className={`text-[28px] font-semibold tabular-nums ${pnl >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
             {fmtEUR(pnl)}
           </div>
-          <p
-            className={`text-xs font-medium mt-1 ${
-              pnl >= 0 ? 'text-emerald-600' : 'text-rose-600'
-            }`}
-          >
+          <p className={`text-xs font-medium mt-1 ${pnl >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
             {fmtPct(pnlPct)}
           </p>
         </CardContent>

@@ -33,7 +33,7 @@ export function PortfolioHistory() {
       }, {});
 
       const chartData = Object.values(aggregated || {}).map((snap: any) => ({
-        date: new Date(snap.date).toLocaleDateString('en-EU', {
+        date: new Date(snap.date).toLocaleDateString('fr-FR', {
           month: 'short',
           day: 'numeric',
         }),
@@ -51,12 +51,11 @@ export function PortfolioHistory() {
     fetchSnapshots();
   }, [user]);
 
-
   const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', notation: 'compact' }).format(value);
+    new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value);
 
   return (
-    <Card className="rounded-2xl shadow-md border border-slate-200 bg-white">
+    <Card className="rounded-2xl shadow-sm border border-[#E6EAF0] bg-white">
       <CardHeader>
         <CardTitle>Portfolio History</CardTitle>
       </CardHeader>
@@ -66,42 +65,29 @@ export function PortfolioHistory() {
             No historical data. Take your first snapshot to track performance over time.
           </p>
         ) : (
-          <ChartContainer
-            config={{
-              value: { label: 'Portfolio Value', color: 'hsl(var(--primary))' },
-              invested: { label: 'Total Invested', color: 'hsl(var(--muted))' },
-            }}
-            className="h-[300px]"
-          >
+          <ChartContainer config={{}} className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={snapshots}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis
-                  dataKey="date"
-                  stroke="hsl(var(--muted-foreground))"
-                  fontSize={12}
-                />
+                <CartesianGrid strokeDasharray="3 3" stroke="#E6EAF0" />
+                <XAxis dataKey="date" stroke="#64748B" fontSize={12} />
                 <YAxis
-                  stroke="hsl(var(--muted-foreground))"
+                  stroke="#64748B"
                   fontSize={12}
-                  tickFormatter={formatCurrency}
+                  tickFormatter={(v: number) =>
+                    new Intl.NumberFormat('fr-FR', {
+                      notation: 'compact',
+                      style: 'currency',
+                      currency: 'EUR',
+                    }).format(v)
+                  }
                 />
                 <ChartTooltip
-                  content={
-                    <ChartTooltipContent
-                      formatter={(value) =>
-                        new Intl.NumberFormat('en-EU', {
-                          style: 'currency',
-                          currency: 'EUR',
-                        }).format(Number(value))
-                      }
-                    />
-                  }
+                  content={<ChartTooltipContent formatter={(v) => formatCurrency(Number(v))} />}
                 />
                 <Line
                   type="monotone"
                   dataKey="invested"
-                  stroke="hsl(var(--muted-foreground))"
+                  stroke="#94A3B8"
                   strokeWidth={1}
                   strokeDasharray="5 5"
                   dot={false}
@@ -109,9 +95,9 @@ export function PortfolioHistory() {
                 <Line
                   type="monotone"
                   dataKey="value"
-                  stroke="hsl(var(--primary))"
+                  stroke="#334155"
                   strokeWidth={2}
-                  dot={{ fill: 'hsl(var(--primary))' }}
+                  dot={false}
                 />
               </LineChart>
             </ResponsiveContainer>
