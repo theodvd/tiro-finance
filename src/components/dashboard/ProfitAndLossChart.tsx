@@ -22,7 +22,7 @@ export function ProfitAndLossChart({ totalInvested, pnl, pnlPct }: ProfitAndLoss
     new Intl.NumberFormat('en-EU', { style: 'currency', currency: 'EUR' }).format(value);
 
   return (
-    <Card>
+    <Card className="rounded-2xl shadow-md border border-slate-200 bg-white">
       <CardHeader>
         <CardTitle>Performance</CardTitle>
       </CardHeader>
@@ -41,10 +41,12 @@ export function ProfitAndLossChart({ totalInvested, pnl, pnlPct }: ProfitAndLoss
                 data={chartData}
                 cx="50%"
                 cy="50%"
-                innerRadius={60}
-                outerRadius={90}
-                paddingAngle={5}
+                innerRadius={62}
+                outerRadius={92}
+                paddingAngle={6}
                 dataKey="value"
+                isAnimationActive
+                animationDuration={700}
               >
                 {chartData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.fill} />
@@ -62,7 +64,7 @@ export function ProfitAndLossChart({ totalInvested, pnl, pnlPct }: ProfitAndLoss
                 y="50%"
                 textAnchor="middle"
                 dominantBaseline="middle"
-                className="fill-foreground text-2xl font-bold"
+                className="fill-foreground text-3xl font-semibold tabular-nums"
               >
                 {pnl >= 0 ? '+' : ''}
                 {pnlPct.toFixed(1)}%

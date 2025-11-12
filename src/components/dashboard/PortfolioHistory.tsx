@@ -53,10 +53,10 @@ export function PortfolioHistory() {
 
 
   const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('en-EU', { style: 'currency', currency: 'EUR', notation: 'compact' }).format(value);
+    new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', notation: 'compact' }).format(value);
 
   return (
-    <Card>
+    <Card className="rounded-2xl shadow-md border border-slate-200 bg-white">
       <CardHeader>
         <CardTitle>Portfolio History</CardTitle>
       </CardHeader>
