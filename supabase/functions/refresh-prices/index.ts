@@ -92,8 +92,10 @@ Deno.serve(async (req) => {
           .filter(Boolean) as any[];
 
         if (rows.length > 0) {
-          const { error: insErr } = await supabase.from("market_data").insert(rows);
-          if (insErr) throw insErr;
+          const { error: upsertErr } = await supabase
+            .from("market_data")
+            .upsert(rows, { onConflict: "security_id" });
+          if (upsertErr) throw upsertErr;
         }
       }
     }
