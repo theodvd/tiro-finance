@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import {
@@ -16,9 +17,12 @@ import {
   CartesianGrid,
   Legend,
 } from 'recharts';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Sparkles, Loader2 } from 'lucide-react';
 import { useSnapshots } from '@/hooks/useSnapshots';
 import { InsightsSummary } from '@/components/dashboard/InsightsSummary';
+import { supabase } from '@/integrations/supabase/client';
+import { useState } from 'react';
+import { toast } from 'sonner';
 
 const COLORS = [
   'hsl(var(--chart-1))',
@@ -32,13 +36,41 @@ const COLORS = [
 ];
 
 export function Insights() {
-  const { loading, error, series, snapshots, allocByAccount, allocByClass, allocByRegion, allocBySector } = useSnapshots();
+  const { loading, error, series, snapshots, allocByAccount, allocByClass, allocByRegion, allocBySector, refetch } = useSnapshots();
+  const [enriching, setEnriching] = useState(false);
 
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', notation: 'compact' }).format(value);
 
   const formatCurrencyFull = (value: number) =>
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value);
+
+  const handleEnrichMetadata = async () => {
+    setEnriching(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('enrich-securities', {
+        headers: {
+          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
+      });
+
+      if (error) throw error;
+
+      toast.success(data.message || 'Métadonnées enrichies avec succès', {
+        description: `${data.updated} actifs mis à jour sur ${data.total}`,
+      });
+
+      // Refetch snapshots to update charts
+      await refetch();
+    } catch (error: any) {
+      console.error('Error enriching metadata:', error);
+      toast.error('Erreur lors de l\'enrichissement des métadonnées', {
+        description: error.message,
+      });
+    } finally {
+      setEnriching(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -76,7 +108,28 @@ export function Insights() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 p-6 md:p-8">
-      <h1 className="text-xl font-bold tracking-tight">Insights</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold tracking-tight">Insights</h1>
+        <Button
+          onClick={handleEnrichMetadata}
+          disabled={enriching}
+          variant="outline"
+          size="sm"
+          className="gap-2"
+        >
+          {enriching ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Enrichissement...
+            </>
+          ) : (
+            <>
+              <Sparkles className="h-4 w-4" />
+              Enrichir les métadonnées
+            </>
+          )}
+        </Button>
+      </div>
 
       {/* Auto-generated Summary */}
       {series.length > 0 && (
