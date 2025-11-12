@@ -24,9 +24,9 @@ export function PortfolioSummary({
       : 'Jamais';
 
   const kpiCard = (label: string, value: number, icon?: React.ReactNode, colored?: boolean) => (
-    <Card className="rounded-2xl shadow-sm border border-border bg-card">
+    <Card className="rounded-2xl shadow-sm border border-border bg-card transition-all duration-300 hover:shadow-[0_0_30px_rgba(234,179,8,0.15)] hover:border-primary/20">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-xs font-medium text-muted-foreground">{label}</CardTitle>
+        <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</CardTitle>
         {icon}
       </CardHeader>
       <CardContent>
@@ -40,20 +40,20 @@ export function PortfolioSummary({
   );
 
   return (
-    <div className="grid gap-4 md:grid-cols-3">
+    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
       {kpiCard('Total Invested', totalInvested, <Wallet className="h-4 w-4 text-muted-foreground" />)}
       {kpiCard('Current Value', totalValue, <TrendingUp className="h-4 w-4 text-muted-foreground" />)}
-      <Card className="rounded-2xl shadow-sm border border-border bg-card">
+      <Card className="rounded-2xl shadow-sm border border-border bg-card transition-all duration-300 hover:shadow-[0_0_30px_rgba(234,179,8,0.15)] hover:border-primary/20">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-xs font-medium text-muted-foreground">Profit / Loss</CardTitle>
+          <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Profit / Loss</CardTitle>
           {pnl >= 0 ? <TrendingUp className="h-4 w-4 text-[hsl(var(--success))]" /> : <TrendingDown className="h-4 w-4 text-[hsl(var(--destructive))]" />}
         </CardHeader>
         <CardContent>
           <div className={`text-[28px] font-semibold tabular-nums ${pnl >= 0 ? 'text-[hsl(var(--success))]' : 'text-[hsl(var(--destructive))]'}`}>
-            {fmtEUR(pnl)}
+            <CountUp end={pnl} duration={0.8} decimals={2} decimal="," separator=" " prefix={pnl >= 0 ? '+' : ''} suffix=" €" />
           </div>
           <p className={`text-xs font-medium mt-1 ${pnl >= 0 ? 'text-[hsl(var(--success))]' : 'text-[hsl(var(--destructive))]'}`}>
-            {fmtPct(pnlPct)}
+            <CountUp end={pnlPct} duration={0.8} decimals={2} decimal="," separator=" " prefix={pnlPct >= 0 ? '+' : ''} suffix="%" />
           </p>
         </CardContent>
       </Card>

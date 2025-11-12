@@ -27,9 +27,9 @@ export function TopHoldingsTable({ topHoldings, totalValue }: TopHoldingsTablePr
     `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
 
   return (
-    <Card className="rounded-2xl shadow-sm border border-border bg-card">
+    <Card className="rounded-2xl shadow-sm border border-border bg-card transition-all duration-300 hover:shadow-[0_0_25px_rgba(234,179,8,0.1)] hover:border-primary/10">
       <CardHeader>
-        <CardTitle>Top Holdings</CardTitle>
+        <CardTitle className="text-lg">Top Holdings</CardTitle>
       </CardHeader>
       <CardContent>
         {topHoldings.length === 0 ? (

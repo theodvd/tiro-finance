@@ -79,17 +79,17 @@ export default function Dashboard() {
 
   if (portfolioData.loading) {
     return (
-      <div className="flex-1 space-y-6 p-6 md:p-8">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+      <div className="max-w-6xl mx-auto space-y-6 p-6 md:p-8">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <h1 className="text-xl font-bold tracking-tight">Dashboard</h1>
           <Skeleton className="h-10 w-32" />
         </div>
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           <Skeleton className="h-32" />
           <Skeleton className="h-32" />
           <Skeleton className="h-32" />
         </div>
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
           <Skeleton className="h-96" />
           <Skeleton className="h-96" />
         </div>
@@ -99,9 +99,9 @@ export default function Dashboard() {
 
   if (portfolioData.error) {
     return (
-      <div className="flex-1 space-y-6 p-6 md:p-8">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+      <div className="max-w-6xl mx-auto space-y-6 p-6 md:p-8">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <h1 className="text-xl font-bold tracking-tight">Dashboard</h1>
         </div>
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
@@ -112,15 +112,15 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="flex-1 space-y-6 p-6 md:p-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <div className="flex gap-2">
-          <Button onClick={handleTakeSnapshot} variant="outline">
+    <div className="max-w-6xl mx-auto space-y-6 p-6 md:p-8">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <h1 className="text-xl font-bold tracking-tight">Dashboard</h1>
+        <div className="flex gap-2 shadow-lg rounded-xl p-1 bg-card/50 backdrop-blur-sm border border-border/50">
+          <Button onClick={handleTakeSnapshot} variant="outline" size="sm">
             <Camera className="h-4 w-4 mr-2" />
             Take Snapshot
           </Button>
-          <Button onClick={handleRefreshPrices}>
+          <Button onClick={handleRefreshPrices} size="sm">
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh Prices
           </Button>
@@ -141,7 +141,7 @@ export default function Dashboard() {
         totalValue={portfolioData.totalValue}
       />
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
         <ProfitAndLossChart
           totalInvested={portfolioData.totalInvested}
           pnl={portfolioData.pnl}

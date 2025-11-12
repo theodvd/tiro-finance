@@ -55,9 +55,9 @@ export function PortfolioHistory() {
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value);
 
   return (
-    <Card className="rounded-2xl shadow-sm border border-border bg-card">
+    <Card className="rounded-2xl shadow-sm border border-border bg-card transition-all duration-300 hover:shadow-[0_0_25px_rgba(234,179,8,0.1)] hover:border-primary/10">
       <CardHeader>
-        <CardTitle>Portfolio History</CardTitle>
+        <CardTitle className="text-lg">Portfolio History</CardTitle>
       </CardHeader>
       <CardContent>
         {snapshots.length === 0 ? (
