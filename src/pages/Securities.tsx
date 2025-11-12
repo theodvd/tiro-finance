@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { ASSET_CLASSES, PRICING_SOURCES, ASSET_CLASS_LABEL, AssetClass, PricingSource } from "@/constants";
+import { z } from "zod";
 
 interface Security {
   id: string;
@@ -21,6 +22,14 @@ interface Security {
   pricing_source: string;
   created_at: string;
 }
+
+const securitySchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(255, "Name must be less than 255 characters"),
+  symbol: z.string().trim().min(1, "Symbol is required").max(50, "Symbol must be less than 50 characters"),
+  asset_class: z.enum(["STOCK", "ETF", "BOND", "CRYPTO", "REIT", "CASH"], { errorMap: () => ({ message: "Invalid asset class" }) }),
+  currency_quote: z.enum(["EUR", "USD", "GBP"], { errorMap: () => ({ message: "Invalid currency" }) }),
+  pricing_source: z.enum(["YFINANCE", "COINGECKO", "MANUAL"], { errorMap: () => ({ message: "Invalid pricing source" }) }),
+});
 
 export default function Securities() {
   const { user } = useAuth();
@@ -68,18 +77,41 @@ export default function Securities() {
     e.preventDefault();
     if (!user) return;
 
+    // Validate input data
+    const validationResult = securitySchema.safeParse(formData);
+    if (!validationResult.success) {
+      const errors = validationResult.error.errors.map(e => e.message).join(", ");
+      toast.error(errors);
+      return;
+    }
+
+    const validatedData = validationResult.data;
+
     try {
       if (editingSecurity) {
         const { error } = await supabase
           .from("securities")
-          .update(formData)
+          .update({
+            name: validatedData.name,
+            symbol: validatedData.symbol,
+            asset_class: validatedData.asset_class,
+            currency_quote: validatedData.currency_quote,
+            pricing_source: validatedData.pricing_source
+          })
           .eq("id", editingSecurity.id);
         if (error) throw error;
         toast.success("Security updated successfully");
       } else {
         const { error } = await supabase
           .from("securities")
-          .insert([{ ...formData, user_id: user.id }]);
+          .insert([{
+            name: validatedData.name,
+            symbol: validatedData.symbol,
+            asset_class: validatedData.asset_class,
+            currency_quote: validatedData.currency_quote,
+            pricing_source: validatedData.pricing_source,
+            user_id: user.id
+          }]);
         if (error) throw error;
         toast.success("Security created successfully");
       }

@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, RefreshCw } from "lucide-react";
+import { z } from "zod";
 
 interface Account {
   id: string;
@@ -33,6 +34,13 @@ interface Holding {
   account: Account;
   security: Security;
 }
+
+const holdingSchema = z.object({
+  account_id: z.string().uuid("Invalid account ID"),
+  security_id: z.string().uuid("Invalid security ID"),
+  shares: z.number().positive("Shares must be positive").max(1000000000, "Shares value too large"),
+  amount_invested_eur: z.number().positive("Amount must be positive").max(1000000000, "Amount value too large").nullable(),
+});
 
 export default function Holdings() {
   const { user } = useAuth();
@@ -147,6 +155,14 @@ export default function Holdings() {
       shares: parseFloat(formData.shares),
       amount_invested_eur: formData.amount_invested_eur ? parseFloat(formData.amount_invested_eur) : null,
     };
+
+    // Validate input data
+    const validationResult = holdingSchema.safeParse(payload);
+    if (!validationResult.success) {
+      const errors = validationResult.error.errors.map(e => e.message).join(", ");
+      toast({ title: "Validation Error", description: errors, variant: "destructive" });
+      return;
+    }
 
     if (editingHolding) {
       const { error } = await supabase

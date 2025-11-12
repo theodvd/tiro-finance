@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { ACCOUNT_TYPES, AccountType } from "@/constants";
+import { z } from "zod";
 
 interface Account {
   id: string;
@@ -18,6 +19,11 @@ interface Account {
   type: string;
   created_at: string;
 }
+
+const accountSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(255, "Name must be less than 255 characters"),
+  type: z.enum(["CTO", "PEA", "AV", "CRYPTO", "LIVRETS", "OTHER"], { errorMap: () => ({ message: "Invalid account type" }) }),
+});
 
 export default function Accounts() {
   const { user } = useAuth();
@@ -53,18 +59,28 @@ export default function Accounts() {
     e.preventDefault();
     if (!user) return;
 
+    // Validate input data
+    const validationResult = accountSchema.safeParse(formData);
+    if (!validationResult.success) {
+      const errors = validationResult.error.errors.map(e => e.message).join(", ");
+      toast.error(errors);
+      return;
+    }
+
+    const validatedData = validationResult.data;
+
     try {
       if (editingAccount) {
         const { error } = await supabase
           .from("accounts")
-          .update({ name: formData.name, type: formData.type })
+          .update({ name: validatedData.name, type: validatedData.type })
           .eq("id", editingAccount.id);
         if (error) throw error;
         toast.success("Account updated successfully");
       } else {
         const { error } = await supabase
           .from("accounts")
-          .insert([{ ...formData, user_id: user.id }]);
+          .insert([{ name: validatedData.name, type: validatedData.type, user_id: user.id }]);
         if (error) throw error;
         toast.success("Account created successfully");
       }

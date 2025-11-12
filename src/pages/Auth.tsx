@@ -8,6 +8,12 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TrendingUp } from "lucide-react";
 import { toast } from "sonner";
+import { z } from "zod";
+
+const authSchema = z.object({
+  email: z.string().trim().email("Invalid email address").max(255, "Email must be less than 255 characters"),
+  password: z.string().min(6, "Password must be at least 6 characters").max(128, "Password must be less than 128 characters"),
+});
 
 export default function Auth() {
   const [email, setEmail] = useState("");
@@ -26,19 +32,16 @@ export default function Auth() {
     e.preventDefault();
     setLoading(true);
     
-    if (!email || !password) {
-      toast.error("Please fill in all fields");
+    // Validate input data
+    const validationResult = authSchema.safeParse({ email, password });
+    if (!validationResult.success) {
+      const errors = validationResult.error.errors.map(e => e.message).join(", ");
+      toast.error(errors);
       setLoading(false);
       return;
     }
 
-    if (password.length < 6) {
-      toast.error("Password must be at least 6 characters");
-      setLoading(false);
-      return;
-    }
-
-    const { error } = await signUp(email, password);
+    const { error } = await signUp(validationResult.data.email, validationResult.data.password);
     
     if (error) {
       toast.error(error.message);
@@ -53,13 +56,16 @@ export default function Auth() {
     e.preventDefault();
     setLoading(true);
     
-    if (!email || !password) {
-      toast.error("Please fill in all fields");
+    // Validate input data
+    const validationResult = authSchema.safeParse({ email, password });
+    if (!validationResult.success) {
+      const errors = validationResult.error.errors.map(e => e.message).join(", ");
+      toast.error(errors);
       setLoading(false);
       return;
     }
 
-    const { error } = await signIn(email, password);
+    const { error } = await signIn(validationResult.data.email, validationResult.data.password);
     
     if (error) {
       toast.error(error.message);
