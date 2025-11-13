@@ -185,6 +185,7 @@ Deno.serve(async (req) => {
           'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify({}),
       });
 
       console.log('Bridge response status:', response.status);
