@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.enrich-securities]
 verify_jwt = true
+
+[functions.execute-dca]
+verify_jwt = false
