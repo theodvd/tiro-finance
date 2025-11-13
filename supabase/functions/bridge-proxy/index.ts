@@ -28,7 +28,12 @@ interface BridgeTransaction {
 
 // Helper to get Bridge user token
 async function getBridgeUserToken(userId: string, clientId: string, clientSecret: string) {
-  const response = await fetch(`${BRIDGE_API_URL}/authorization/token`, {
+  console.log('Getting Bridge token for user:', userId);
+  
+  const authUrl = `${BRIDGE_API_URL}/authorization/token`;
+  console.log('Auth URL:', authUrl);
+  
+  const response = await fetch(authUrl, {
     method: 'POST',
     headers: {
       'Bridge-Version': BRIDGE_VERSION,
@@ -41,9 +46,16 @@ async function getBridgeUserToken(userId: string, clientId: string, clientSecret
     }),
   });
 
+  console.log('Auth response status:', response.status);
+
   if (!response.ok) {
+    console.log('User does not exist, creating new Bridge user');
+    
     // User doesn't exist, create one
-    const createResponse = await fetch(`${BRIDGE_API_URL}/users`, {
+    const createUrl = `${BRIDGE_API_URL}/users`;
+    console.log('Create user URL:', createUrl);
+    
+    const createResponse = await fetch(createUrl, {
       method: 'POST',
       headers: {
         'Bridge-Version': BRIDGE_VERSION,
@@ -55,14 +67,20 @@ async function getBridgeUserToken(userId: string, clientId: string, clientSecret
         external_user_id: userId,
       }),
     });
+
+    console.log('Create user response status:', createResponse.status);
 
     if (!createResponse.ok) {
       const error = await createResponse.text();
+      console.error('Failed to create Bridge user:', error);
       throw new Error(`Failed to create Bridge user: ${error}`);
     }
 
+    const userData = await createResponse.json();
+    console.log('Created Bridge user:', userData.uuid);
+
     // Get token for newly created user
-    const tokenResponse = await fetch(`${BRIDGE_API_URL}/authorization/token`, {
+    const tokenResponse = await fetch(authUrl, {
       method: 'POST',
       headers: {
         'Bridge-Version': BRIDGE_VERSION,
@@ -75,16 +93,21 @@ async function getBridgeUserToken(userId: string, clientId: string, clientSecret
       }),
     });
 
+    console.log('Token response status:', tokenResponse.status);
+
     if (!tokenResponse.ok) {
       const error = await tokenResponse.text();
+      console.error('Failed to get token for new user:', error);
       throw new Error(`Failed to get token for new user: ${error}`);
     }
 
     const tokenData = await tokenResponse.json();
+    console.log('Got access token for new user');
     return tokenData.access_token;
   }
 
   const data = await response.json();
+  console.log('Got access token for existing user');
   return data.access_token;
 }
 
@@ -132,10 +155,16 @@ Deno.serve(async (req) => {
 
     // GET /bridge/init - Create Bridge Connect session
     if (path === '/init' && req.method === 'GET') {
+      console.log('Initializing Bridge session for user:', user.id);
+      
       // Get or create Bridge user token
       const accessToken = await getBridgeUserToken(user.id, BRIDGE_CLIENT_ID, BRIDGE_CLIENT_SECRET);
+      console.log('Got Bridge access token');
 
-      const response = await fetch(`${BRIDGE_API_URL}/connect-sessions`, {
+      const connectUrl = `${BRIDGE_API_URL}/connect-sessions`;
+      console.log('Calling Bridge connect-sessions:', connectUrl);
+
+      const response = await fetch(connectUrl, {
         method: 'POST',
         headers: {
           'Bridge-Version': BRIDGE_VERSION,
@@ -146,16 +175,19 @@ Deno.serve(async (req) => {
         },
       });
 
+      console.log('Bridge response status:', response.status);
+      
       if (!response.ok) {
         const error = await response.text();
         console.error('Bridge init error:', error);
-        return new Response(JSON.stringify({ error: 'Failed to initialize Bridge session' }), {
+        return new Response(JSON.stringify({ error: 'Failed to initialize Bridge session', details: error }), {
           status: response.status,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
       const data = await response.json();
+      console.log('Bridge session created:', data.id);
       return new Response(JSON.stringify({ redirect_url: data.url }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
