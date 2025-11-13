@@ -176,6 +176,13 @@ Deno.serve(async (req) => {
       const connectUrl = `${BRIDGE_API_URL}/connect-sessions`;
       console.log('Calling Bridge connect-sessions:', connectUrl);
 
+      // Prepare request body with user email if available
+      const requestBody: { user_email?: string } = {};
+      if (user.email) {
+        requestBody.user_email = user.email;
+      }
+      console.log('Request body:', JSON.stringify(requestBody));
+
       const response = await fetch(connectUrl, {
         method: 'POST',
         headers: {
@@ -185,7 +192,7 @@ Deno.serve(async (req) => {
           'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({}),
+        body: JSON.stringify(requestBody),
       });
 
       console.log('Bridge response status:', response.status);
