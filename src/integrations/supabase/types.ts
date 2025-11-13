@@ -41,6 +41,98 @@ export type Database = {
         }
         Relationships: []
       }
+      bridge_accounts: {
+        Row: {
+          balance: number | null
+          created_at: string | null
+          currency: string | null
+          id: string
+          name: string
+          provider: string
+          provider_account_id: string
+          raw_json: Json | null
+          type: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          balance?: number | null
+          created_at?: string | null
+          currency?: string | null
+          id?: string
+          name: string
+          provider: string
+          provider_account_id: string
+          raw_json?: Json | null
+          type: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          balance?: number | null
+          created_at?: string | null
+          currency?: string | null
+          id?: string
+          name?: string
+          provider?: string
+          provider_account_id?: string
+          raw_json?: Json | null
+          type?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      bridge_transactions: {
+        Row: {
+          amount: number
+          bridge_account_id: string
+          bridge_transaction_id: string
+          category: string | null
+          created_at: string | null
+          currency: string | null
+          date: string
+          description: string | null
+          id: string
+          raw_json: Json | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          bridge_account_id: string
+          bridge_transaction_id: string
+          category?: string | null
+          created_at?: string | null
+          currency?: string | null
+          date: string
+          description?: string | null
+          id?: string
+          raw_json?: Json | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          bridge_account_id?: string
+          bridge_transaction_id?: string
+          category?: string | null
+          created_at?: string | null
+          currency?: string | null
+          date?: string
+          description?: string | null
+          id?: string
+          raw_json?: Json | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bridge_transactions_bridge_account_id_fkey"
+            columns: ["bridge_account_id"]
+            isOneToOne: false
+            referencedRelation: "bridge_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dca_plans: {
         Row: {
           account_id: string
