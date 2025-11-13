@@ -41,6 +41,72 @@ export type Database = {
         }
         Relationships: []
       }
+      dca_plans: {
+        Row: {
+          account_id: string
+          active: boolean
+          amount: number
+          created_at: string
+          frequency: string
+          id: string
+          interval_days: number | null
+          monthday: number | null
+          next_execution_date: string | null
+          security_id: string
+          start_date: string
+          updated_at: string
+          user_id: string
+          weekday: number | null
+        }
+        Insert: {
+          account_id: string
+          active?: boolean
+          amount: number
+          created_at?: string
+          frequency: string
+          id?: string
+          interval_days?: number | null
+          monthday?: number | null
+          next_execution_date?: string | null
+          security_id: string
+          start_date: string
+          updated_at?: string
+          user_id: string
+          weekday?: number | null
+        }
+        Update: {
+          account_id?: string
+          active?: boolean
+          amount?: number
+          created_at?: string
+          frequency?: string
+          id?: string
+          interval_days?: number | null
+          monthday?: number | null
+          next_execution_date?: string | null
+          security_id?: string
+          start_date?: string
+          updated_at?: string
+          user_id?: string
+          weekday?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dca_plans_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dca_plans_security_id_fkey"
+            columns: ["security_id"]
+            isOneToOne: false
+            referencedRelation: "securities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fx_rates: {
         Row: {
           asof: string

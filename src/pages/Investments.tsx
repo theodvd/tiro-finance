@@ -9,8 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, RefreshCw } from "lucide-react";
+import { Plus, Pencil, Trash2, RefreshCw, Calendar, TrendingUp } from "lucide-react";
 import { z } from "zod";
 import { ASSET_CLASSES, PRICING_SOURCES, ASSET_CLASS_LABEL, AssetClass, PricingSource } from "@/constants";
 
@@ -40,6 +41,24 @@ interface Holding {
   security: Security;
 }
 
+interface DcaPlan {
+  id: string;
+  user_id: string;
+  account_id: string;
+  security_id: string;
+  amount: number;
+  frequency: 'weekly' | 'monthly' | 'interval';
+  interval_days: number | null;
+  weekday: number | null;
+  monthday: number | null;
+  start_date: string;
+  next_execution_date: string | null;
+  active: boolean;
+  created_at: string;
+  account?: Account;
+  security?: Security;
+}
+
 const holdingSchema = z.object({
   account_id: z.string().uuid("Invalid account ID"),
   security_id: z.string().uuid("Invalid security ID"),
@@ -61,6 +80,7 @@ export default function Investments() {
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [securities, setSecurities] = useState<Security[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [dcaPlans, setDcaPlans] = useState<DcaPlan[]>([]);
   const [priceMap, setPriceMap] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -104,6 +124,21 @@ export default function Investments() {
     asset_class: "STOCK" as AssetClass,
     currency: "EUR",
     pricing_source: "YFINANCE" as PricingSource,
+  });
+
+  // DCA Plan dialog
+  const [dcaDialogOpen, setDcaDialogOpen] = useState(false);
+  const [editingDca, setEditingDca] = useState<DcaPlan | null>(null);
+  const [dcaFormData, setDcaFormData] = useState({
+    account_id: "",
+    security_id: "",
+    amount: "",
+    frequency: "monthly" as "weekly" | "monthly" | "interval",
+    interval_days: "",
+    weekday: "1",
+    monthday: "1",
+    start_date: new Date().toISOString().split('T')[0],
+    active: true,
   });
 
   useEffect(() => {
@@ -178,6 +213,23 @@ export default function Investments() {
       toast({ title: "Error", description: securitiesError.message, variant: "destructive" });
     } else {
       setSecurities(securitiesData || []);
+    }
+
+    // Fetch DCA plans
+    const { data: dcaData, error: dcaError } = await supabase
+      .from('dca_plans')
+      .select(`
+        *,
+        account:accounts(id, name, type),
+        security:securities(id, name, symbol)
+      `)
+      .eq('user_id', user!.id)
+      .order('created_at', { ascending: false });
+
+    if (dcaError) {
+      toast({ title: "Error", description: dcaError.message, variant: "destructive" });
+    } else {
+      setDcaPlans((dcaData || []) as any);
     }
 
     setLoading(false);
@@ -404,6 +456,127 @@ export default function Investments() {
     return Number(holding.shares) * price;
   };
 
+  const handleDcaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!dcaFormData.account_id || !dcaFormData.security_id || !dcaFormData.amount) {
+      toast({ title: "Error", description: "Please fill all required fields", variant: "destructive" });
+      return;
+    }
+
+    const payload: any = {
+      user_id: user!.id,
+      account_id: dcaFormData.account_id,
+      security_id: dcaFormData.security_id,
+      amount: parseFloat(dcaFormData.amount),
+      frequency: dcaFormData.frequency,
+      start_date: dcaFormData.start_date,
+      active: dcaFormData.active,
+      interval_days: dcaFormData.frequency === 'interval' ? parseInt(dcaFormData.interval_days) : null,
+      weekday: dcaFormData.frequency === 'weekly' ? parseInt(dcaFormData.weekday) : null,
+      monthday: dcaFormData.frequency === 'monthly' ? parseInt(dcaFormData.monthday) : null,
+    };
+
+    try {
+      if (editingDca) {
+        const { error } = await supabase
+          .from('dca_plans')
+          .update(payload)
+          .eq('id', editingDca.id);
+
+        if (error) throw error;
+        toast({ title: "Success", description: "DCA plan updated successfully" });
+      } else {
+        const { error } = await supabase.from('dca_plans').insert(payload);
+        if (error) throw error;
+        toast({ title: "Success", description: "DCA plan created successfully" });
+      }
+      
+      setDcaDialogOpen(false);
+      setEditingDca(null);
+      resetDcaForm();
+      fetchData();
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const handleEditDca = (plan: DcaPlan) => {
+    setEditingDca(plan);
+    setDcaFormData({
+      account_id: plan.account_id,
+      security_id: plan.security_id,
+      amount: plan.amount.toString(),
+      frequency: plan.frequency,
+      interval_days: plan.interval_days?.toString() || "",
+      weekday: plan.weekday?.toString() || "1",
+      monthday: plan.monthday?.toString() || "1",
+      start_date: plan.start_date,
+      active: plan.active,
+    });
+    setDcaDialogOpen(true);
+  };
+
+  const handleDeleteDca = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this DCA plan?")) return;
+
+    const { error } = await supabase.from('dca_plans').delete().eq('id', id);
+
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Success", description: "DCA plan deleted successfully" });
+      fetchData();
+    }
+  };
+
+  const handleToggleDca = async (id: string, active: boolean) => {
+    const { error } = await supabase
+      .from('dca_plans')
+      .update({ active })
+      .eq('id', id);
+
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Success", description: `DCA plan ${active ? 'activated' : 'paused'}` });
+      fetchData();
+    }
+  };
+
+  const resetDcaForm = () => {
+    setDcaFormData({
+      account_id: "",
+      security_id: "",
+      amount: "",
+      frequency: "monthly",
+      interval_days: "",
+      weekday: "1",
+      monthday: "1",
+      start_date: new Date().toISOString().split('T')[0],
+      active: true,
+    });
+  };
+
+  const formatNextExecution = (plan: DcaPlan) => {
+    if (plan.next_execution_date) {
+      return new Date(plan.next_execution_date).toLocaleDateString('fr-FR');
+    }
+    
+    const start = new Date(plan.start_date);
+    switch (plan.frequency) {
+      case 'weekly':
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        return `Every ${dayNames[plan.weekday || 0]}`;
+      case 'monthly':
+        return `Day ${plan.monthday} of each month`;
+      case 'interval':
+        return `Every ${plan.interval_days} days`;
+      default:
+        return start.toLocaleDateString('fr-FR');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -617,10 +790,14 @@ export default function Investments() {
       </div>
 
       <Tabs defaultValue="quick" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="quick">Quick Add</TabsTrigger>
           <TabsTrigger value="holdings">Holdings</TabsTrigger>
           <TabsTrigger value="securities">Securities</TabsTrigger>
+          <TabsTrigger value="dca">
+            <TrendingUp className="w-4 h-4 mr-2" />
+            DCA Plans
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="quick" className="space-y-4">
@@ -933,6 +1110,280 @@ export default function Investments() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="dca" className="space-y-4">
+          <div className="flex justify-end">
+            <Dialog open={dcaDialogOpen} onOpenChange={(open) => {
+              setDcaDialogOpen(open);
+              if (!open) {
+                setEditingDca(null);
+                resetDcaForm();
+              }
+            }}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add DCA Plan
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>{editingDca ? "Edit DCA Plan" : "New DCA Plan"}</DialogTitle>
+                  <DialogDescription>
+                    Create a recurring investment plan that will execute automatically
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleDcaSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="dca_account">Account *</Label>
+                    <Select value={dcaFormData.account_id} onValueChange={(value) => setDcaFormData({ ...dcaFormData, account_id: value })}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select account..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {accounts.map((acc) => (
+                          <SelectItem key={acc.id} value={acc.id}>
+                            {acc.name} ({acc.type})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="dca_security">Security *</Label>
+                    <Select value={dcaFormData.security_id} onValueChange={(value) => setDcaFormData({ ...dcaFormData, security_id: value })}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select security..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {securities.map((sec) => (
+                          <SelectItem key={sec.id} value={sec.id}>
+                            {sec.symbol} - {sec.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="dca_amount">Amount (EUR) *</Label>
+                    <Input
+                      id="dca_amount"
+                      type="number"
+                      step="0.01"
+                      min="1"
+                      value={dcaFormData.amount}
+                      onChange={(e) => setDcaFormData({ ...dcaFormData, amount: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="dca_frequency">Frequency *</Label>
+                    <Select value={dcaFormData.frequency} onValueChange={(value: any) => setDcaFormData({ ...dcaFormData, frequency: value })}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="weekly">Weekly</SelectItem>
+                        <SelectItem value="monthly">Monthly</SelectItem>
+                        <SelectItem value="interval">Custom Interval</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {dcaFormData.frequency === 'weekly' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="dca_weekday">Day of Week *</Label>
+                      <Select value={dcaFormData.weekday} onValueChange={(value) => setDcaFormData({ ...dcaFormData, weekday: value })}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">Monday</SelectItem>
+                          <SelectItem value="2">Tuesday</SelectItem>
+                          <SelectItem value="3">Wednesday</SelectItem>
+                          <SelectItem value="4">Thursday</SelectItem>
+                          <SelectItem value="5">Friday</SelectItem>
+                          <SelectItem value="6">Saturday</SelectItem>
+                          <SelectItem value="0">Sunday</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {dcaFormData.frequency === 'monthly' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="dca_monthday">Day of Month *</Label>
+                      <Input
+                        id="dca_monthday"
+                        type="number"
+                        min="1"
+                        max="31"
+                        value={dcaFormData.monthday}
+                        onChange={(e) => setDcaFormData({ ...dcaFormData, monthday: e.target.value })}
+                        required
+                      />
+                    </div>
+                  )}
+
+                  {dcaFormData.frequency === 'interval' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="dca_interval">Every N Days *</Label>
+                      <Input
+                        id="dca_interval"
+                        type="number"
+                        min="1"
+                        value={dcaFormData.interval_days}
+                        onChange={(e) => setDcaFormData({ ...dcaFormData, interval_days: e.target.value })}
+                        required
+                      />
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label htmlFor="dca_start">Start Date *</Label>
+                    <Input
+                      id="dca_start"
+                      type="date"
+                      value={dcaFormData.start_date}
+                      onChange={(e) => setDcaFormData({ ...dcaFormData, start_date: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="dca_active"
+                      checked={dcaFormData.active}
+                      onCheckedChange={(checked) => setDcaFormData({ ...dcaFormData, active: checked })}
+                    />
+                    <Label htmlFor="dca_active">Active</Label>
+                  </div>
+
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setDcaDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button type="submit">{editingDca ? "Update" : "Create"}</Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {dcaPlans.length === 0 ? (
+            <Card>
+              <CardContent className="pt-6">
+                <p className="text-center text-muted-foreground">
+                  No DCA plans yet. Click "Add DCA Plan" to automate your investments.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <Card className="transition-all duration-300 hover:shadow-[0_0_25px_rgba(234,179,8,0.1)] hover:border-primary/10">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5" />
+                    Active DCA Plans
+                  </CardTitle>
+                  <CardDescription>
+                    Your recurring investment plans
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Security</TableHead>
+                          <TableHead>Account</TableHead>
+                          <TableHead className="text-right">Amount</TableHead>
+                          <TableHead>Frequency</TableHead>
+                          <TableHead>Next Execution</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {dcaPlans.map((plan) => (
+                          <TableRow key={plan.id}>
+                            <TableCell>
+                              <div>
+                                <div className="font-medium">{plan.security?.symbol}</div>
+                                <div className="text-sm text-muted-foreground">{plan.security?.name}</div>
+                              </div>
+                            </TableCell>
+                            <TableCell>{plan.account?.name}</TableCell>
+                            <TableCell className="text-right tabular-nums">{formatCurrency(plan.amount)}</TableCell>
+                            <TableCell className="capitalize">{plan.frequency}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Calendar className="w-4 h-4 text-muted-foreground" />
+                                <span className="text-sm">{formatNextExecution(plan)}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Switch
+                                checked={plan.active}
+                                onCheckedChange={(checked) => handleToggleDca(plan.id, checked)}
+                              />
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end space-x-2">
+                                <Button variant="ghost" size="sm" onClick={() => handleEditDca(plan)}>
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => handleDeleteDca(plan.id)}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-primary/5 border-primary/20">
+                <CardHeader>
+                  <CardTitle className="text-lg">Upcoming Schedule</CardTitle>
+                  <CardDescription>
+                    Next scheduled DCA executions
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {dcaPlans
+                      .filter(p => p.active)
+                      .slice(0, 5)
+                      .map((plan) => (
+                        <div key={plan.id} className="flex items-center justify-between p-3 rounded-lg bg-card border">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                              <TrendingUp className="w-5 h-5 text-primary" />
+                            </div>
+                            <div>
+                              <div className="font-medium">{plan.security?.symbol}</div>
+                              <div className="text-sm text-muted-foreground">{formatNextExecution(plan)}</div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="font-semibold">{formatCurrency(plan.amount)}</div>
+                            <div className="text-xs text-muted-foreground">{plan.account?.name}</div>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </TabsContent>
       </Tabs>
     </div>
