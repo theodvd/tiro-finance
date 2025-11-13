@@ -112,8 +112,13 @@ async function getBridgeUserToken(userId: string, clientId: string, clientSecret
 }
 
 Deno.serve(async (req) => {
+  console.log('=== Bridge Proxy Request ===');
+  console.log('Method:', req.method);
+  console.log('URL:', req.url);
+  
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
+    console.log('Handling CORS preflight');
     return new Response(null, { headers: corsHeaders });
   }
 
@@ -121,7 +126,8 @@ Deno.serve(async (req) => {
     // Get Bridge credentials
     const BRIDGE_CLIENT_ID = Deno.env.get('BRIDGE_CLIENT_ID');
     const BRIDGE_CLIENT_SECRET = Deno.env.get('BRIDGE_CLIENT_SECRET');
-    const BRIDGE_API_URL = 'https://api.bridgeapi.io/v2';
+
+    console.log('Bridge credentials present:', !!BRIDGE_CLIENT_ID, !!BRIDGE_CLIENT_SECRET);
 
     if (!BRIDGE_CLIENT_ID || !BRIDGE_CLIENT_SECRET) {
       throw new Error('Bridge API credentials not configured');
@@ -129,6 +135,8 @@ Deno.serve(async (req) => {
 
     // Verify JWT and get user
     const authHeader = req.headers.get('Authorization');
+    console.log('Auth header present:', !!authHeader);
+    
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
         status: 401,
@@ -143,7 +151,10 @@ Deno.serve(async (req) => {
     });
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
+    console.log('User authenticated:', !!user);
+    
     if (authError || !user) {
+      console.error('Auth error:', authError);
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -152,6 +163,7 @@ Deno.serve(async (req) => {
 
     const url = new URL(req.url);
     const path = url.pathname.split('/bridge-proxy')[1] || '';
+    console.log('Parsed path:', path);
 
     // GET /bridge/init - Create Bridge Connect session
     if (path === '/init' && req.method === 'GET') {
