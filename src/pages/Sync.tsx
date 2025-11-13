@@ -1,0 +1,275 @@
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Loader2, RefreshCw, Wallet, ArrowRight } from 'lucide-react';
+import { toast } from 'sonner';
+import { fmtEUR } from '@/lib/format';
+
+interface BridgeAccount {
+  id: string;
+  provider: string;
+  name: string;
+  balance: number;
+  currency: string;
+  type: string;
+  updated_at: string;
+}
+
+export default function Sync() {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [accounts, setAccounts] = useState<BridgeAccount[]>([]);
+
+  useEffect(() => {
+    if (user) {
+      fetchAccounts();
+    }
+  }, [user]);
+
+  const fetchAccounts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('bridge_accounts')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setAccounts(data || []);
+    } catch (error) {
+      console.error('Error fetching accounts:', error);
+    }
+  };
+
+  const handleConnectBank = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('bridge-proxy/init', {
+        method: 'GET',
+      });
+
+      if (error) throw error;
+
+      if (data?.redirect_url) {
+        // Open Bridge Connect in new window
+        const width = 600;
+        const height = 800;
+        const left = (window.screen.width - width) / 2;
+        const top = (window.screen.height - height) / 2;
+        
+        const popup = window.open(
+          data.redirect_url,
+          'Bridge Connect',
+          `width=${width},height=${height},left=${left},top=${top}`
+        );
+
+        // Poll for popup closure
+        const checkPopup = setInterval(() => {
+          if (popup?.closed) {
+            clearInterval(checkPopup);
+            handleSyncAccounts();
+          }
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Error connecting bank:', error);
+      toast.error('Failed to connect bank account');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSyncAccounts = async () => {
+    setSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('bridge-proxy/accounts', {
+        method: 'GET',
+      });
+
+      if (error) throw error;
+
+      toast.success(`Synced ${data?.accounts?.length || 0} accounts`);
+      await fetchAccounts();
+
+      // Sync transactions for each account
+      if (data?.accounts) {
+        for (const account of data.accounts) {
+          await supabase.functions.invoke(`bridge-proxy/transactions?account_id=${account.id}`, {
+            method: 'GET',
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error syncing accounts:', error);
+      toast.error('Failed to sync accounts');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  return (
+    <div className="space-y-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground">Bank Sync</h1>
+          <p className="text-muted-foreground mt-1">
+            Connect your bank accounts for automatic transaction sync
+          </p>
+        </div>
+        <div className="flex gap-3">
+          {accounts.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={handleSyncAccounts}
+              disabled={syncing}
+            >
+              {syncing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Syncing...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Refresh Accounts
+                </>
+              )}
+            </Button>
+          )}
+          <Button onClick={handleConnectBank} disabled={loading}>
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Connecting...
+              </>
+            ) : (
+              <>
+                <Wallet className="mr-2 h-4 w-4" />
+                Connect Bank Account
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+
+      {accounts.length === 0 ? (
+        <Card className="border-border bg-card">
+          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="rounded-full bg-primary/10 p-4 mb-4">
+              <Wallet className="h-8 w-8 text-primary" />
+            </div>
+            <h3 className="text-lg font-semibold text-foreground mb-2">
+              No bank accounts connected
+            </h3>
+            <p className="text-muted-foreground mb-6 max-w-md">
+              Connect your bank accounts to automatically sync transactions and get a complete
+              view of your finances.
+            </p>
+            <Button onClick={handleConnectBank} disabled={loading} size="lg">
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Connecting...
+                </>
+              ) : (
+                <>
+                  Get Started
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {accounts.map((account) => (
+            <Card key={account.id} className="border-border bg-card hover:shadow-lg transition-shadow">
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="text-foreground">{account.name}</CardTitle>
+                    <CardDescription className="text-muted-foreground">
+                      {account.provider} • {account.type}
+                    </CardDescription>
+                  </div>
+                  <div className="rounded-full bg-primary/10 p-2">
+                    <Wallet className="h-4 w-4 text-primary" />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Balance</p>
+                    <p className="text-2xl font-semibold text-foreground">
+                      {fmtEUR(account.balance)}
+                    </p>
+                  </div>
+                  <div className="pt-2 border-t border-border">
+                    <p className="text-xs text-muted-foreground">
+                      Last updated: {new Date(account.updated_at).toLocaleDateString('fr-FR', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {accounts.length > 0 && (
+        <Card className="border-border bg-card">
+          <CardHeader>
+            <CardTitle className="text-foreground">What's Next?</CardTitle>
+            <CardDescription className="text-muted-foreground">
+              Your bank accounts are now connected and syncing automatically.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="rounded-full bg-primary/10 p-1 mt-1">
+                <div className="h-2 w-2 rounded-full bg-primary" />
+              </div>
+              <div>
+                <p className="font-medium text-foreground">Automatic Sync</p>
+                <p className="text-sm text-muted-foreground">
+                  Transactions are automatically imported and categorized
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="rounded-full bg-primary/10 p-1 mt-1">
+                <div className="h-2 w-2 rounded-full bg-primary" />
+              </div>
+              <div>
+                <p className="font-medium text-foreground">Portfolio Integration</p>
+                <p className="text-sm text-muted-foreground">
+                  Investment accounts automatically update your holdings and performance
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="rounded-full bg-primary/10 p-1 mt-1">
+                <div className="h-2 w-2 rounded-full bg-primary" />
+              </div>
+              <div>
+                <p className="font-medium text-foreground">Real-time Updates</p>
+                <p className="text-sm text-muted-foreground">
+                  Your dashboard and insights update automatically as new data arrives
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}

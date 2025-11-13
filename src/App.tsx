@@ -13,6 +13,7 @@ import Investments from "./pages/Investments";
 import Market from "./pages/Market";
 import Insights from "./pages/Insights";
 import Profile from "./pages/Profile";
+import Sync from "./pages/Sync";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -82,6 +83,16 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <Profile />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/sync"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Sync />
                   </Layout>
                 </ProtectedRoute>
               }
