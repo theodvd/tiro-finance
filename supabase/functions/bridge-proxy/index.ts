@@ -5,15 +5,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const BRIDGE_API_URL = 'https://api.bridgeapi.io/v3/aggregation';
+const BRIDGE_VERSION = '2025-01-15';
+
 interface BridgeAccount {
   id: number;
   name: string;
   balance: number;
-  currency: string;
+  currency_code: string;
   type: string;
-  bank: {
-    name: string;
-  };
+  item_id: number;
 }
 
 interface BridgeTransaction {
@@ -21,8 +22,70 @@ interface BridgeTransaction {
   description: string;
   amount: number;
   date: string;
-  currency: string;
+  currency_code: string;
   category_id?: number;
+}
+
+// Helper to get Bridge user token
+async function getBridgeUserToken(userId: string, clientId: string, clientSecret: string) {
+  const response = await fetch(`${BRIDGE_API_URL}/authorization/token`, {
+    method: 'POST',
+    headers: {
+      'Bridge-Version': BRIDGE_VERSION,
+      'Client-Id': clientId,
+      'Client-Secret': clientSecret,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      external_user_id: userId,
+    }),
+  });
+
+  if (!response.ok) {
+    // User doesn't exist, create one
+    const createResponse = await fetch(`${BRIDGE_API_URL}/users`, {
+      method: 'POST',
+      headers: {
+        'Bridge-Version': BRIDGE_VERSION,
+        'Client-Id': clientId,
+        'Client-Secret': clientSecret,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        external_user_id: userId,
+      }),
+    });
+
+    if (!createResponse.ok) {
+      const error = await createResponse.text();
+      throw new Error(`Failed to create Bridge user: ${error}`);
+    }
+
+    // Get token for newly created user
+    const tokenResponse = await fetch(`${BRIDGE_API_URL}/authorization/token`, {
+      method: 'POST',
+      headers: {
+        'Bridge-Version': BRIDGE_VERSION,
+        'Client-Id': clientId,
+        'Client-Secret': clientSecret,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        external_user_id: userId,
+      }),
+    });
+
+    if (!tokenResponse.ok) {
+      const error = await tokenResponse.text();
+      throw new Error(`Failed to get token for new user: ${error}`);
+    }
+
+    const tokenData = await tokenResponse.json();
+    return tokenData.access_token;
+  }
+
+  const data = await response.json();
+  return data.access_token;
 }
 
 Deno.serve(async (req) => {
@@ -69,20 +132,18 @@ Deno.serve(async (req) => {
 
     // GET /bridge/init - Create Bridge Connect session
     if (path === '/init' && req.method === 'GET') {
-      const response = await fetch(`${BRIDGE_API_URL}/connect/items/add`, {
+      // Get or create Bridge user token
+      const accessToken = await getBridgeUserToken(user.id, BRIDGE_CLIENT_ID, BRIDGE_CLIENT_SECRET);
+
+      const response = await fetch(`${BRIDGE_API_URL}/connect-sessions`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Bridge-Version': '2025-01-15',
+          'Bridge-Version': BRIDGE_VERSION,
           'Client-Id': BRIDGE_CLIENT_ID,
           'Client-Secret': BRIDGE_CLIENT_SECRET,
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          user: {
-            uuid: user.id,
-          },
-          prefill_email: user.email,
-        }),
       });
 
       if (!response.ok) {
@@ -95,19 +156,21 @@ Deno.serve(async (req) => {
       }
 
       const data = await response.json();
-      return new Response(JSON.stringify(data), {
+      return new Response(JSON.stringify({ redirect_url: data.url }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
     // GET /bridge/accounts - Fetch user's accounts
     if (path === '/accounts' && req.method === 'GET') {
+      const accessToken = await getBridgeUserToken(user.id, BRIDGE_CLIENT_ID, BRIDGE_CLIENT_SECRET);
+
       const response = await fetch(`${BRIDGE_API_URL}/accounts`, {
         headers: {
-          'Bridge-Version': '2025-01-15',
+          'Bridge-Version': BRIDGE_VERSION,
           'Client-Id': BRIDGE_CLIENT_ID,
           'Client-Secret': BRIDGE_CLIENT_SECRET,
-          'User-UUID': user.id,
+          'Authorization': `Bearer ${accessToken}`,
         },
       });
 
@@ -129,11 +192,11 @@ Deno.serve(async (req) => {
           .from('bridge_accounts')
           .upsert({
             user_id: user.id,
-            provider: account.bank.name,
+            provider: `item_${account.item_id}`,
             provider_account_id: account.id.toString(),
             name: account.name,
             balance: account.balance,
-            currency: account.currency,
+            currency: account.currency_code,
             type: account.type,
             raw_json: account,
           }, {
@@ -156,12 +219,14 @@ Deno.serve(async (req) => {
         });
       }
 
+      const accessToken = await getBridgeUserToken(user.id, BRIDGE_CLIENT_ID, BRIDGE_CLIENT_SECRET);
+
       const response = await fetch(`${BRIDGE_API_URL}/accounts/${accountId}/transactions`, {
         headers: {
-          'Bridge-Version': '2025-01-15',
+          'Bridge-Version': BRIDGE_VERSION,
           'Client-Id': BRIDGE_CLIENT_ID,
           'Client-Secret': BRIDGE_CLIENT_SECRET,
-          'User-UUID': user.id,
+          'Authorization': `Bearer ${accessToken}`,
         },
       });
 
@@ -183,7 +248,7 @@ Deno.serve(async (req) => {
         .select('id')
         .eq('user_id', user.id)
         .eq('provider_account_id', accountId)
-        .single();
+        .maybeSingle();
 
       if (bridgeAccount) {
         // Store transactions in Supabase
@@ -194,7 +259,7 @@ Deno.serve(async (req) => {
               user_id: user.id,
               bridge_account_id: bridgeAccount.id,
               amount: transaction.amount,
-              currency: transaction.currency,
+              currency: transaction.currency_code,
               date: transaction.date,
               description: transaction.description,
               bridge_transaction_id: transaction.id.toString(),

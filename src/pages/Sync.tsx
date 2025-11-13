@@ -46,11 +46,28 @@ export default function Sync() {
   const handleConnectBank = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('bridge-proxy/init', {
-        method: 'GET',
-      });
+      // Get the auth session for the request
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
 
-      if (error) throw error;
+      // Call the edge function with the correct URL structure
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/bridge-proxy/init`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to initialize Bridge session');
+      }
+
+      const data = await response.json();
 
       if (data?.redirect_url) {
         // Open Bridge Connect in new window
@@ -84,11 +101,26 @@ export default function Sync() {
   const handleSyncAccounts = async () => {
     setSyncing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('bridge-proxy/accounts', {
-        method: 'GET',
-      });
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
 
-      if (error) throw error;
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/bridge-proxy/accounts`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to sync accounts');
+      }
+
+      const data = await response.json();
 
       toast.success(`Synced ${data?.accounts?.length || 0} accounts`);
       await fetchAccounts();
@@ -96,9 +128,16 @@ export default function Sync() {
       // Sync transactions for each account
       if (data?.accounts) {
         for (const account of data.accounts) {
-          await supabase.functions.invoke(`bridge-proxy/transactions?account_id=${account.id}`, {
-            method: 'GET',
-          });
+          await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/bridge-proxy/transactions?account_id=${account.id}`,
+            {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${session.access_token}`,
+                'Content-Type': 'application/json',
+              },
+            }
+          );
         }
       }
     } catch (error) {
