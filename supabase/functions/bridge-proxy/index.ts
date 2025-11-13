@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Bridge-Version': '2021-06-01',
+          'Bridge-Version': '2025-01-15',
           'Client-Id': BRIDGE_CLIENT_ID,
           'Client-Secret': BRIDGE_CLIENT_SECRET,
         },
@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
     if (path === '/accounts' && req.method === 'GET') {
       const response = await fetch(`${BRIDGE_API_URL}/accounts`, {
         headers: {
-          'Bridge-Version': '2021-06-01',
+          'Bridge-Version': '2025-01-15',
           'Client-Id': BRIDGE_CLIENT_ID,
           'Client-Secret': BRIDGE_CLIENT_SECRET,
           'User-UUID': user.id,
@@ -158,7 +158,7 @@ Deno.serve(async (req) => {
 
       const response = await fetch(`${BRIDGE_API_URL}/accounts/${accountId}/transactions`, {
         headers: {
-          'Bridge-Version': '2021-06-01',
+          'Bridge-Version': '2025-01-15',
           'Client-Id': BRIDGE_CLIENT_ID,
           'Client-Secret': BRIDGE_CLIENT_SECRET,
           'User-UUID': user.id,
