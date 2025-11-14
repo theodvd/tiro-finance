@@ -5,7 +5,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full">
-        <div className="backdrop-blur-sm hidden md:block">
+        <div className="backdrop-blur-sm hidden md:block sticky top-0 h-screen">
           <AppSidebar />
         </div>
         <div className="flex-1 flex flex-col min-w-0">
