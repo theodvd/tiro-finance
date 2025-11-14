@@ -112,17 +112,17 @@ export default function Portfolio() {
   }
 
   return (
-    <div className="w-full max-w-6xl mx-auto space-y-4 sm:space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Portfolio</h1>
-        <div className="flex flex-col sm:flex-row gap-2 shadow-lg rounded-xl p-1 bg-card/50 backdrop-blur-sm border border-border/50 w-full sm:w-auto">
-          <Button onClick={handleTakeSnapshot} variant="outline" size="sm" className="w-full sm:w-auto">
-            <Camera className="h-4 w-4 mr-2" />
+    <div className="w-full max-w-6xl mx-auto space-y-3 sm:space-y-4 md:space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+        <h1 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight">Portfolio</h1>
+        <div className="flex flex-col sm:flex-row gap-2 shadow-lg rounded-lg sm:rounded-xl p-1 bg-card/50 backdrop-blur-sm border border-border/50 w-full sm:w-auto">
+          <Button onClick={handleTakeSnapshot} variant="outline" size="sm" className="w-full sm:w-auto text-xs sm:text-sm">
+            <Camera className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
             <span className="hidden sm:inline">Take Snapshot</span>
             <span className="sm:hidden">Snapshot</span>
           </Button>
-          <Button onClick={handleRefreshPrices} size="sm" className="w-full sm:w-auto">
-            <RefreshCw className="h-4 w-4 mr-2" />
+          <Button onClick={handleRefreshPrices} size="sm" className="w-full sm:w-auto text-xs sm:text-sm">
+            <RefreshCw className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
             <span className="hidden sm:inline">Refresh Prices</span>
             <span className="sm:hidden">Refresh</span>
           </Button>
@@ -143,7 +143,7 @@ export default function Portfolio() {
         totalValue={portfolioData.totalValue}
       />
 
-      <div className="grid gap-4 sm:gap-6 grid-cols-1 lg:grid-cols-2">
+      <div className="grid gap-3 sm:gap-4 md:gap-6 grid-cols-1 lg:grid-cols-2">
         <ProfitAndLossChart
           totalInvested={portfolioData.totalInvested}
           pnl={portfolioData.pnl}
