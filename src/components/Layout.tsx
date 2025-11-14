@@ -4,11 +4,11 @@ import { AppSidebar } from "./AppSidebar";
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full">
-        <div className="backdrop-blur-sm hidden md:block sticky top-0 h-screen">
+      <div className="flex w-full">
+        <div className="hidden md:block fixed left-0 top-0 h-screen backdrop-blur-sm z-40">
           <AppSidebar />
         </div>
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-h-screen md:ml-[280px]">
           <header className="h-14 border-b border-border/60 bg-card/30 backdrop-blur supports-[backdrop-filter]:bg-card/40 flex items-center px-4 sticky top-0 z-50">
             <SidebarTrigger />
           </header>
