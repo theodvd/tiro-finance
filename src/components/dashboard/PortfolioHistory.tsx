@@ -55,17 +55,17 @@ export function PortfolioHistory() {
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value);
 
   return (
-    <Card className="rounded-2xl shadow-sm border border-border bg-card transition-all duration-300 hover:shadow-[0_0_25px_rgba(234,179,8,0.1)] hover:border-primary/10 min-w-0">
-      <CardHeader>
-        <CardTitle className="text-base sm:text-lg">Portfolio History</CardTitle>
+    <Card className="rounded-xl sm:rounded-2xl shadow-sm border border-border bg-card transition-all duration-300 hover:shadow-[0_0_25px_rgba(234,179,8,0.1)] hover:border-primary/10 min-w-0">
+      <CardHeader className="px-3 sm:px-6 py-3 sm:py-6">
+        <CardTitle className="text-sm sm:text-base md:text-lg">Portfolio History</CardTitle>
       </CardHeader>
-      <CardContent className="w-full">
+      <CardContent className="w-full px-3 sm:px-6 pb-3 sm:pb-6">
         {snapshots.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-8">
+          <p className="text-xs sm:text-sm text-muted-foreground text-center py-8">
             No historical data. Take your first snapshot to track performance over time.
           </p>
         ) : (
-          <ChartContainer config={{}} className="h-[200px] sm:h-[250px] lg:h-[300px] w-full">
+          <ChartContainer config={{}} className="h-[180px] sm:h-[220px] md:h-[250px] lg:h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={snapshots} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -82,7 +82,7 @@ export function PortfolioHistory() {
                   stroke="hsl(var(--muted-foreground))"
                   fontSize={9}
                   className="sm:text-xs"
-                  width={50}
+                  width={45}
                   tickFormatter={(v: number) =>
                     new Intl.NumberFormat('fr-FR', {
                       notation: 'compact',

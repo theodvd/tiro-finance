@@ -124,40 +124,40 @@ export function InsightsSummary({
   };
 
   return (
-    <div className="grid gap-6 md:grid-cols-2">
-      <Card className="hover:shadow-[0_0_30px_rgba(234,179,8,0.15)] hover:border-primary/20 transition-all duration-300">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-primary" />
+    <div className="grid gap-3 sm:gap-4 md:gap-6 grid-cols-1 md:grid-cols-2">
+      <Card className="rounded-xl sm:rounded-2xl hover:shadow-[0_0_30px_rgba(234,179,8,0.15)] hover:border-primary/20 transition-all duration-300">
+        <CardHeader className="px-3 sm:px-6 py-3 sm:py-6">
+          <CardTitle className="text-sm sm:text-base md:text-lg flex items-center gap-1.5 sm:gap-2">
+            <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
             Résumé Automatique
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-2 sm:space-y-3 px-3 sm:px-6 pb-3 sm:pb-6">
           {insights.map((insight, idx) => (
-            <div key={idx} className="flex items-start gap-2">
-              {insight.type === 'positive' && <CheckCircle className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />}
-              {insight.type === 'warning' && <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />}
-              {insight.type === 'info' && <TrendingDown className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />}
-              <p className="text-sm">{insight.text}</p>
+            <div key={idx} className="flex items-start gap-1.5 sm:gap-2">
+              {insight.type === 'positive' && <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-success mt-0.5 flex-shrink-0" />}
+              {insight.type === 'warning' && <AlertTriangle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-destructive mt-0.5 flex-shrink-0" />}
+              {insight.type === 'info' && <TrendingDown className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground mt-0.5 flex-shrink-0" />}
+              <p className="text-xs sm:text-sm leading-relaxed">{insight.text}</p>
             </div>
           ))}
         </CardContent>
       </Card>
 
-      <Card className="hover:shadow-[0_0_30px_rgba(234,179,8,0.15)] hover:border-primary/20 transition-all duration-300">
-        <CardHeader>
-          <CardTitle className="text-lg">Score de Diversification</CardTitle>
+      <Card className="rounded-xl sm:rounded-2xl hover:shadow-[0_0_30px_rgba(234,179,8,0.15)] hover:border-primary/20 transition-all duration-300">
+        <CardHeader className="px-3 sm:px-6 py-3 sm:py-6">
+          <CardTitle className="text-sm sm:text-base md:text-lg">Score de Diversification</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between mb-4">
-            <div className={`text-5xl font-bold ${getScoreColor(diversificationScore)}`}>
+        <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className={`text-3xl sm:text-4xl md:text-5xl font-bold ${getScoreColor(diversificationScore)}`}>
               {diversificationScore}
             </div>
-            <Badge variant={getScoreVariant(diversificationScore)} className="text-lg px-4 py-2">
+            <Badge variant={getScoreVariant(diversificationScore)} className="text-xs sm:text-sm md:text-base px-2 sm:px-3 md:px-4 py-1 sm:py-1.5 md:py-2">
               {diversificationScore >= 80 ? 'Excellent' : diversificationScore >= 60 ? 'Bon' : 'À améliorer'}
             </Badge>
           </div>
-          <div className="space-y-2 text-sm text-muted-foreground">
+          <div className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm text-muted-foreground">
             <div className="flex justify-between">
               <span>Classes d'actifs:</span>
               <span className="font-medium text-foreground">{allocByClass.length}</span>
