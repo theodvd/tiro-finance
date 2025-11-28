@@ -86,6 +86,7 @@ Deno.serve(async (req) => {
                   eur_fx: 1,
                   last_px_eur: px,
                   last_close_dt: nowIso,
+                  updated_at: nowIso,
                 }
               : null;
           })
