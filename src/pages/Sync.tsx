@@ -3,9 +3,20 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, RefreshCw, Wallet, ArrowRight } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Loader2, RefreshCw, Wallet, ArrowRight, Trash2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { fmtEUR } from '@/lib/format';
+import { LiquidityAccountDialog } from '@/components/liquidity/LiquidityAccountDialog';
 
 interface BridgeAccount {
   id: string;
@@ -22,6 +33,10 @@ export default function Sync() {
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [accounts, setAccounts] = useState<BridgeAccount[]>([]);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<any>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [accountToDelete, setAccountToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -148,6 +163,45 @@ export default function Sync() {
     }
   };
 
+  const handleEditAccount = (account: BridgeAccount) => {
+    setEditingAccount({
+      id: account.id,
+      name: account.name,
+      type: account.type,
+      balance: account.balance,
+      currency: account.currency,
+      provider: account.provider,
+    });
+    setDialogOpen(true);
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!accountToDelete) return;
+
+    try {
+      const { error } = await supabase
+        .from("bridge_accounts")
+        .delete()
+        .eq("id", accountToDelete);
+
+      if (error) throw error;
+
+      toast.success("Compte supprimé avec succès");
+      await fetchAccounts();
+    } catch (error: any) {
+      console.error("Error deleting account:", error);
+      toast.error("Erreur lors de la suppression");
+    } finally {
+      setDeleteDialogOpen(false);
+      setAccountToDelete(null);
+    }
+  };
+
+  const openDeleteDialog = (accountId: string) => {
+    setAccountToDelete(accountId);
+    setDeleteDialogOpen(true);
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
@@ -224,17 +278,35 @@ export default function Sync() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {accounts.map((account) => (
-            <Card key={account.id} className="border-border bg-card hover:shadow-lg transition-shadow">
+            <Card key={account.id} className="border-border bg-card hover:shadow-lg transition-shadow group">
               <CardHeader>
                 <div className="flex items-start justify-between">
-                  <div>
+                  <div className="flex-1">
                     <CardTitle className="text-foreground">{account.name}</CardTitle>
                     <CardDescription className="text-muted-foreground">
                       {account.provider} • {account.type}
                     </CardDescription>
                   </div>
-                  <div className="rounded-full bg-primary/10 p-2">
-                    <Wallet className="h-4 w-4 text-primary" />
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-full bg-primary/10 p-2">
+                      <Wallet className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleEditAccount(account)}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => openDeleteDialog(account.id)}
+                      >
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </CardHeader>
@@ -309,6 +381,29 @@ export default function Sync() {
           </CardContent>
         </Card>
       )}
+
+      <LiquidityAccountDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onSuccess={fetchAccounts}
+        userId={user?.id || ""}
+        account={editingAccount}
+      />
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+            <AlertDialogDescription>
+              Êtes-vous sûr de vouloir supprimer ce compte ? Cette action est irréversible.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteAccount}>Supprimer</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
