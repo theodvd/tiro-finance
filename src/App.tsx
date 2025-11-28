@@ -14,6 +14,7 @@ import Market from "./pages/Market";
 import Insights from "./pages/Insights";
 import Profile from "./pages/Profile";
 import Sync from "./pages/Sync";
+import Liquidity from "./pages/Liquidity";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -93,6 +94,16 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <Sync />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/liquidity"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Liquidity />
                   </Layout>
                 </ProtectedRoute>
               }
