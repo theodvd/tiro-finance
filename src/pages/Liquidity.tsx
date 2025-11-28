@@ -4,9 +4,22 @@ import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 import { fmtEUR } from "@/lib/format";
-import { Wallet } from "lucide-react";
+import { Wallet, Plus, Pencil, Trash2 } from "lucide-react";
+import { LiquidityAccountDialog } from "@/components/liquidity/LiquidityAccountDialog";
+import { toast } from "sonner";
 
 interface LiquidityData {
   totalLiquidity: number;
@@ -29,6 +42,10 @@ export default function Liquidity() {
     totalInvestments: 0,
     accounts: [],
   });
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<any>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [accountToDelete, setAccountToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -92,6 +109,43 @@ export default function Liquidity() {
     { name: "Investissements", value: data.totalInvestments, color: "hsl(var(--chart-2))" },
   ];
 
+  const handleAddAccount = () => {
+    setEditingAccount(null);
+    setDialogOpen(true);
+  };
+
+  const handleEditAccount = (account: any) => {
+    setEditingAccount(account);
+    setDialogOpen(true);
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!accountToDelete) return;
+
+    try {
+      const { error } = await supabase
+        .from("bridge_accounts")
+        .delete()
+        .eq("id", accountToDelete);
+
+      if (error) throw error;
+
+      toast.success("Compte supprimé avec succès");
+      await fetchData();
+    } catch (error: any) {
+      console.error("Error deleting account:", error);
+      toast.error("Erreur lors de la suppression");
+    } finally {
+      setDeleteDialogOpen(false);
+      setAccountToDelete(null);
+    }
+  };
+
+  const openDeleteDialog = (accountId: string) => {
+    setAccountToDelete(accountId);
+    setDeleteDialogOpen(true);
+  };
+
   if (loading) {
     return (
       <div className="space-y-6 max-w-6xl mx-auto">
@@ -121,11 +175,17 @@ export default function Liquidity() {
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
-      <div className="flex items-center gap-3">
-        <div className="p-2 bg-primary/10 rounded-lg">
-          <Wallet className="w-6 h-6 text-primary" />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-primary/10 rounded-lg">
+            <Wallet className="w-6 h-6 text-primary" />
+          </div>
+          <h1 className="text-xl font-bold text-foreground">Liquidités & Patrimoine</h1>
         </div>
-        <h1 className="text-xl font-bold text-foreground">Liquidités & Patrimoine</h1>
+        <Button onClick={handleAddAccount}>
+          <Plus className="w-4 h-4 mr-2" />
+          Ajouter un compte
+        </Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -218,7 +278,7 @@ export default function Liquidity() {
                 {data.accounts.map((account) => (
                   <div
                     key={account.id}
-                    className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border border-border/40"
+                    className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border border-border/40 group hover:border-border transition-colors"
                   >
                     <div className="flex-1">
                       <p className="font-medium text-sm text-foreground">{account.name}</p>
@@ -226,10 +286,28 @@ export default function Liquidity() {
                         {account.provider} • {account.type}
                       </p>
                     </div>
-                    <div className="text-right">
-                      <p className="font-bold text-sm tabular-nums text-foreground">
-                        {fmtEUR(account.balance)}
-                      </p>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <p className="font-bold text-sm tabular-nums text-foreground">
+                          {fmtEUR(account.balance)}
+                        </p>
+                      </div>
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleEditAccount(account)}
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => openDeleteDialog(account.id)}
+                        >
+                          <Trash2 className="w-3 h-3 text-destructive" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -238,6 +316,29 @@ export default function Liquidity() {
           </CardContent>
         </Card>
       </div>
+
+      <LiquidityAccountDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onSuccess={fetchData}
+        userId={user?.id || ""}
+        account={editingAccount}
+      />
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+            <AlertDialogDescription>
+              Êtes-vous sûr de vouloir supprimer ce compte ? Cette action est irréversible.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteAccount}>Supprimer</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
