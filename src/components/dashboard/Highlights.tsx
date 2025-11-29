@@ -1,18 +1,22 @@
 import { Card, CardContent } from '@/components/ui/card';
-import { TrendingUp, AlertCircle } from 'lucide-react';
+import { TrendingUp, AlertCircle, Wallet } from 'lucide-react';
 
 interface HighlightsProps {
   pnlPct: number;
   accountAllocations: Array<{ name: string; value: number; type: string }>;
   totalValue: number;
+  totalLiquidity: number;
 }
 
-export function Highlights({ pnlPct, accountAllocations, totalValue }: HighlightsProps) {
+export function Highlights({ pnlPct, accountAllocations, totalValue, totalLiquidity }: HighlightsProps) {
   const cryptoAllocation = accountAllocations
     .filter(acc => acc.type === 'CRYPTO')
     .reduce((sum, acc) => sum + acc.value, 0);
   
   const cryptoPct = totalValue > 0 ? (cryptoAllocation / totalValue) * 100 : 0;
+  
+  const totalWealth = totalValue + totalLiquidity;
+  const liquidityPct = totalWealth > 0 ? (totalLiquidity / totalWealth) * 100 : 0;
 
   const highlights: Array<{ icon: any; text: string; variant?: 'success' | 'warning' }> = [];
 
@@ -31,6 +35,14 @@ export function Highlights({ pnlPct, accountAllocations, totalValue }: Highlight
       icon: AlertCircle,
       text: `Crypto allocation at ${cryptoPct.toFixed(1)}% (>10%)`,
       variant: 'warning',
+    });
+  }
+
+  if (liquidityPct > 0) {
+    highlights.push({
+      icon: Wallet,
+      text: `Emergency fund at ${liquidityPct.toFixed(1)}% of total wealth`,
+      variant: liquidityPct >= 15 ? 'success' : 'warning',
     });
   }
 
