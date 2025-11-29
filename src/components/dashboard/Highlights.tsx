@@ -38,13 +38,12 @@ export function Highlights({ pnlPct, accountAllocations, totalValue, totalLiquid
     });
   }
 
-  if (liquidityPct > 0) {
-    highlights.push({
-      icon: Wallet,
-      text: `Emergency fund at ${liquidityPct.toFixed(1)}% of total wealth`,
-      variant: liquidityPct >= 15 ? 'success' : 'warning',
-    });
-  }
+  // Always show emergency fund indicator
+  highlights.push({
+    icon: Wallet,
+    text: `Matelas de sécurité : ${liquidityPct.toFixed(1)}% du patrimoine total`,
+    variant: liquidityPct >= 15 ? 'success' : 'warning',
+  });
 
   if (highlights.length === 0) {
     return null;
