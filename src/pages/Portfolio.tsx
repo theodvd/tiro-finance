@@ -17,7 +17,7 @@ import { useAuth } from '@/contexts/AuthContext';
 export default function Portfolio() {
   const portfolioData = usePortfolioData();
   const { user } = useAuth();
-  const [totalLiquidity, setTotalLiquidity] = useState(0);
+  const [totalLiquidity, setTotalLiquidity] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchLiquidity = async () => {
@@ -30,6 +30,7 @@ export default function Portfolio() {
 
       if (error) {
         console.error('Error fetching liquidity:', error);
+        setTotalLiquidity(0);
         return;
       }
 
@@ -166,7 +167,8 @@ export default function Portfolio() {
         pnlPct={portfolioData.pnlPct}
         accountAllocations={portfolioData.accountAllocations}
         totalValue={portfolioData.totalValue}
-        totalLiquidity={totalLiquidity}
+        totalLiquidity={totalLiquidity ?? 0}
+        isLiquidityLoading={totalLiquidity === null}
       />
 
       <div className="grid gap-3 sm:gap-4 md:gap-6 grid-cols-1 lg:grid-cols-2">
