@@ -11,9 +11,34 @@ import { AllocationByAccount } from '@/components/dashboard/AllocationByAccount'
 import { PortfolioHistory } from '@/components/dashboard/PortfolioHistory';
 import { TopHoldingsTable } from '@/components/dashboard/TopHoldingsTable';
 import { Highlights } from '@/components/dashboard/Highlights';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Portfolio() {
   const portfolioData = usePortfolioData();
+  const { user } = useAuth();
+  const [totalLiquidity, setTotalLiquidity] = useState(0);
+
+  useEffect(() => {
+    const fetchLiquidity = async () => {
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('bridge_accounts')
+        .select('balance')
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error fetching liquidity:', error);
+        return;
+      }
+
+      const total = data?.reduce((sum, acc) => sum + (acc.balance || 0), 0) || 0;
+      setTotalLiquidity(total);
+    };
+
+    fetchLiquidity();
+  }, [user]);
 
   const handleRefreshPrices = async () => {
     try {
@@ -141,6 +166,7 @@ export default function Portfolio() {
         pnlPct={portfolioData.pnlPct}
         accountAllocations={portfolioData.accountAllocations}
         totalValue={portfolioData.totalValue}
+        totalLiquidity={totalLiquidity}
       />
 
       <div className="grid gap-3 sm:gap-4 md:gap-6 grid-cols-1 lg:grid-cols-2">
