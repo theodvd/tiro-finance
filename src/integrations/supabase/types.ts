@@ -511,97 +511,151 @@ export type Database = {
       }
       user_profile: {
         Row: {
-          committed: boolean | null
-          concrete_project: string | null
+          age: number | null
+          ai_expectations: Json | null
+          available_time: string | null
+          city: string | null
+          commitment_apply_advice: boolean | null
+          commitment_long_term_investing: boolean | null
+          commitment_regular_learning: boolean | null
+          communication_tone: string | null
           created_at: string
-          current_status: string | null
-          emergency_fund: number | null
-          existing_investments: string[] | null
-          financial_dream: string | null
-          financial_goals: string[] | null
-          five_year_goal: string | null
+          current_savings: Json | null
+          current_situation: string | null
+          debts: Json | null
+          emotional_stability: string | null
+          esg_importance: string | null
+          existing_investments: Json | null
+          financial_resilience_months: string | null
+          first_name: string | null
+          fomo_tendency: string | null
+          housing_situation: string | null
           id: string
-          investment_exclusions: string[] | null
+          income_stability: string | null
           investment_experience: string | null
           investment_horizon: string | null
-          learning_priorities: string[] | null
-          main_difficulty: string | null
-          main_motivation: string | null
+          knowledge_levels: Json | null
+          learning_topics: string[] | null
+          loss_impact: string | null
+          main_project: string | null
           management_style: string | null
-          monthly_expenses: number | null
-          monthly_income: number | null
-          monthly_saving_capacity: number | null
-          one_year_goal: string | null
-          planned_expenses: string | null
-          preferred_assets: string[] | null
-          responsible_investing: boolean | null
-          risk_tolerance: string | null
-          time_commitment: string | null
+          max_acceptable_loss: string | null
+          monthly_expenses: Json | null
+          monthly_income: Json | null
+          panic_selling_history: boolean | null
+          priorities: Json | null
+          project_budget: number | null
+          project_horizon_months: number | null
+          reaction_to_gains: string | null
+          reaction_to_volatility: string | null
+          regretted_purchases_history: boolean | null
+          remaining_monthly: number | null
+          risk_percentage_on_main_goal: number | null
+          risk_vision: string | null
+          saveable_monthly: number | null
+          sectors_of_interest: string[] | null
+          sectors_to_avoid: string[] | null
+          upcoming_constraints: string[] | null
           updated_at: string
           user_id: string
-          wants_reminders: boolean | null
         }
         Insert: {
-          committed?: boolean | null
-          concrete_project?: string | null
+          age?: number | null
+          ai_expectations?: Json | null
+          available_time?: string | null
+          city?: string | null
+          commitment_apply_advice?: boolean | null
+          commitment_long_term_investing?: boolean | null
+          commitment_regular_learning?: boolean | null
+          communication_tone?: string | null
           created_at?: string
-          current_status?: string | null
-          emergency_fund?: number | null
-          existing_investments?: string[] | null
-          financial_dream?: string | null
-          financial_goals?: string[] | null
-          five_year_goal?: string | null
+          current_savings?: Json | null
+          current_situation?: string | null
+          debts?: Json | null
+          emotional_stability?: string | null
+          esg_importance?: string | null
+          existing_investments?: Json | null
+          financial_resilience_months?: string | null
+          first_name?: string | null
+          fomo_tendency?: string | null
+          housing_situation?: string | null
           id?: string
-          investment_exclusions?: string[] | null
+          income_stability?: string | null
           investment_experience?: string | null
           investment_horizon?: string | null
-          learning_priorities?: string[] | null
-          main_difficulty?: string | null
-          main_motivation?: string | null
+          knowledge_levels?: Json | null
+          learning_topics?: string[] | null
+          loss_impact?: string | null
+          main_project?: string | null
           management_style?: string | null
-          monthly_expenses?: number | null
-          monthly_income?: number | null
-          monthly_saving_capacity?: number | null
-          one_year_goal?: string | null
-          planned_expenses?: string | null
-          preferred_assets?: string[] | null
-          responsible_investing?: boolean | null
-          risk_tolerance?: string | null
-          time_commitment?: string | null
+          max_acceptable_loss?: string | null
+          monthly_expenses?: Json | null
+          monthly_income?: Json | null
+          panic_selling_history?: boolean | null
+          priorities?: Json | null
+          project_budget?: number | null
+          project_horizon_months?: number | null
+          reaction_to_gains?: string | null
+          reaction_to_volatility?: string | null
+          regretted_purchases_history?: boolean | null
+          remaining_monthly?: number | null
+          risk_percentage_on_main_goal?: number | null
+          risk_vision?: string | null
+          saveable_monthly?: number | null
+          sectors_of_interest?: string[] | null
+          sectors_to_avoid?: string[] | null
+          upcoming_constraints?: string[] | null
           updated_at?: string
           user_id: string
-          wants_reminders?: boolean | null
         }
         Update: {
-          committed?: boolean | null
-          concrete_project?: string | null
+          age?: number | null
+          ai_expectations?: Json | null
+          available_time?: string | null
+          city?: string | null
+          commitment_apply_advice?: boolean | null
+          commitment_long_term_investing?: boolean | null
+          commitment_regular_learning?: boolean | null
+          communication_tone?: string | null
           created_at?: string
-          current_status?: string | null
-          emergency_fund?: number | null
-          existing_investments?: string[] | null
-          financial_dream?: string | null
-          financial_goals?: string[] | null
-          five_year_goal?: string | null
+          current_savings?: Json | null
+          current_situation?: string | null
+          debts?: Json | null
+          emotional_stability?: string | null
+          esg_importance?: string | null
+          existing_investments?: Json | null
+          financial_resilience_months?: string | null
+          first_name?: string | null
+          fomo_tendency?: string | null
+          housing_situation?: string | null
           id?: string
-          investment_exclusions?: string[] | null
+          income_stability?: string | null
           investment_experience?: string | null
           investment_horizon?: string | null
-          learning_priorities?: string[] | null
-          main_difficulty?: string | null
-          main_motivation?: string | null
+          knowledge_levels?: Json | null
+          learning_topics?: string[] | null
+          loss_impact?: string | null
+          main_project?: string | null
           management_style?: string | null
-          monthly_expenses?: number | null
-          monthly_income?: number | null
-          monthly_saving_capacity?: number | null
-          one_year_goal?: string | null
-          planned_expenses?: string | null
-          preferred_assets?: string[] | null
-          responsible_investing?: boolean | null
-          risk_tolerance?: string | null
-          time_commitment?: string | null
+          max_acceptable_loss?: string | null
+          monthly_expenses?: Json | null
+          monthly_income?: Json | null
+          panic_selling_history?: boolean | null
+          priorities?: Json | null
+          project_budget?: number | null
+          project_horizon_months?: number | null
+          reaction_to_gains?: string | null
+          reaction_to_volatility?: string | null
+          regretted_purchases_history?: boolean | null
+          remaining_monthly?: number | null
+          risk_percentage_on_main_goal?: number | null
+          risk_vision?: string | null
+          saveable_monthly?: number | null
+          sectors_of_interest?: string[] | null
+          sectors_to_avoid?: string[] | null
+          upcoming_constraints?: string[] | null
           updated_at?: string
           user_id?: string
-          wants_reminders?: boolean | null
         }
         Relationships: []
       }
