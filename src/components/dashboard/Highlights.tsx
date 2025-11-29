@@ -6,9 +6,10 @@ interface HighlightsProps {
   accountAllocations: Array<{ name: string; value: number; type: string }>;
   totalValue: number;
   totalLiquidity: number;
+  isLiquidityLoading?: boolean;
 }
 
-export function Highlights({ pnlPct, accountAllocations, totalValue, totalLiquidity }: HighlightsProps) {
+export function Highlights({ pnlPct, accountAllocations, totalValue, totalLiquidity, isLiquidityLoading }: HighlightsProps) {
   const cryptoAllocation = accountAllocations
     .filter(acc => acc.type === 'CRYPTO')
     .reduce((sum, acc) => sum + acc.value, 0);
@@ -38,12 +39,14 @@ export function Highlights({ pnlPct, accountAllocations, totalValue, totalLiquid
     });
   }
 
-  // Always show emergency fund indicator
-  highlights.push({
-    icon: Wallet,
-    text: `Matelas de sécurité : ${liquidityPct.toFixed(1)}% du patrimoine total`,
-    variant: liquidityPct >= 15 ? 'success' : 'warning',
-  });
+  // Always show emergency fund indicator if liquidity data is loaded
+  if (!isLiquidityLoading) {
+    highlights.push({
+      icon: Wallet,
+      text: `Matelas de sécurité : ${liquidityPct.toFixed(1)}% du patrimoine total (${totalLiquidity.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })})`,
+      variant: liquidityPct >= 15 ? 'success' : 'warning',
+    });
+  }
 
   if (highlights.length === 0) {
     return null;
