@@ -149,8 +149,14 @@ export default function Profile() {
 
     setSaving(true);
     
+    // Debug: afficher les données du formulaire
+    console.log("Form data:", data);
+    
     // Calculer le profil de risque
     const riskProfile = calculateRiskProfile(data);
+    
+    // Debug: afficher le résultat du scoring
+    console.log("Risk profile calculated:", riskProfile);
     
     const profileData = {
       ...data,
