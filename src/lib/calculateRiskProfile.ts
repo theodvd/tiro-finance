@@ -58,43 +58,29 @@ function calculateTolerance(data: RiskProfileData): number {
 function mapMaxLoss(value: string): number {
   const mapping: Record<string, number> = {
     "0%": 0,
-    "Aucune perte": 0,
-    "5%": 1,
-    "Jusqu'à 5%": 1,
-    "10%": 2,
-    "Jusqu'à 10%": 2,
-    "20%": 4,
-    "Jusqu'à 20%": 4,
-    "30%": 5,
-    "Plus de 20%": 5,
-    "30% ou plus": 5,
+    "-5%": 1,
+    "-10%": 2,
+    "-20%": 4,
+    "-30% ou plus": 5,
   };
   return mapping[value] || 2;
 }
 
 function mapRiskVision(value: string): number {
   const mapping: Record<string, number> = {
-    "Préserver mon capital": 0,
-    "Risque minimal": 0,
-    "Croissance modérée": 2,
-    "Équilibre": 3,
-    "Croissance élevée": 4,
-    "Croissance maximale": 5,
-    "Maximiser mes gains": 5,
+    "Je vends": 0,
+    "J'attends": 2,
+    "C'est normal": 4,
+    "Je remets de l'argent": 5,
   };
   return mapping[value] || 2;
 }
 
 function mapVolatility(value: string): number {
   const mapping: Record<string, number> = {
-    "Très stressé": 0,
-    "Stress important": 0,
-    "Inquiet": 1,
-    "Inconfortable": 2,
-    "Normal": 3,
-    "Acceptable": 4,
-    "Indifférent": 4,
-    "Opportunité": 5,
+    "Stress extrême": 0,
+    "Inconfort": 2,
+    "Je m'en fiche": 4,
     "Je renforce": 5,
   };
   return mapping[value] || 2;
@@ -111,39 +97,31 @@ function calculateCapacity(data: RiskProfileData): number {
 
 function mapIncomeStability(value: string): number {
   const mapping: Record<string, number> = {
-    "Instables": 0,
-    "Très variables": 1,
+    "Inexistants": 0,
+    "Irréguliers": 1,
     "Variables": 2,
-    "Assez stables": 3,
-    "Stables": 4,
-    "Très stables": 5,
+    "Stables": 5,
   };
   return mapping[value] || 2;
 }
 
 function mapSafetyMonths(value: string): number {
   const mapping: Record<string, number> = {
-    "Moins d'1 mois": 0,
-    "<1 mois": 0,
+    "< 1 mois": 0,
     "1-3 mois": 2,
     "3-6 mois": 3,
     "6-12 mois": 4,
-    "Plus de 12 mois": 5,
-    ">12 mois": 5,
+    "> 12 mois": 5,
   };
   return mapping[value] || 2;
 }
 
 function mapLossImpact(value: string): number {
   const mapping: Record<string, number> = {
-    "Impacterait ma vie quotidienne": 0,
-    "Impact majeur": 0,
-    "Compromettrait un projet": 1,
-    "Impact modéré": 2,
-    "Inconfort temporaire": 3,
-    "Impact mineur": 3,
-    "Aucun impact": 5,
-    "Pas d'impact": 5,
+    "Ton quotidien": 0,
+    "Ton loyer": 1,
+    "Ton projet principal": 2,
+    "Rien du tout": 5,
   };
   return mapping[value] || 2;
 }
@@ -160,12 +138,10 @@ function calculateBehavior(data: RiskProfileData): number {
 
 function mapFomo(value: string): number {
   const mapping: Record<string, number> = {
-    "Souvent": 0,
-    "Très souvent": 0,
-    "Parfois": 2,
-    "Occasionnellement": 2,
-    "Rarement": 4,
-    "Jamais": 5,
+    "Je veux acheter": 0,
+    "J'hésite": 2,
+    "Je m'en fiche": 4,
+    "Je méfie": 5,
   };
   return mapping[value] || 2;
 }
@@ -173,27 +149,19 @@ function mapFomo(value: string): number {
 function mapEmotionalStability(value: string): number {
   const mapping: Record<string, number> = {
     "Impulsif": 0,
-    "Très émotif": 0,
     "Réactif": 2,
-    "Émotif": 2,
     "Calme": 4,
-    "Rationnel": 4,
     "Très stable": 5,
-    "Très rationnel": 5,
   };
   return mapping[value] || 2;
 }
 
 function mapGainReaction(value: string): number {
   const mapping: Record<string, number> = {
-    "Je sécurise tout": 2,
-    "Sécurise immédiatement": 2,
+    "Je sécurise tout de suite": 2,
     "Je prends une partie": 3,
-    "Prends des profits partiels": 3,
     "Je laisse tourner": 4,
-    "Reste investi": 4,
     "Je renforce": 5,
-    "Renforce la position": 5,
   };
   return mapping[value] || 3;
 }
@@ -202,11 +170,10 @@ function mapGainReaction(value: string): number {
 function calculateHorizon(data: RiskProfileData): number {
   const value = data.investment_horizon || "";
   
-  if (value.includes("< 1") || value.includes("Moins de 1")) return 0;
-  if (value.includes("1-2") || value.includes("1 à 2")) return 2;
-  if (value.includes("3-5") || value.includes("3 à 5")) return 5;
-  if (value.includes("5-10") || value.includes("5 à 10")) return 8;
-  if (value.includes("> 10") || value.includes("Plus de 10")) return 10;
+  if (value === "< 1 an") return 0;
+  if (value === "1-2 ans") return 2;
+  if (value === "3-5 ans") return 5;
+  if (value === "> 5 ans") return 10;
   
   return 5; // default
 }
@@ -227,8 +194,9 @@ function calculateKnowledge(data: RiskProfileData): number {
   let base = (avg / 5) * 10;
   
   const exp = data.investment_experience || "";
-  if (exp.includes("> 1") || exp.includes("Plus d'1 an")) base += 1;
-  if (exp.includes("< 6") || exp.includes("Moins de 6")) base -= 1;
+  if (exp === "> 1 an") base += 1;
+  if (exp === "< 6 mois") base -= 1;
+  if (exp === "Jamais") base -= 2;
   
   return clamp(base, 0, 10);
 }
