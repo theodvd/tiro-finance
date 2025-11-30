@@ -15,6 +15,7 @@ import { InvestorProfileSection } from "@/components/profile/InvestorProfileSect
 import { BehavioralSection } from "@/components/profile/BehavioralSection";
 import { PreferencesSection } from "@/components/profile/PreferencesSection";
 import { CommitmentSection } from "@/components/profile/CommitmentSection";
+import { calculateRiskProfile } from "@/lib/calculateRiskProfile";
 
 const STEPS = [
   { id: "objectives", label: "Objectifs", component: ObjectivesSection },
@@ -85,6 +86,13 @@ export default function Profile() {
       commitment_apply_advice: false,
       commitment_regular_learning: false,
       commitment_long_term_investing: false,
+      score_total: 0,
+      score_tolerance: 0,
+      score_capacity: 0,
+      score_behavior: 0,
+      score_horizon: 0,
+      score_knowledge: 0,
+      risk_profile: "",
     },
   });
 
@@ -140,8 +148,13 @@ export default function Profile() {
     if (!user) return;
 
     setSaving(true);
+    
+    // Calculer le profil de risque
+    const riskProfile = calculateRiskProfile(data);
+    
     const profileData = {
       ...data,
+      ...riskProfile,
       user_id: user.id,
       updated_at: new Date().toISOString(),
     };
@@ -154,7 +167,7 @@ export default function Profile() {
       console.error("Error saving profile:", error);
       toast.error("Erreur lors de l'enregistrement");
     } else {
-      toast.success("Profil enregistré avec succès ! 🎉");
+      toast.success(`Profil enregistré avec succès ! 🎉 Profil de risque: ${riskProfile.risk_profile}`);
       setProfileExists(true);
     }
 
@@ -194,26 +207,60 @@ export default function Profile() {
           </div>
 
           <div className="space-y-4 mt-6">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Prénom</p>
-                <p className="text-foreground font-medium">{form.getValues("first_name") || "Non renseigné"}</p>
+            <div className="space-y-6">
+              {/* Profil de risque */}
+              <div className="p-6 bg-primary/10 rounded-lg border border-primary/20">
+                <h3 className="text-xl font-bold text-primary mb-2">
+                  {form.getValues().risk_profile || "Non calculé"}
+                </h3>
+                <p className="text-sm text-muted-foreground mb-4">Score total: {form.getValues().score_total || 0}/100</p>
+                
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Tolérance:</span>
+                    <span className="ml-2 font-medium">{form.getValues().score_tolerance || 0}/30</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Capacité:</span>
+                    <span className="ml-2 font-medium">{form.getValues().score_capacity || 0}/25</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Comportement:</span>
+                    <span className="ml-2 font-medium">{form.getValues().score_behavior || 0}/25</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Horizon:</span>
+                    <span className="ml-2 font-medium">{form.getValues().score_horizon || 0}/10</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Connaissances:</span>
+                    <span className="ml-2 font-medium">{form.getValues().score_knowledge || 0}/10</span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Âge</p>
-                <p className="text-foreground font-medium">{form.getValues("age") || "Non renseigné"}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Horizon d'investissement</p>
-                <p className="text-foreground font-medium">
-                  {form.getValues("investment_horizon") || "Non renseigné"}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Tolérance au risque</p>
-                <p className="text-foreground font-medium">
-                  {form.getValues("max_acceptable_loss") || "Non renseigné"}
-                </p>
+
+              {/* Informations personnelles */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Prénom</p>
+                  <p className="text-foreground font-medium">{form.getValues("first_name") || "Non renseigné"}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Âge</p>
+                  <p className="text-foreground font-medium">{form.getValues("age") || "Non renseigné"}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Horizon d'investissement</p>
+                  <p className="text-foreground font-medium">
+                    {form.getValues("investment_horizon") || "Non renseigné"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Tolérance au risque</p>
+                  <p className="text-foreground font-medium">
+                    {form.getValues("max_acceptable_loss") || "Non renseigné"}
+                  </p>
+                </div>
               </div>
             </div>
 
