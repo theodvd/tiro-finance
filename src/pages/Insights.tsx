@@ -23,6 +23,8 @@ import { InsightsSummary } from '@/components/dashboard/InsightsSummary';
 import { supabase } from '@/integrations/supabase/client';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { useUserProfile } from '@/hooks/useUserProfile';
+import { getRiskBasedInsights } from '@/lib/investorRules';
 
 const COLORS = [
   'hsl(var(--chart-1))',
@@ -38,6 +40,8 @@ const COLORS = [
 export function Insights() {
   const { loading, error, series, snapshots, allocByAccount, allocByClass, allocByRegion, allocBySector, refetch } = useSnapshots();
   const [enriching, setEnriching] = useState(false);
+  const { data: profile } = useUserProfile();
+  const risk = getRiskBasedInsights(profile?.risk_profile);
 
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', notation: 'compact' }).format(value);
@@ -132,6 +136,21 @@ export function Insights() {
           )}
         </Button>
       </div>
+
+      {/* Rule-based Personalized Recommendations */}
+      {profile && (
+        <Card className="rounded-xl sm:rounded-2xl p-4 sm:p-6 hover:shadow-[0_0_30px_rgba(234,179,8,0.15)] hover:border-primary/20 transition-all duration-300">
+          <h2 className="text-base sm:text-lg md:text-xl font-bold mb-3 sm:mb-4 text-primary">Recommandations personnalisées</h2>
+          <ul className="space-y-2 sm:space-y-3">
+            {risk.insights.map((item, idx) => (
+              <li key={idx} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
+                <span className="text-primary mt-0.5">•</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {/* Auto-generated Summary */}
       {series.length > 0 && (
