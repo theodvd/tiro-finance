@@ -551,8 +551,15 @@ export type Database = {
           regretted_purchases_history: boolean | null
           remaining_monthly: number | null
           risk_percentage_on_main_goal: number | null
+          risk_profile: string | null
           risk_vision: string | null
           saveable_monthly: number | null
+          score_behavior: number | null
+          score_capacity: number | null
+          score_horizon: number | null
+          score_knowledge: number | null
+          score_tolerance: number | null
+          score_total: number | null
           sectors_of_interest: string[] | null
           sectors_to_avoid: string[] | null
           upcoming_constraints: string[] | null
@@ -600,8 +607,15 @@ export type Database = {
           regretted_purchases_history?: boolean | null
           remaining_monthly?: number | null
           risk_percentage_on_main_goal?: number | null
+          risk_profile?: string | null
           risk_vision?: string | null
           saveable_monthly?: number | null
+          score_behavior?: number | null
+          score_capacity?: number | null
+          score_horizon?: number | null
+          score_knowledge?: number | null
+          score_tolerance?: number | null
+          score_total?: number | null
           sectors_of_interest?: string[] | null
           sectors_to_avoid?: string[] | null
           upcoming_constraints?: string[] | null
@@ -649,8 +663,15 @@ export type Database = {
           regretted_purchases_history?: boolean | null
           remaining_monthly?: number | null
           risk_percentage_on_main_goal?: number | null
+          risk_profile?: string | null
           risk_vision?: string | null
           saveable_monthly?: number | null
+          score_behavior?: number | null
+          score_capacity?: number | null
+          score_horizon?: number | null
+          score_knowledge?: number | null
+          score_tolerance?: number | null
+          score_total?: number | null
           sectors_of_interest?: string[] | null
           sectors_to_avoid?: string[] | null
           upcoming_constraints?: string[] | null
