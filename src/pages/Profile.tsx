@@ -173,6 +173,12 @@ export default function Profile() {
       console.error("Error saving profile:", error);
       toast.error("Erreur lors de l'enregistrement");
     } else {
+      // Mettre à jour immédiatement le formulaire avec les scores calculés
+      form.reset({
+        ...data,
+        ...riskProfile,
+      });
+
       toast.success(`Profil enregistré avec succès ! 🎉 Profil de risque: ${riskProfile.risk_profile}`);
       setProfileExists(true);
     }
