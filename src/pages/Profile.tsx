@@ -16,6 +16,7 @@ import { BehavioralSection } from "@/components/profile/BehavioralSection";
 import { PreferencesSection } from "@/components/profile/PreferencesSection";
 import { CommitmentSection } from "@/components/profile/CommitmentSection";
 import { calculateRiskProfile } from "@/lib/calculateRiskProfile";
+import { getRiskBasedInsights } from "@/lib/investorRules";
 
 const STEPS = [
   { id: "objectives", label: "Objectifs", component: ObjectivesSection },
@@ -207,6 +208,8 @@ export default function Profile() {
   }
 
   if (profileExists) {
+    const risk = getRiskBasedInsights(form.getValues().risk_profile);
+    
     return (
       <div className="container max-w-4xl mx-auto p-6 space-y-6">
         <Card className="p-8 border-primary/20">
@@ -249,6 +252,15 @@ export default function Profile() {
                     <span className="ml-2 font-medium">{form.getValues().score_knowledge || 0}/10</span>
                   </div>
                 </div>
+              </div>
+
+              {/* Résumé du profil de risque */}
+              <div className="p-6 bg-muted rounded-lg border">
+                <h3 className="text-lg font-semibold mb-3">Résumé du profil</h3>
+                <p className="text-muted-foreground mb-4">{risk.summary}</p>
+
+                <h3 className="text-lg font-semibold mb-3 mt-6">Ce que cela signifie</h3>
+                <p className="text-muted-foreground">{risk.profile_message}</p>
               </div>
 
               {/* Informations personnelles */}
