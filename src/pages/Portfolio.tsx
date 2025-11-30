@@ -13,11 +13,16 @@ import { TopHoldingsTable } from '@/components/dashboard/TopHoldingsTable';
 import { Highlights } from '@/components/dashboard/Highlights';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUserProfile } from '@/hooks/useUserProfile';
+import { getRiskBasedInsights } from '@/lib/investorRules';
+import { Card } from '@/components/ui/card';
 
 export default function Portfolio() {
   const portfolioData = usePortfolioData();
   const { user } = useAuth();
   const [totalLiquidity, setTotalLiquidity] = useState<number | null>(null);
+  const { data: profile } = useUserProfile();
+  const risk = getRiskBasedInsights(profile?.risk_profile);
 
   useEffect(() => {
     const fetchLiquidity = async () => {
@@ -162,6 +167,14 @@ export default function Portfolio() {
         pnlPct={portfolioData.pnlPct}
         lastUpdated={portfolioData.lastUpdated}
       />
+
+      {/* Most Important Action Card */}
+      {profile && (
+        <Card className="p-4 sm:p-5 border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/10 rounded-xl sm:rounded-2xl">
+          <h3 className="text-base sm:text-lg font-semibold text-primary mb-2">Action Prioritaire</h3>
+          <p className="text-xs sm:text-sm text-muted-foreground">{risk.important_action}</p>
+        </Card>
+      )}
 
       <Highlights
         pnlPct={portfolioData.pnlPct}
