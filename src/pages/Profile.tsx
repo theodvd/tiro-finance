@@ -146,9 +146,9 @@ export default function Profile() {
       updated_at: new Date().toISOString(),
     };
 
-    const { error } = profileExists
-      ? await supabase.from("user_profile").update(profileData).eq("user_id", user.id)
-      : await supabase.from("user_profile").insert([profileData]);
+    const { error } = await supabase
+      .from("user_profile")
+      .upsert(profileData, { onConflict: "user_id" });
 
     if (error) {
       console.error("Error saving profile:", error);
