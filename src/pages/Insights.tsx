@@ -40,6 +40,7 @@ const COLORS = [
 export function Insights() {
   const { loading, error, series, snapshots, allocByAccount, allocByClass, allocByRegion, allocBySector, refetch } = useSnapshots();
   const [enriching, setEnriching] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const { data: profile } = useUserProfile();
   const risk = getRiskBasedInsights(profile?.risk_profile);
 
@@ -61,11 +62,11 @@ export function Insights() {
       if (error) throw error;
 
       toast.success(data.message || 'Métadonnées enrichies avec succès', {
-        description: `${data.updated} actifs mis à jour sur ${data.total}. Prenez un nouveau snapshot pour voir les changements dans les graphiques.`,
+        description: `${data.updated} actifs mis à jour sur ${data.total}. Cliquez maintenant sur "Rafraîchir les métadonnées" pour voir les changements.`,
         duration: 6000,
       });
 
-      // Don't refetch yet - user needs to take a new snapshot first
+      // Don't refetch yet - user needs to refresh snapshot metadata first
     } catch (error: any) {
       console.error('Error enriching metadata:', error);
       toast.error('Erreur lors de l\'enrichissement des métadonnées', {
@@ -73,6 +74,34 @@ export function Insights() {
       });
     } finally {
       setEnriching(false);
+    }
+  };
+
+  const handleRefreshMetadata = async () => {
+    setRefreshing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('refresh-snapshot-metadata', {
+        headers: {
+          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
+      });
+
+      if (error) throw error;
+
+      toast.success(data.message || 'Métadonnées rafraîchies avec succès', {
+        description: `${data.updated_lines} positions mises à jour. Les graphiques vont se mettre à jour automatiquement.`,
+        duration: 5000,
+      });
+
+      // Refetch to show updated data
+      await refetch();
+    } catch (error: any) {
+      console.error('Error refreshing metadata:', error);
+      toast.error('Erreur lors du rafraîchissement des métadonnées', {
+        description: error.message,
+      });
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -114,27 +143,50 @@ export function Insights() {
     <div className="max-w-6xl mx-auto space-y-3 sm:space-y-4 md:space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
         <h1 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight">Insights</h1>
-        <Button
-          onClick={handleEnrichMetadata}
-          disabled={enriching}
-          variant="outline"
-          size="sm"
-          className="gap-1.5 sm:gap-2 text-xs sm:text-sm w-full sm:w-auto"
-        >
-          {enriching ? (
-            <>
-              <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
-              <span className="hidden sm:inline">Enrichissement...</span>
-              <span className="sm:hidden">Enriching...</span>
-            </>
-          ) : (
-            <>
-              <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              <span className="hidden sm:inline">Enrichir les métadonnées</span>
-              <span className="sm:hidden">Enrich data</span>
-            </>
-          )}
-        </Button>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button
+            onClick={handleEnrichMetadata}
+            disabled={enriching || refreshing}
+            variant="outline"
+            size="sm"
+            className="gap-1.5 sm:gap-2 text-xs sm:text-sm flex-1 sm:flex-initial"
+          >
+            {enriching ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
+                <span className="hidden sm:inline">Enrichissement...</span>
+                <span className="sm:hidden">Enriching...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">Enrichir</span>
+                <span className="sm:hidden">Enrich</span>
+              </>
+            )}
+          </Button>
+          <Button
+            onClick={handleRefreshMetadata}
+            disabled={enriching || refreshing}
+            variant="default"
+            size="sm"
+            className="gap-1.5 sm:gap-2 text-xs sm:text-sm flex-1 sm:flex-initial"
+          >
+            {refreshing ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
+                <span className="hidden sm:inline">Rafraîchissement...</span>
+                <span className="sm:hidden">Refreshing...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">Rafraîchir</span>
+                <span className="sm:hidden">Refresh</span>
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Rule-based Personalized Recommendations */}
@@ -173,9 +225,8 @@ export function Insights() {
           <AlertDescription className="text-xs sm:text-sm">
             Pour voir les allocations par région et secteur, suivez ces 2 étapes :
             <ol className="list-decimal ml-4 sm:ml-6 mt-2 space-y-1 text-[11px] sm:text-xs">
-              <li>Cliquez sur "Enrichir les métadonnées" ci-dessus et attendez la fin</li>
-              <li>Retournez sur le Dashboard et cliquez sur "Take Snapshot"</li>
-              <li>Revenez ici pour voir les graphiques mis à jour</li>
+              <li>Cliquez sur "Enrichir" ci-dessus pour récupérer les métadonnées depuis Yahoo Finance</li>
+              <li>Cliquez ensuite sur "Rafraîchir" pour mettre à jour vos graphiques</li>
             </ol>
           </AlertDescription>
         </Alert>
