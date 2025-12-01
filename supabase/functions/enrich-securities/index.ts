@@ -17,38 +17,66 @@ const mapRegion = (country: string | undefined, exchange: string | undefined): s
   if (!country && !exchange) return 'Non défini';
   
   const regionMap: Record<string, string> = {
+    // États-Unis
     'US': 'États-Unis',
+    'USA': 'États-Unis',
     'United States': 'États-Unis',
+    'NASDAQ': 'États-Unis',
+    'NYSE': 'États-Unis',
+    
+    // Europe
     'FR': 'Europe',
     'France': 'Europe',
+    'FRA': 'Europe',
     'DE': 'Europe',
     'Germany': 'Europe',
+    'GER': 'Europe',
     'GB': 'Europe',
     'United Kingdom': 'Europe',
+    'LON': 'Europe',
     'IT': 'Europe',
     'Italy': 'Europe',
+    'ITA': 'Europe',
     'ES': 'Europe',
     'Spain': 'Europe',
+    'SPA': 'Europe',
     'NL': 'Europe',
     'Netherlands': 'Europe',
+    'AMS': 'Europe',
     'CH': 'Europe',
     'Switzerland': 'Europe',
+    'SWX': 'Europe',
+    
+    // Asie
     'JP': 'Asie',
     'Japan': 'Asie',
+    'JPN': 'Asie',
     'CN': 'Asie',
     'China': 'Asie',
+    'SHA': 'Asie',
     'HK': 'Asie',
     'Hong Kong': 'Asie',
+    'HKG': 'Asie',
     'SG': 'Asie',
     'Singapore': 'Asie',
+    'SGP': 'Asie',
     'KR': 'Asie',
     'South Korea': 'Asie',
+    'KOR': 'Asie',
+    
+    // Émergents
     'IN': 'Émergents',
     'India': 'Émergents',
+    'IND': 'Émergents',
     'BR': 'Émergents',
     'Brazil': 'Émergents',
+    'BRA': 'Émergents',
     'MX': 'Émergents',
     'Mexico': 'Émergents',
+    'MEX': 'Émergents',
+    'ZA': 'Émergents',
+    'South Africa': 'Émergents',
+    'ZAF': 'Émergents',
   };
   
   const key = country || exchange || '';
@@ -129,6 +157,9 @@ async function fetchYahooFinanceMetadata(symbol: string): Promise<SecurityMetada
       const quoteData = await quoteResponse.json();
       const quote = quoteData?.quoteResponse?.result?.[0];
       
+      // Log détaillé des données Yahoo Finance
+      console.log(`[${symbol}] Country: ${quote?.country}, Exchange: ${quote?.exchange}, Sector: ${quote?.sector}`);
+      
       console.log(`[ENRICH] Quote data:`, JSON.stringify({
         quoteType: quote?.quoteType,
         country: quote?.country,
@@ -138,13 +169,24 @@ async function fetchYahooFinanceMetadata(symbol: string): Promise<SecurityMetada
       }));
       
       if (quote) {
-        region = mapRegion(quote.country, quote.exchange);
+        // Detect world ETFs (VWCE, IWDA, etc.)
+        const isWorldETF = ['VWCE', 'IWDA', 'SWRD', 'ACWI', 'VT', 'MSCI'].some(ticker => 
+          symbol.toUpperCase().includes(ticker)
+        );
         
-        // For ETFs, check if it's in the name
-        if (quote.quoteType === 'ETF' || symbol.includes('ETF')) {
+        if (isWorldETF) {
+          region = 'Monde';
           sector = 'Diversifié';
+          console.log(`[ENRICH] Detected world ETF: ${symbol}`);
         } else {
-          sector = mapSector(quote.sector, quote.industry);
+          region = mapRegion(quote.country, quote.exchange);
+          
+          // For ETFs, check if it's in the name
+          if (quote.quoteType === 'ETF' || symbol.includes('ETF')) {
+            sector = 'Diversifié';
+          } else {
+            sector = mapSector(quote.sector, quote.industry);
+          }
         }
         
         console.log(`[ENRICH] Mapped region: ${region}, sector: ${sector}`);
