@@ -41,11 +41,20 @@ interface Holding {
   security: Security;
 }
 
+interface BridgeAccount {
+  id: string;
+  name: string;
+  balance: number | null;
+  currency: string;
+  type: string;
+}
+
 interface DcaPlan {
   id: string;
   user_id: string;
   account_id: string;
   security_id: string;
+  source_account_id: string | null;
   amount: number;
   frequency: 'weekly' | 'monthly' | 'interval';
   interval_days: number | null;
@@ -57,6 +66,7 @@ interface DcaPlan {
   created_at: string;
   account?: Account;
   security?: Security;
+  source_account?: BridgeAccount;
 }
 
 const holdingSchema = z.object({
@@ -81,6 +91,7 @@ export default function Investments() {
   const [securities, setSecurities] = useState<Security[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [dcaPlans, setDcaPlans] = useState<DcaPlan[]>([]);
+  const [bridgeAccounts, setBridgeAccounts] = useState<BridgeAccount[]>([]);
   const [priceMap, setPriceMap] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -132,6 +143,7 @@ export default function Investments() {
   const [dcaFormData, setDcaFormData] = useState({
     account_id: "",
     security_id: "",
+    source_account_id: "",
     amount: "",
     frequency: "monthly" as "weekly" | "monthly" | "interval",
     interval_days: "",
@@ -221,7 +233,8 @@ export default function Investments() {
       .select(`
         *,
         account:accounts(id, name, type),
-        security:securities(id, name, symbol)
+        security:securities(id, name, symbol),
+        source_account:bridge_accounts(id, name, balance, currency, type)
       `)
       .eq('user_id', user!.id)
       .order('created_at', { ascending: false });
@@ -230,6 +243,17 @@ export default function Investments() {
       toast({ title: "Error", description: dcaError.message, variant: "destructive" });
     } else {
       setDcaPlans((dcaData || []) as any);
+    }
+
+    // Fetch bridge accounts (liquidity sources)
+    const { data: bridgeData, error: bridgeError } = await supabase
+      .from('bridge_accounts')
+      .select('id, name, balance, currency, type')
+      .eq('user_id', user!.id)
+      .order('name');
+
+    if (!bridgeError) {
+      setBridgeAccounts(bridgeData || []);
     }
 
     setLoading(false);
@@ -468,6 +492,7 @@ export default function Investments() {
       user_id: user!.id,
       account_id: dcaFormData.account_id,
       security_id: dcaFormData.security_id,
+      source_account_id: dcaFormData.source_account_id || null,
       amount: parseFloat(dcaFormData.amount),
       frequency: dcaFormData.frequency,
       start_date: dcaFormData.start_date,
@@ -506,6 +531,7 @@ export default function Investments() {
     setDcaFormData({
       account_id: plan.account_id,
       security_id: plan.security_id,
+      source_account_id: plan.source_account_id || "",
       amount: plan.amount.toString(),
       frequency: plan.frequency,
       interval_days: plan.interval_days?.toString() || "",
@@ -548,6 +574,7 @@ export default function Investments() {
     setDcaFormData({
       account_id: "",
       security_id: "",
+      source_account_id: "",
       amount: "",
       frequency: "monthly",
       interval_days: "",
@@ -1180,6 +1207,28 @@ export default function Investments() {
                     />
                   </div>
 
+                  {bridgeAccounts.length > 0 && (
+                    <div className="space-y-2">
+                      <Label htmlFor="dca_source">Source de liquidité (optionnel)</Label>
+                      <Select value={dcaFormData.source_account_id} onValueChange={(value) => setDcaFormData({ ...dcaFormData, source_account_id: value })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Aucune source sélectionnée" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">Aucune</SelectItem>
+                          {bridgeAccounts.map((acc) => (
+                            <SelectItem key={acc.id} value={acc.id}>
+                              {acc.name} ({acc.balance?.toFixed(2) || 0} {acc.currency})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Le montant sera automatiquement déduit de ce compte lors de l'exécution du DCA
+                      </p>
+                    </div>
+                  )}
+
                   <div className="space-y-2">
                     <Label htmlFor="dca_frequency">Frequency *</Label>
                     <Select value={dcaFormData.frequency} onValueChange={(value: any) => setDcaFormData({ ...dcaFormData, frequency: value })}>
@@ -1317,7 +1366,16 @@ export default function Investments() {
                                 <div className="text-sm text-muted-foreground">{plan.security?.name}</div>
                               </div>
                             </TableCell>
-                            <TableCell>{plan.account?.name}</TableCell>
+                            <TableCell>
+                              <div>
+                                <div>{plan.account?.name}</div>
+                                {plan.source_account && (
+                                  <div className="text-xs text-muted-foreground">
+                                    Source: {plan.source_account.name}
+                                  </div>
+                                )}
+                              </div>
+                            </TableCell>
                             <TableCell className="text-right tabular-nums">{formatCurrency(plan.amount)}</TableCell>
                             <TableCell className="capitalize">{plan.frequency}</TableCell>
                             <TableCell>
