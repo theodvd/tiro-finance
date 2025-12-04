@@ -142,6 +142,7 @@ export type Database = {
           frequency: string
           id: string
           interval_days: number | null
+          investment_mode: string
           monthday: number | null
           next_execution_date: string | null
           security_id: string
@@ -159,6 +160,7 @@ export type Database = {
           frequency: string
           id?: string
           interval_days?: number | null
+          investment_mode?: string
           monthday?: number | null
           next_execution_date?: string | null
           security_id: string
@@ -176,6 +178,7 @@ export type Database = {
           frequency?: string
           id?: string
           interval_days?: number | null
+          investment_mode?: string
           monthday?: number | null
           next_execution_date?: string | null
           security_id?: string
