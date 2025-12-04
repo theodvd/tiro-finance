@@ -1210,12 +1210,15 @@ export default function Investments() {
                   {bridgeAccounts.length > 0 && (
                     <div className="space-y-2">
                       <Label htmlFor="dca_source">Source de liquidité (optionnel)</Label>
-                      <Select value={dcaFormData.source_account_id} onValueChange={(value) => setDcaFormData({ ...dcaFormData, source_account_id: value })}>
+                      <Select 
+                        value={dcaFormData.source_account_id || "none"} 
+                        onValueChange={(value) => setDcaFormData({ ...dcaFormData, source_account_id: value === "none" ? "" : value })}
+                      >
                         <SelectTrigger>
                           <SelectValue placeholder="Aucune source sélectionnée" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">Aucune</SelectItem>
+                          <SelectItem value="none">Aucune</SelectItem>
                           {bridgeAccounts.map((acc) => (
                             <SelectItem key={acc.id} value={acc.id}>
                               {acc.name} ({acc.balance?.toFixed(2) || 0} {acc.currency})
