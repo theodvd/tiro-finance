@@ -56,6 +56,7 @@ interface DcaPlan {
   security_id: string;
   source_account_id: string | null;
   amount: number;
+  investment_mode: 'amount' | 'shares';
   frequency: 'weekly' | 'monthly' | 'interval';
   interval_days: number | null;
   weekday: number | null;
@@ -145,6 +146,7 @@ export default function Investments() {
     security_id: "",
     source_account_id: "",
     amount: "",
+    investment_mode: "amount" as "amount" | "shares",
     frequency: "monthly" as "weekly" | "monthly" | "interval",
     interval_days: "",
     weekday: "1",
@@ -494,6 +496,7 @@ export default function Investments() {
       security_id: dcaFormData.security_id,
       source_account_id: dcaFormData.source_account_id || null,
       amount: parseFloat(dcaFormData.amount),
+      investment_mode: dcaFormData.investment_mode,
       frequency: dcaFormData.frequency,
       start_date: dcaFormData.start_date,
       active: dcaFormData.active,
@@ -533,6 +536,7 @@ export default function Investments() {
       security_id: plan.security_id,
       source_account_id: plan.source_account_id || "",
       amount: plan.amount.toString(),
+      investment_mode: plan.investment_mode || "amount",
       frequency: plan.frequency,
       interval_days: plan.interval_days?.toString() || "",
       weekday: plan.weekday?.toString() || "1",
@@ -576,6 +580,7 @@ export default function Investments() {
       security_id: "",
       source_account_id: "",
       amount: "",
+      investment_mode: "amount",
       frequency: "monthly",
       interval_days: "",
       weekday: "1",
@@ -1195,7 +1200,27 @@ export default function Investments() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="dca_amount">Amount (EUR) *</Label>
+                    <Label htmlFor="dca_mode">Mode d'investissement *</Label>
+                    <Select value={dcaFormData.investment_mode} onValueChange={(value: "amount" | "shares") => setDcaFormData({ ...dcaFormData, investment_mode: value })}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="amount">Montant fixe (parts fractionnaires)</SelectItem>
+                        <SelectItem value="shares">Parts entières (budget max)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {dcaFormData.investment_mode === 'amount' 
+                        ? "Investit le montant exact en EUR, peut acheter des fractions de parts"
+                        : "Achète des parts entières jusqu'au budget max, le reste n'est pas investi"}
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="dca_amount">
+                      {dcaFormData.investment_mode === 'amount' ? "Montant (EUR) *" : "Budget max (EUR) *"}
+                    </Label>
                     <Input
                       id="dca_amount"
                       type="number"

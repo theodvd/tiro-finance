@@ -21,6 +21,7 @@ interface DcaPlan {
   security_id: string;
   source_account_id: string | null;
   amount: number;
+  investment_mode: 'amount' | 'shares';
   frequency: 'weekly' | 'monthly' | 'interval';
   interval_days: number | null;
   weekday: number | null;
@@ -309,7 +310,28 @@ Deno.serve(async (req) => {
         
         // Execute for each missed date
         for (const execDate of missedDates) {
-          const shares = plan.amount / priceEur;
+          // Calculate shares and actual amount based on investment mode
+          let shares: number;
+          let actualInvestedAmount: number;
+          
+          const investmentMode = plan.investment_mode || 'amount';
+          
+          if (investmentMode === 'shares') {
+            // Buy whole shares up to max budget
+            const wholeShares = Math.floor(plan.amount / priceEur);
+            if (wholeShares < 1) {
+              console.warn(`[DCA] Plan ${plan.id}: Budget ${plan.amount} EUR insufficient for 1 share at ${priceEur.toFixed(2)} EUR, skipping`);
+              continue;
+            }
+            shares = wholeShares;
+            actualInvestedAmount = shares * priceEur;
+            console.log(`[DCA] Plan ${plan.id} (shares mode): Buying ${shares} whole shares at ${priceEur.toFixed(2)} EUR = ${actualInvestedAmount.toFixed(2)} EUR (budget: ${plan.amount} EUR)`);
+          } else {
+            // Fixed amount mode (default) - buy fractional shares
+            shares = plan.amount / priceEur;
+            actualInvestedAmount = plan.amount;
+            console.log(`[DCA] Plan ${plan.id} (amount mode): Buying ${shares.toFixed(6)} shares at ${priceEur.toFixed(2)} EUR = ${actualInvestedAmount.toFixed(2)} EUR`);
+          }
           
           // Check if holding exists
           const { data: existingHolding } = await supabase
@@ -323,7 +345,7 @@ Deno.serve(async (req) => {
           if (existingHolding) {
             // Update existing holding
             const newShares = Number(existingHolding.shares) + shares;
-            const newInvested = Number(existingHolding.amount_invested_eur || 0) + plan.amount;
+            const newInvested = Number(existingHolding.amount_invested_eur || 0) + actualInvestedAmount;
             
             const { error: updateError } = await supabase
               .from("holdings")
@@ -346,7 +368,7 @@ Deno.serve(async (req) => {
                 account_id: plan.account_id,
                 security_id: plan.security_id,
                 shares: shares,
-                amount_invested_eur: plan.amount,
+                amount_invested_eur: actualInvestedAmount,
               });
             
             if (insertError) {
@@ -355,7 +377,7 @@ Deno.serve(async (req) => {
             }
           }
           
-          // Deduct from source account if specified
+          // Deduct from source account if specified (use actual invested amount for shares mode)
           if (plan.source_account_id) {
             const { data: sourceAccount } = await supabase
               .from("bridge_accounts")
@@ -364,7 +386,7 @@ Deno.serve(async (req) => {
               .maybeSingle();
             
             if (sourceAccount) {
-              const newBalance = (Number(sourceAccount.balance) || 0) - plan.amount;
+              const newBalance = (Number(sourceAccount.balance) || 0) - actualInvestedAmount;
               const { error: updateSourceError } = await supabase
                 .from("bridge_accounts")
                 .update({ balance: newBalance })
@@ -373,7 +395,7 @@ Deno.serve(async (req) => {
               if (updateSourceError) {
                 console.error(`[DCA] Error updating source account balance:`, updateSourceError);
               } else {
-                console.log(`[DCA] Deducted ${plan.amount} EUR from source account ${plan.source_account_id}, new balance: ${newBalance.toFixed(2)} EUR`);
+                console.log(`[DCA] Deducted ${actualInvestedAmount.toFixed(2)} EUR from source account ${plan.source_account_id}, new balance: ${newBalance.toFixed(2)} EUR`);
               }
             }
           }
@@ -381,13 +403,15 @@ Deno.serve(async (req) => {
           dcaResults.push({
             plan_id: plan.id,
             execution_date: execDate.toISOString().split('T')[0],
-            amount: plan.amount,
+            budget: plan.amount,
+            actual_invested: actualInvestedAmount,
             shares: shares,
             price: priceEur,
+            investment_mode: investmentMode,
             source_account_id: plan.source_account_id,
           });
           
-          console.log(`[DCA] Executed plan ${plan.id} for ${execDate.toISOString().split('T')[0]}: ${shares.toFixed(6)} shares @ ${priceEur.toFixed(2)} EUR`);
+          console.log(`[DCA] Executed plan ${plan.id} for ${execDate.toISOString().split('T')[0]}: ${investmentMode === 'shares' ? shares : shares.toFixed(6)} shares @ ${priceEur.toFixed(2)} EUR = ${actualInvestedAmount.toFixed(2)} EUR`);
         }
         
         // Update next execution date to the day after the last missed date
