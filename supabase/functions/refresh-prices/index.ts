@@ -19,6 +19,7 @@ interface DcaPlan {
   user_id: string;
   account_id: string;
   security_id: string;
+  source_account_id: string | null;
   amount: number;
   frequency: 'weekly' | 'monthly' | 'interval';
   interval_days: number | null;
@@ -354,12 +355,36 @@ Deno.serve(async (req) => {
             }
           }
           
+          // Deduct from source account if specified
+          if (plan.source_account_id) {
+            const { data: sourceAccount } = await supabase
+              .from("bridge_accounts")
+              .select("balance")
+              .eq("id", plan.source_account_id)
+              .maybeSingle();
+            
+            if (sourceAccount) {
+              const newBalance = (Number(sourceAccount.balance) || 0) - plan.amount;
+              const { error: updateSourceError } = await supabase
+                .from("bridge_accounts")
+                .update({ balance: newBalance })
+                .eq("id", plan.source_account_id);
+              
+              if (updateSourceError) {
+                console.error(`[DCA] Error updating source account balance:`, updateSourceError);
+              } else {
+                console.log(`[DCA] Deducted ${plan.amount} EUR from source account ${plan.source_account_id}, new balance: ${newBalance.toFixed(2)} EUR`);
+              }
+            }
+          }
+          
           dcaResults.push({
             plan_id: plan.id,
             execution_date: execDate.toISOString().split('T')[0],
             amount: plan.amount,
             shares: shares,
             price: priceEur,
+            source_account_id: plan.source_account_id,
           });
           
           console.log(`[DCA] Executed plan ${plan.id} for ${execDate.toISOString().split('T')[0]}: ${shares.toFixed(6)} shares @ ${priceEur.toFixed(2)} EUR`);
