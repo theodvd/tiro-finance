@@ -145,6 +145,7 @@ export type Database = {
           monthday: number | null
           next_execution_date: string | null
           security_id: string
+          source_account_id: string | null
           start_date: string
           updated_at: string
           user_id: string
@@ -161,6 +162,7 @@ export type Database = {
           monthday?: number | null
           next_execution_date?: string | null
           security_id: string
+          source_account_id?: string | null
           start_date: string
           updated_at?: string
           user_id: string
@@ -177,6 +179,7 @@ export type Database = {
           monthday?: number | null
           next_execution_date?: string | null
           security_id?: string
+          source_account_id?: string | null
           start_date?: string
           updated_at?: string
           user_id?: string
@@ -195,6 +198,13 @@ export type Database = {
             columns: ["security_id"]
             isOneToOne: false
             referencedRelation: "securities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dca_plans_source_account_id_fkey"
+            columns: ["source_account_id"]
+            isOneToOne: false
+            referencedRelation: "bridge_accounts"
             referencedColumns: ["id"]
           },
         ]
