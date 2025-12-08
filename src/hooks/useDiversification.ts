@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { enrichAssetMetadata, isClassified } from '@/utils/assetEnrichment';
 
 export interface HoldingDetail {
   id: string;
@@ -81,30 +82,36 @@ function calculateDiversificationScore(
     else if (h.weight > 10) score -= 5;
   });
 
-  // Penalize sector concentration
-  bySector.forEach(s => {
-    if (s.percentage > 50) score -= 15;
-    else if (s.percentage > 40) score -= 10;
-    else if (s.percentage > 30) score -= 5;
-  });
+  // Penalize sector concentration (excluding Unknown/Non classifié)
+  bySector
+    .filter(s => s.name !== 'Unknown' && s.name !== 'Non classifié')
+    .forEach(s => {
+      if (s.percentage > 50) score -= 15;
+      else if (s.percentage > 40) score -= 10;
+      else if (s.percentage > 30) score -= 5;
+    });
 
-  // Penalize region concentration
-  byRegion.forEach(r => {
-    if (r.percentage > 80) score -= 15;
-    else if (r.percentage > 70) score -= 10;
-    else if (r.percentage > 60) score -= 5;
-  });
+  // Penalize region concentration (excluding Unknown/Non classifié)
+  byRegion
+    .filter(r => r.name !== 'Unknown' && r.name !== 'Non classifié')
+    .forEach(r => {
+      if (r.percentage > 80) score -= 15;
+      else if (r.percentage > 70) score -= 10;
+      else if (r.percentage > 60) score -= 5;
+    });
 
-  // Penalize asset class concentration
-  byAssetClass.forEach(a => {
-    if (a.percentage > 90) score -= 10;
-    else if (a.percentage > 80) score -= 5;
-  });
+  // Penalize asset class concentration (excluding Unknown/Non classifié)
+  byAssetClass
+    .filter(a => a.name !== 'Unknown' && a.name !== 'Non classifié')
+    .forEach(a => {
+      if (a.percentage > 90) score -= 10;
+      else if (a.percentage > 80) score -= 5;
+    });
 
-  // Reward diversity
-  const uniqueRegions = byRegion.filter(r => r.name !== 'Unknown' && r.percentage > 5).length;
-  const uniqueSectors = bySector.filter(s => s.name !== 'Unknown' && s.percentage > 5).length;
-  const uniqueClasses = byAssetClass.filter(a => a.name !== 'Unknown' && a.percentage > 5).length;
+  // Reward diversity (only count properly classified items)
+  const uniqueRegions = byRegion.filter(r => r.name !== 'Unknown' && r.name !== 'Non classifié' && r.percentage > 5).length;
+  const uniqueSectors = bySector.filter(s => s.name !== 'Unknown' && s.name !== 'Non classifié' && s.percentage > 5).length;
+  const uniqueClasses = byAssetClass.filter(a => a.name !== 'Unknown' && a.name !== 'Non classifié' && a.percentage > 5).length;
 
   score += Math.min(uniqueRegions * 3, 15);
   score += Math.min(uniqueSectors * 2, 10);
@@ -145,9 +152,9 @@ function detectConcentrationRisks(
       });
     });
 
-  // Check sector concentration
+  // Check sector concentration (exclude unknown/unclassified)
   bySector
-    .filter(s => s.name !== 'Unknown' && s.percentage > THRESHOLDS.sector)
+    .filter(s => s.name !== 'Unknown' && s.name !== 'Non classifié' && s.percentage > THRESHOLDS.sector)
     .forEach(s => {
       risks.push({
         type: 'sector',
@@ -160,9 +167,9 @@ function detectConcentrationRisks(
       });
     });
 
-  // Check region concentration
+  // Check region concentration (exclude unknown/unclassified)
   byRegion
-    .filter(r => r.name !== 'Unknown' && r.percentage > THRESHOLDS.region)
+    .filter(r => r.name !== 'Unknown' && r.name !== 'Non classifié' && r.percentage > THRESHOLDS.region)
     .forEach(r => {
       risks.push({
         type: 'region',
@@ -220,8 +227,12 @@ function generateRecommendations(
   });
 
   // Check for missing diversification
-  const hasEmerging = byRegion.some(r => r.name?.toLowerCase().includes('émergent') && r.percentage > 5);
-  const hasBonds = byAssetClass.some(a => a.name?.toLowerCase().includes('bond') && a.percentage > 5);
+  const hasEmerging = byRegion.some(r => 
+    (r.name?.toLowerCase().includes('émergent') || r.name?.toLowerCase().includes('emerging')) && r.percentage > 5
+  );
+  const hasBonds = byAssetClass.some(a => 
+    (a.name?.toLowerCase().includes('bond') || a.name?.toLowerCase().includes('obligation')) && a.percentage > 5
+  );
   
   if (!hasEmerging && byRegion.length > 0) {
     recommendations.push({
@@ -323,30 +334,60 @@ export function useDiversification() {
 
     const totalValue = latestLines.reduce((sum, l) => sum + Number(l.market_value_eur || 0), 0);
 
-    // Build holdings with all metadata
+    // Build holdings with enriched metadata
     const holdings: HoldingDetail[] = latestLines.map(line => {
       const security = securities.find(s => s.id === line.security_id);
       const account = accounts.find(a => a.id === line.account_id);
       const value = Number(line.market_value_eur || 0);
+      
+      const symbol = security?.symbol || 'N/A';
+      const name = security?.name || 'Unknown';
+      
+      // Get existing metadata from DB
+      let region = line.region || security?.region || null;
+      let sector = line.sector || security?.sector || null;
+      let assetClass = line.asset_class || security?.asset_class || null;
+      
+      // Enrich if missing or unknown
+      if (!region || !sector || !assetClass || 
+          region === 'Unknown' || sector === 'Unknown' || assetClass === 'Unknown' ||
+          region === 'Monde' && sector === 'Diversifié') {
+        const enriched = enrichAssetMetadata(symbol, name);
+        
+        // Only use enriched if current is missing/unknown
+        if (!region || region === 'Unknown') region = enriched.region;
+        if (!sector || sector === 'Unknown') sector = enriched.sector;
+        if (!assetClass || assetClass === 'Unknown') assetClass = enriched.assetClass;
+      }
 
       return {
         id: line.id,
-        ticker: security?.symbol || 'N/A',
-        name: security?.name || 'Unknown',
+        ticker: symbol,
+        name,
         quantity: Number(line.shares || 0),
         value,
         weight: totalValue > 0 ? (value / totalValue) * 100 : 0,
-        sector: line.sector || security?.sector || null,
-        region: line.region || security?.region || null,
-        assetClass: line.asset_class || security?.asset_class || null,
+        sector,
+        region,
+        assetClass,
         accountName: account?.name || 'Unknown',
       };
     });
 
-    // Aggregate by asset class
+    // Debug log for enrichment verification
+    console.log('Holdings enrichis:', holdings.map(h => ({
+      symbol: h.ticker,
+      name: h.name,
+      region: h.region,
+      sector: h.sector,
+      assetClass: h.assetClass,
+      value: h.value.toFixed(2)
+    })));
+
+    // Aggregate by asset class (filter out unclassified for display but keep for stats)
     const byAssetClassMap = new Map<string, { value: number; holdings: HoldingDetail[] }>();
     holdings.forEach(h => {
-      const key = h.assetClass || 'Unknown';
+      const key = h.assetClass || 'Non classifié';
       const existing = byAssetClassMap.get(key) || { value: 0, holdings: [] };
       existing.value += h.value;
       existing.holdings.push(h);
@@ -364,7 +405,7 @@ export function useDiversification() {
     // Aggregate by region
     const byRegionMap = new Map<string, { value: number; holdings: HoldingDetail[] }>();
     holdings.forEach(h => {
-      const key = h.region || 'Unknown';
+      const key = h.region || 'Non classifié';
       const existing = byRegionMap.get(key) || { value: 0, holdings: [] };
       existing.value += h.value;
       existing.holdings.push(h);
@@ -382,7 +423,7 @@ export function useDiversification() {
     // Aggregate by sector
     const bySectorMap = new Map<string, { value: number; holdings: HoldingDetail[] }>();
     holdings.forEach(h => {
-      const key = h.sector || 'Unknown';
+      const key = h.sector || 'Non classifié';
       const existing = bySectorMap.get(key) || { value: 0, holdings: [] };
       existing.value += h.value;
       existing.holdings.push(h);
@@ -406,8 +447,15 @@ export function useDiversification() {
     // Generate recommendations
     const recommendations = generateRecommendations(byAssetClass, byRegion, bySector, holdings, concentrationRisks);
 
-    // Data quality
-    const classified = holdings.filter(h => h.sector && h.region && h.sector !== 'Unknown' && h.region !== 'Unknown').length;
+    // Data quality - check using enrichment utility
+    const classified = holdings.filter(h => {
+      const metadata = { 
+        region: h.region || 'Non classifié', 
+        sector: h.sector || 'Non classifié', 
+        assetClass: h.assetClass || 'Non classifié' 
+      };
+      return isClassified(metadata);
+    }).length;
 
     return {
       score,
