@@ -1,0 +1,242 @@
+import { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { AlertCircle, RefreshCw, Loader2, ChevronRight, AlertTriangle, Lightbulb, Info } from 'lucide-react';
+import { useDiversification, AllocationBreakdown } from '@/hooks/useDiversification';
+import { DiversificationScoreCard } from '@/components/diversification/DiversificationScoreCard';
+import { AllocationChart } from '@/components/diversification/AllocationChart';
+import { HoldingsPanel } from '@/components/diversification/HoldingsPanel';
+import { ConcentrationRisksPanel } from '@/components/diversification/ConcentrationRisksPanel';
+import { RecommendationsPanel } from '@/components/diversification/RecommendationsPanel';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+
+export default function Diversification() {
+  const { loading, error, data, refetch } = useDiversification();
+  const [enriching, setEnriching] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedBreakdown, setSelectedBreakdown] = useState<AllocationBreakdown | null>(null);
+  const [panelType, setPanelType] = useState<'asset_class' | 'region' | 'sector'>('asset_class');
+
+  const handleEnrichMetadata = async () => {
+    setEnriching(true);
+    try {
+      const { data: result, error } = await supabase.functions.invoke('enrich-securities', {
+        headers: {
+          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
+      });
+
+      if (error) throw error;
+
+      toast.success('Métadonnées enrichies', {
+        description: `${result.updated} actifs mis à jour. Cliquez sur "Rafraîchir" pour voir les changements.`,
+      });
+    } catch (err: any) {
+      toast.error('Erreur lors de l\'enrichissement', { description: err.message });
+    } finally {
+      setEnriching(false);
+    }
+  };
+
+  const handleRefreshMetadata = async () => {
+    setRefreshing(true);
+    try {
+      const { error } = await supabase.functions.invoke('refresh-snapshot-metadata', {
+        headers: {
+          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
+      });
+
+      if (error) throw error;
+
+      toast.success('Données rafraîchies');
+      await refetch();
+    } catch (err: any) {
+      toast.error('Erreur lors du rafraîchissement', { description: err.message });
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleSliceClick = (breakdown: AllocationBreakdown, type: 'asset_class' | 'region' | 'sector') => {
+    setSelectedBreakdown(breakdown);
+    setPanelType(type);
+  };
+
+  const closePanel = () => {
+    setSelectedBreakdown(null);
+  };
+
+  if (loading) {
+    return (
+      <div className="max-w-6xl mx-auto space-y-6 p-4 sm:p-6 md:p-8">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-10 w-32" />
+        </div>
+        <Skeleton className="h-40" />
+        <div className="grid gap-6 grid-cols-1 lg:grid-cols-3">
+          <Skeleton className="h-80" />
+          <Skeleton className="h-80" />
+          <Skeleton className="h-80" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-6xl mx-auto space-y-6 p-4 sm:p-6 md:p-8">
+        <h1 className="text-xl font-bold">Diversification</h1>
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+        <Button onClick={refetch} variant="outline">
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Réessayer
+        </Button>
+      </div>
+    );
+  }
+
+  if (!data || data.holdings.length === 0) {
+    return (
+      <div className="max-w-6xl mx-auto space-y-6 p-4 sm:p-6 md:p-8">
+        <h1 className="text-xl font-bold">Diversification</h1>
+        <Card className="p-8 text-center">
+          <Info className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+          <h2 className="text-lg font-semibold mb-2">Aucune position trouvée</h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Ajoutez des holdings à votre portefeuille et prenez un snapshot pour voir votre analyse de diversification.
+          </p>
+          <Button onClick={refetch} variant="outline">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Actualiser
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-6xl mx-auto space-y-4 sm:space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <h1 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight">Diversification</h1>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button
+            onClick={handleEnrichMetadata}
+            disabled={enriching || refreshing}
+            variant="outline"
+            size="sm"
+            className="flex-1 sm:flex-initial text-xs sm:text-sm"
+          >
+            {enriching ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
+            <span className="hidden sm:inline">Enrichir</span>
+            <span className="sm:hidden">Enrichir</span>
+          </Button>
+          <Button
+            onClick={handleRefreshMetadata}
+            disabled={enriching || refreshing}
+            size="sm"
+            className="flex-1 sm:flex-initial text-xs sm:text-sm"
+          >
+            {refreshing ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <RefreshCw className="h-4 w-4 mr-1.5" />}
+            <span className="hidden sm:inline">Rafraîchir</span>
+            <span className="sm:hidden">Refresh</span>
+          </Button>
+        </div>
+      </div>
+
+      {/* Data quality warning */}
+      {data.dataQuality.unclassified > 0 && (
+        <Alert className="rounded-xl">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription className="text-xs sm:text-sm">
+            {data.dataQuality.unclassified} sur {data.dataQuality.total} positions n'ont pas de métadonnées complètes.
+            Cliquez sur "Enrichir" puis "Rafraîchir" pour améliorer la précision de l'analyse.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Score Card */}
+      <DiversificationScoreCard
+        score={data.score}
+        scoreLabel={data.scoreLabel}
+        lastUpdated={data.lastUpdated}
+        totalValue={data.totalValue}
+        dataQuality={data.dataQuality}
+      />
+
+      {/* Allocation Charts */}
+      <Tabs defaultValue="asset_class" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-3 h-auto">
+          <TabsTrigger value="asset_class" className="text-xs sm:text-sm py-2">
+            Classe d'actif
+          </TabsTrigger>
+          <TabsTrigger value="region" className="text-xs sm:text-sm py-2">
+            Géographie
+          </TabsTrigger>
+          <TabsTrigger value="sector" className="text-xs sm:text-sm py-2">
+            Secteur
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="asset_class">
+          <AllocationChart
+            data={data.byAssetClass}
+            title="Allocation par Classe d'Actif"
+            onSliceClick={(b) => handleSliceClick(b, 'asset_class')}
+          />
+        </TabsContent>
+
+        <TabsContent value="region">
+          <AllocationChart
+            data={data.byRegion}
+            title="Allocation Géographique"
+            onSliceClick={(b) => handleSliceClick(b, 'region')}
+          />
+        </TabsContent>
+
+        <TabsContent value="sector">
+          <AllocationChart
+            data={data.bySector}
+            title="Allocation par Secteur"
+            onSliceClick={(b) => handleSliceClick(b, 'sector')}
+          />
+        </TabsContent>
+      </Tabs>
+
+      {/* Concentration Risks & Recommendations */}
+      <div className="grid gap-4 sm:gap-6 grid-cols-1 lg:grid-cols-2">
+        <ConcentrationRisksPanel risks={data.concentrationRisks} />
+        <RecommendationsPanel recommendations={data.recommendations} />
+      </div>
+
+      {/* Legal Disclaimer */}
+      <Card className="rounded-xl bg-muted/30 border-dashed">
+        <CardContent className="p-4">
+          <p className="text-xs text-muted-foreground text-center">
+            <Info className="h-3 w-3 inline mr-1" />
+            Ces informations sont fournies à titre indicatif et ne constituent pas un conseil en investissement personnalisé.
+            Consultez un conseiller financier agréé pour des recommandations adaptées à votre situation.
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Holdings Side Panel */}
+      <HoldingsPanel
+        isOpen={selectedBreakdown !== null}
+        onClose={closePanel}
+        breakdown={selectedBreakdown}
+        type={panelType}
+      />
+    </div>
+  );
+}
