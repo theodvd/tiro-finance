@@ -30,9 +30,10 @@ export function AllocationChart({ data, title, onSliceClick }: AllocationChartPr
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   // Filter out zero values and sort by value
-  const chartData = data
-    .filter(d => d.value > 0)
-    .sort((a, b) => b.value - a.value)
+const chartData = data
+  .filter(d => d.value > 0)
+  .filter(d => !['Non classifié', 'Unknown', 'Inconnu'].includes(d.name)) // ✅ Filtrer les non-classifiés
+  .sort((a, b) => b.value - a.value)
     .map((d, index) => ({
       ...d,
       fill: d.percentage > 50 ? RISKY_COLOR : CHART_COLORS[index % CHART_COLORS.length],
@@ -67,20 +68,40 @@ export function AllocationChart({ data, title, onSliceClick }: AllocationChartPr
     }
   };
 
-  if (chartData.length === 0) {
-    return (
-      <Card className="rounded-xl sm:rounded-2xl">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm sm:text-base">{title}</CardTitle>
-        </CardHeader>
-        <CardContent className="p-6">
-          <p className="text-sm text-muted-foreground text-center py-8">
-            Aucune donnée disponible. Enrichissez vos métadonnées pour voir l'allocation.
+if (chartData.length === 0) {
+  // Calculer le % non classifié
+  const unclassifiedData = data.filter(d => 
+    ['Non classifié', 'Unknown', 'Inconnu'].includes(d.name)
+  );
+  const unclassifiedPct = unclassifiedData.reduce((sum, d) => sum + d.percentage, 0);
+  
+  return (
+    <Card className="rounded-xl sm:rounded-2xl border-amber-500/30">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm sm:text-base flex items-center gap-2">
+          {title}
+          <span className="text-xs font-normal text-amber-500">⚠️ Données manquantes</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-6">
+        <div className="text-center py-8 space-y-3">
+          <div className="text-4xl">📊</div>
+          <p className="text-sm font-medium text-foreground">
+            {unclassifiedPct > 0 
+              ? `${unclassifiedPct.toFixed(0)}% de votre portefeuille n'est pas classifié`
+              : 'Aucune donnée classifiée disponible'
+            }
           </p>
-        </CardContent>
-      </Card>
-    );
-  }
+          <p className="text-xs text-muted-foreground max-w-md mx-auto">
+            L'enrichissement automatique n'a pas pu classifier ces actifs. 
+            Vérifiez que les symboles et noms sont corrects, ou ajoutez-les manuellement 
+            à la base de données dans <code className="text-xs bg-muted px-1 rounded">assetEnrichment.ts</code>.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
   return (
     <Card className="rounded-xl sm:rounded-2xl hover:shadow-[0_0_30px_rgba(234,179,8,0.15)] hover:border-primary/20 transition-all duration-300">
@@ -192,5 +213,33 @@ export function AllocationChart({ data, title, onSliceClick }: AllocationChartPr
         </div>
       </CardContent>
     </Card>
+     {data.some(d => ['Non classifié', 'Unknown', 'Inconnu'].includes(d.name)) && (
+      <Card className="rounded-xl sm:rounded-2xl border-amber-500/20 bg-amber-500/5 mt-4">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-xs sm:text-sm text-amber-600 flex items-center gap-2">
+            ⚠️ Actifs non classifiés ({
+              data
+                .filter(d => ['Non classifié', 'Unknown', 'Inconnu'].includes(d.name))
+                .reduce((sum, d) => sum + d.percentage, 0)
+                .toFixed(1)
+            }%)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-3">
+          <div className="space-y-1">
+            {data
+              .filter(d => ['Non classifié', 'Unknown', 'Inconnu'].includes(d.name))
+              .flatMap(d => d.holdings)
+              .map(h => (
+                <div key={h.id} className="text-xs flex justify-between items-center p-2 rounded hover:bg-amber-100/50">
+                  <span className="font-medium">{h.ticker}</span>
+                  <span className="text-muted-foreground">{h.name}</span>
+                </div>
+              ))
+            }
+          </div>
+        </CardContent>
+      </Card>
+    )}
   );
 }
