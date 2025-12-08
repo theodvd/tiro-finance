@@ -15,6 +15,7 @@ import Insights from "./pages/Insights";
 import Profile from "./pages/Profile";
 import Sync from "./pages/Sync";
 import Liquidity from "./pages/Liquidity";
+import Diversification from "./pages/Diversification";
 import { DebugSecurities } from "./pages/DebugSecurities";
 import NotFound from "./pages/NotFound";
 
@@ -75,6 +76,16 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <Insights />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/diversification"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Diversification />
                   </Layout>
                 </ProtectedRoute>
               }
