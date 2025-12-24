@@ -21,6 +21,17 @@ Deno.serve(async (req) => {
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) return new Response('Unauthorized', { status: 401, headers: corsHeaders });
 
+    // Get snapshot_type from request body (default: 'manual')
+    let snapshotType = 'manual';
+    try {
+      const body = await req.json();
+      if (body?.snapshot_type) {
+        snapshotType = body.snapshot_type;
+      }
+    } catch {
+      // No body or invalid JSON, use default
+    }
+
     // 1) Holdings (no nested queries)
     const { data: holdings, error: hErr } = await supabase
       .from('holdings')
@@ -104,6 +115,7 @@ Deno.serve(async (req) => {
         total_value_eur: totalValue,
         pnl_eur: pnl,
         pnl_pct: pnlPct,
+        snapshot_type: snapshotType,
         meta: {}
       }])
       .select()
