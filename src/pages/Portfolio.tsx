@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
-import { RefreshCw, AlertCircle, Camera } from 'lucide-react';
+import { RefreshCw, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { usePortfolioData } from '@/hooks/usePortfolioData';
@@ -77,36 +77,6 @@ export default function Portfolio() {
     }
   };
 
-  const handleTakeSnapshot = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error('Not authenticated');
-
-      toast({ title: 'Taking snapshot...', description: 'Capturing portfolio state' });
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/take-snapshot`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      if (!response.ok) throw new Error('Failed to take snapshot');
-
-      toast({ title: 'Snapshot created successfully' });
-      await portfolioData.refetch();
-    } catch (err: any) {
-      toast({
-        title: 'Error taking snapshot',
-        description: err.message,
-        variant: 'destructive',
-      });
-    }
-  };
 
   if (portfolioData.loading) {
     return (
@@ -146,18 +116,11 @@ export default function Portfolio() {
     <div className="w-full max-w-6xl mx-auto space-y-3 sm:space-y-4 md:space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
         <h1 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight">Portfolio</h1>
-        <div className="flex flex-col sm:flex-row gap-2 shadow-lg rounded-lg sm:rounded-xl p-1 bg-card/50 backdrop-blur-sm border border-border/50 w-full sm:w-auto">
-          <Button onClick={handleTakeSnapshot} variant="outline" size="sm" className="w-full sm:w-auto text-xs sm:text-sm">
-            <Camera className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
-            <span className="hidden sm:inline">Take Snapshot</span>
-            <span className="sm:hidden">Snapshot</span>
-          </Button>
-          <Button onClick={handleRefreshPrices} size="sm" className="w-full sm:w-auto text-xs sm:text-sm">
-            <RefreshCw className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
-            <span className="hidden sm:inline">Refresh Prices</span>
-            <span className="sm:hidden">Refresh</span>
-          </Button>
-        </div>
+        <Button onClick={handleRefreshPrices} size="sm" className="text-xs sm:text-sm">
+          <RefreshCw className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+          <span className="hidden sm:inline">Refresh Prices</span>
+          <span className="sm:hidden">Refresh</span>
+        </Button>
       </div>
 
       <PortfolioSummary
