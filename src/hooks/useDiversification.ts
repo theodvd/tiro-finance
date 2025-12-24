@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { enrichAssetMetadata, isClassified } from "@/utils/assetEnrichment";
+import { calculateLookThroughExposure, LookThroughResult } from "@/utils/lookThroughAnalysis";
 
 export interface HoldingDetail {
   id: string;
@@ -57,6 +58,8 @@ export interface DiversificationData {
     unclassified: number;
     total: number;
   };
+  /** Look-through analysis data (decomposed ETF exposure) */
+  lookThrough: LookThroughResult | null;
 }
 
 // Thresholds for concentration risks
@@ -501,6 +504,26 @@ export function useDiversification() {
       return isClassified(metadata);
     }).length;
 
+    // Calculate look-through exposure for ETFs
+    const lookThrough = calculateLookThroughExposure(holdings, totalValue);
+
+    // Log look-through analysis
+    if (lookThrough.hasLookThroughData) {
+      console.group("🔍 Analyse Look-Through");
+      console.log(`ETFs avec données: ${lookThrough.etfsWithData.join(", ")}`);
+      console.log(`Couverture: ${lookThrough.lookThroughCoverage.toFixed(1)}% du portefeuille`);
+      if (lookThrough.etfsWithoutData.length > 0) {
+        console.warn(`ETFs sans données: ${lookThrough.etfsWithoutData.join(", ")}`);
+      }
+      console.table(
+        lookThrough.realGeographic.slice(0, 10).map((r) => ({
+          Région: r.name,
+          Pourcentage: r.percentage.toFixed(1) + "%",
+        }))
+      );
+      console.groupEnd();
+    }
+
     return {
       score,
       scoreLabel: getScoreLabel(score),
@@ -517,6 +540,7 @@ export function useDiversification() {
         unclassified: holdings.length - classifiedCount,
         total: holdings.length,
       },
+      lookThrough,
     };
   }, [rawData]);
 

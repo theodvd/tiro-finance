@@ -5,7 +5,10 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertCircle, RefreshCw, Loader2, ChevronRight, AlertTriangle, Lightbulb, Info } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { AlertCircle, RefreshCw, Loader2, ChevronRight, AlertTriangle, Lightbulb, Info, Eye, Layers } from 'lucide-react';
 import { useDiversification, AllocationBreakdown } from '@/hooks/useDiversification';
 import { DiversificationScoreCard } from '@/components/diversification/DiversificationScoreCard';
 import { AllocationChart } from '@/components/diversification/AllocationChart';
@@ -21,6 +24,7 @@ export default function Diversification() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedBreakdown, setSelectedBreakdown] = useState<AllocationBreakdown | null>(null);
   const [panelType, setPanelType] = useState<'asset_class' | 'region' | 'sector'>('asset_class');
+  const [lookThroughMode, setLookThroughMode] = useState(false);
 
   const handleEnrichMetadata = async () => {
     setEnriching(true);
@@ -124,6 +128,15 @@ export default function Diversification() {
     );
   }
 
+  // Determine which data to show based on look-through mode
+  const hasLookThroughData = data.lookThrough?.hasLookThroughData ?? false;
+  const displayRegion = lookThroughMode && hasLookThroughData 
+    ? data.lookThrough!.realGeographic 
+    : data.byRegion;
+  const displaySector = lookThroughMode && hasLookThroughData 
+    ? data.lookThrough!.realSectoral 
+    : data.bySector;
+
   return (
     <div className="max-w-6xl mx-auto space-y-4 sm:space-y-6">
       {/* Header */}
@@ -165,6 +178,89 @@ export default function Diversification() {
         </Alert>
       )}
 
+      {/* Look-Through Toggle */}
+      {hasLookThroughData && (
+        <Card className="rounded-xl bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
+          <CardContent className="p-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Layers className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-sm">Analyse Look-Through</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Décompose vos ETFs pour révéler l'exposition réelle sous-jacente.
+                    <br />
+                    <span className="text-primary font-medium">
+                      {data.lookThrough!.etfsWithData.length} ETF{data.lookThrough!.etfsWithData.length > 1 ? 's' : ''} analysé{data.lookThrough!.etfsWithData.length > 1 ? 's' : ''} 
+                      ({data.lookThrough!.lookThroughCoverage.toFixed(0)}% du portefeuille)
+                    </span>
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center space-x-2">
+                        <Label htmlFor="lookthrough-mode" className="text-xs cursor-pointer flex items-center gap-1.5">
+                          <Eye className="h-3.5 w-3.5" />
+                          {lookThroughMode ? 'Vue réelle' : 'Vue nominale'}
+                        </Label>
+                        <Switch
+                          id="lookthrough-mode"
+                          checked={lookThroughMode}
+                          onCheckedChange={setLookThroughMode}
+                        />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="left" className="max-w-xs">
+                      <p className="text-xs">
+                        <strong>Vue nominale :</strong> Affiche vos positions telles qu'elles sont (ex: "VWCE = Monde")
+                        <br /><br />
+                        <strong>Vue réelle :</strong> Décompose les ETFs pour montrer où votre argent est vraiment investi 
+                        (ex: "VWCE → 62% USA, 6% Japon...")
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+            </div>
+            
+            {/* Show ETFs covered */}
+            {lookThroughMode && (
+              <div className="mt-3 pt-3 border-t border-primary/10">
+                <div className="flex flex-wrap gap-1.5">
+                  {data.lookThrough!.etfsWithData.map((etf) => (
+                    <Badge key={etf} variant="secondary" className="text-xs bg-primary/10 text-primary">
+                      {etf}
+                    </Badge>
+                  ))}
+                  {data.lookThrough!.etfsWithoutData.length > 0 && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Badge variant="outline" className="text-xs text-muted-foreground">
+                            +{data.lookThrough!.etfsWithoutData.length} sans données
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="text-xs">
+                            Ces ETFs n'ont pas de données de composition :<br />
+                            {data.lookThrough!.etfsWithoutData.join(", ")}
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Score Card */}
       <DiversificationScoreCard
         score={data.score}
@@ -182,9 +278,19 @@ export default function Diversification() {
           </TabsTrigger>
           <TabsTrigger value="region" className="text-xs sm:text-sm py-2">
             Géographie
+            {lookThroughMode && hasLookThroughData && (
+              <Badge variant="secondary" className="ml-1.5 text-[10px] px-1 py-0 bg-primary/20 text-primary">
+                LT
+              </Badge>
+            )}
           </TabsTrigger>
           <TabsTrigger value="sector" className="text-xs sm:text-sm py-2">
             Secteur
+            {lookThroughMode && hasLookThroughData && (
+              <Badge variant="secondary" className="ml-1.5 text-[10px] px-1 py-0 bg-primary/20 text-primary">
+                LT
+              </Badge>
+            )}
           </TabsTrigger>
         </TabsList>
 
@@ -198,18 +304,30 @@ export default function Diversification() {
 
         <TabsContent value="region">
           <AllocationChart
-            data={data.byRegion}
-            title="Allocation Géographique"
+            data={displayRegion}
+            title={lookThroughMode && hasLookThroughData ? "Allocation Géographique (Look-Through)" : "Allocation Géographique"}
             onSliceClick={(b) => handleSliceClick(b, 'region')}
           />
+          {lookThroughMode && hasLookThroughData && (
+            <p className="text-xs text-muted-foreground mt-2 text-center">
+              <Info className="h-3 w-3 inline mr-1" />
+              Cette vue décompose vos ETFs pour montrer l'exposition géographique réelle de votre portefeuille.
+            </p>
+          )}
         </TabsContent>
 
         <TabsContent value="sector">
           <AllocationChart
-            data={data.bySector}
-            title="Allocation par Secteur"
+            data={displaySector}
+            title={lookThroughMode && hasLookThroughData ? "Allocation par Secteur (Look-Through)" : "Allocation par Secteur"}
             onSliceClick={(b) => handleSliceClick(b, 'sector')}
           />
+          {lookThroughMode && hasLookThroughData && (
+            <p className="text-xs text-muted-foreground mt-2 text-center">
+              <Info className="h-3 w-3 inline mr-1" />
+              Cette vue décompose vos ETFs pour montrer l'exposition sectorielle réelle de votre portefeuille.
+            </p>
+          )}
         </TabsContent>
       </Tabs>
 
