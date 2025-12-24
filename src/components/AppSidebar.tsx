@@ -14,11 +14,10 @@ import {
 } from "@/components/ui/sidebar";
 
 const menuItems = [
-  { title: "Portfolio", url: "/", icon: Home },
+  { title: "Overview", url: "/", icon: Home },
   { title: "Investments", url: "/investments", icon: Briefcase },
   { title: "Diversification", url: "/diversification", icon: PieChart },
   { title: "Insights", url: "/insights", icon: BarChart3 },
-  { title: "Profil", url: "/profile", icon: User },
 ];
 
 export function AppSidebar() {
