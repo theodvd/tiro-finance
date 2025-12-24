@@ -530,6 +530,7 @@ export type Database = {
           age: number | null
           ai_expectations: Json | null
           available_time: string | null
+          cash_target_pct: number | null
           city: string | null
           commitment_apply_advice: boolean | null
           commitment_long_term_investing: boolean | null
@@ -556,6 +557,8 @@ export type Database = {
           main_project: string | null
           management_style: string | null
           max_acceptable_loss: string | null
+          max_asset_class_pct: number | null
+          max_position_pct: number | null
           monthly_expenses: Json | null
           monthly_income: Json | null
           panic_selling_history: boolean | null
@@ -586,6 +589,7 @@ export type Database = {
           age?: number | null
           ai_expectations?: Json | null
           available_time?: string | null
+          cash_target_pct?: number | null
           city?: string | null
           commitment_apply_advice?: boolean | null
           commitment_long_term_investing?: boolean | null
@@ -612,6 +616,8 @@ export type Database = {
           main_project?: string | null
           management_style?: string | null
           max_acceptable_loss?: string | null
+          max_asset_class_pct?: number | null
+          max_position_pct?: number | null
           monthly_expenses?: Json | null
           monthly_income?: Json | null
           panic_selling_history?: boolean | null
@@ -642,6 +648,7 @@ export type Database = {
           age?: number | null
           ai_expectations?: Json | null
           available_time?: string | null
+          cash_target_pct?: number | null
           city?: string | null
           commitment_apply_advice?: boolean | null
           commitment_long_term_investing?: boolean | null
@@ -668,6 +675,8 @@ export type Database = {
           main_project?: string | null
           management_style?: string | null
           max_acceptable_loss?: string | null
+          max_asset_class_pct?: number | null
+          max_position_pct?: number | null
           monthly_expenses?: Json | null
           monthly_income?: Json | null
           panic_selling_history?: boolean | null

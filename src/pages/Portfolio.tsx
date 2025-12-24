@@ -1,17 +1,20 @@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertCircle, Wallet, TrendingUp, TrendingDown, PiggyBank, Target, AlertTriangle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { AlertCircle, Wallet, TrendingUp, TrendingDown, PiggyBank, Target, AlertTriangle, Calendar } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { usePortfolioData } from '@/hooks/usePortfolioData';
 import { PortfolioHistory } from '@/components/dashboard/PortfolioHistory';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDiversification } from '@/hooks/useDiversification';
+import { useNavigate } from 'react-router-dom';
 import CountUp from 'react-countup';
 import { fmtEUR } from '@/lib/format';
 
 export default function Portfolio() {
+  const navigate = useNavigate();
   const portfolioData = usePortfolioData();
   const { user } = useAuth();
   const [totalLiquidity, setTotalLiquidity] = useState<number | null>(null);
@@ -103,12 +106,22 @@ export default function Portfolio() {
 
   return (
     <div className="w-full max-w-5xl mx-auto space-y-6">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold tracking-tight">Overview</h1>
-        <p className="text-xs text-muted-foreground">
-          Mis à jour : {formatDate(portfolioData.lastUpdated)}
-        </p>
+      {/* Page Header with CTA */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center justify-between sm:block">
+          <h1 className="text-xl font-bold tracking-tight">Overview</h1>
+          <p className="text-xs text-muted-foreground sm:mt-0.5">
+            Mis à jour : {formatDate(portfolioData.lastUpdated)}
+          </p>
+        </div>
+        <Button 
+          onClick={() => navigate('/monthly-review')}
+          variant="outline"
+          className="w-full sm:w-auto"
+        >
+          <Calendar className="h-4 w-4 mr-2" />
+          Faire mon point mensuel
+        </Button>
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════════
