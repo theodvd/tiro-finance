@@ -1,36 +1,28 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DecisionCard } from '@/components/decisions/DecisionCard';
-import { useDecisions, Decision } from '@/hooks/useDecisions';
+import { useDecisions } from '@/hooks/useDecisions';
+import { useDecisionStatus } from '@/hooks/useDecisionStatus';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 export default function Decisions() {
   const navigate = useNavigate();
   const { decisions, lastAnalysisDate, loading, error } = useDecisions();
-  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const { getStatus, markAsIgnored, resetAll } = useDecisionStatus();
 
-  const visibleDecisions = decisions.filter(d => !dismissedIds.has(d.id));
+  // Filter out ignored decisions
+  const visibleDecisions = decisions.filter(d => getStatus(d.id) !== 'ignored');
 
-  const handleViewDetail = (decision: Decision) => {
-    // Navigate to diversification page for most decision types
-    if (decision.type === 'concentration' || decision.type === 'diversification') {
-      navigate('/diversification');
-    } else {
-      navigate('/');
-    }
+  const handleViewDetail = (decisionId: string) => {
+    navigate(`/decisions/${decisionId}`);
   };
 
   const handleDismiss = (decisionId: string) => {
-    setDismissedIds(prev => new Set([...prev, decisionId]));
-  };
-
-  const handleReset = () => {
-    setDismissedIds(new Set());
+    markAsIgnored(decisionId);
   };
 
   if (loading) {
@@ -72,10 +64,10 @@ export default function Decisions() {
             Dernière analyse : {format(new Date(lastAnalysisDate), 'dd MMMM yyyy à HH:mm', { locale: fr })}
           </p>
         </div>
-        {dismissedIds.size > 0 && (
-          <Button variant="outline" size="sm" onClick={handleReset}>
+        {decisions.some(d => getStatus(d.id) === 'ignored') && (
+          <Button variant="outline" size="sm" onClick={resetAll}>
             <RefreshCw className="h-4 w-4 mr-2" />
-            Réinitialiser ({dismissedIds.size})
+            Réinitialiser
           </Button>
         )}
       </div>
@@ -102,7 +94,8 @@ export default function Decisions() {
             <DecisionCard
               key={decision.id}
               decision={decision}
-              onViewDetail={() => handleViewDetail(decision)}
+              status={getStatus(decision.id)}
+              onViewDetail={() => handleViewDetail(decision.id)}
               onDismiss={() => handleDismiss(decision.id)}
             />
           ))}

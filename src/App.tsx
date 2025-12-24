@@ -13,6 +13,7 @@ import Insights from "./pages/Insights";
 import Profile from "./pages/Profile";
 import Diversification from "./pages/Diversification";
 import Decisions from "./pages/Decisions";
+import DecisionDetail from "./pages/DecisionDetail";
 import MonthlyReview from "./pages/MonthlyReview";
 import NotFound from "./pages/NotFound";
 
@@ -73,6 +74,16 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <Decisions />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/decisions/:decisionId"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <DecisionDetail />
                   </Layout>
                 </ProtectedRoute>
               }
