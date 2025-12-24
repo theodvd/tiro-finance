@@ -8,15 +8,10 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Layout } from "./components/Layout";
 import Auth from "./pages/Auth";
 import Portfolio from "./pages/Portfolio";
-import Accounts from "./pages/Accounts";
 import Investments from "./pages/Investments";
-import Market from "./pages/Market";
 import Insights from "./pages/Insights";
 import Profile from "./pages/Profile";
-import Sync from "./pages/Sync";
-import Liquidity from "./pages/Liquidity";
 import Diversification from "./pages/Diversification";
-import { DebugSecurities } from "./pages/DebugSecurities";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -41,31 +36,11 @@ const App = () => (
               }
             />
             <Route
-              path="/accounts"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Accounts />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
               path="/investments"
               element={
                 <ProtectedRoute>
                   <Layout>
                     <Investments />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/market"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Market />
                   </Layout>
                 </ProtectedRoute>
               }
@@ -96,36 +71,6 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <Profile />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/sync"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Sync />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/liquidity"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Liquidity />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/debug-securities"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <DebugSecurities />
                   </Layout>
                 </ProtectedRoute>
               }
