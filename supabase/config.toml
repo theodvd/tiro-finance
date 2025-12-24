@@ -6,6 +6,9 @@ verify_jwt = false
 [functions.take-snapshot]
 verify_jwt = false
 
+[functions.scheduled-snapshots]
+verify_jwt = false
+
 [functions.enrich-securities]
 verify_jwt = true
 
