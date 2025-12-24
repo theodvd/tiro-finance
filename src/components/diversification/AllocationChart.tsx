@@ -120,7 +120,82 @@ export function AllocationChart({ data, title, onSliceClick }: AllocationChartPr
             </button>
           </div>
         </CardHeader>
-        <CardContent className="p-3 sm:p-6">{/* ... tout le contenu du graphique ... */}</CardContent>
+        <CardContent className="p-3 sm:p-6">
+          {chartType === "pie" ? (
+            <div className="h-[300px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={chartData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={100}
+                    innerRadius={60}
+                    paddingAngle={2}
+                    onClick={(_, index) => handleClick(chartData[index])}
+                    onMouseEnter={(_, index) => setHoveredIndex(index)}
+                    onMouseLeave={() => setHoveredIndex(null)}
+                    style={{ cursor: "pointer" }}
+                  >
+                    {chartData.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={entry.fill}
+                        stroke={hoveredIndex === index ? "hsl(var(--primary))" : "transparent"}
+                        strokeWidth={hoveredIndex === index ? 3 : 0}
+                        opacity={hoveredIndex !== null && hoveredIndex !== index ? 0.6 : 1}
+                      />
+                    ))}
+                  </Pie>
+                  <ChartTooltip content={<CustomTooltip />} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-[300px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} layout="vertical" margin={{ left: 80 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis type="number" tickFormatter={(v) => `${v.toFixed(0)}%`} domain={[0, 100]} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={75} />
+                  <ChartTooltip content={<CustomTooltip />} />
+                  <Bar
+                    dataKey="percentage"
+                    radius={[0, 4, 4, 0]}
+                    onClick={(data) => handleClick(data)}
+                    style={{ cursor: "pointer" }}
+                  >
+                    {chartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Legend */}
+          <div className="mt-4 flex flex-wrap gap-3 justify-center">
+            {chartData.slice(0, 6).map((item, index) => (
+              <button
+                key={item.name}
+                onClick={() => handleClick(item)}
+                className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted transition-colors"
+                onMouseEnter={() => setHoveredIndex(index)}
+                onMouseLeave={() => setHoveredIndex(null)}
+              >
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.fill }} />
+                <span className="text-xs font-medium">{item.name}</span>
+                <span className="text-xs text-muted-foreground">{item.percentage.toFixed(1)}%</span>
+              </button>
+            ))}
+            {chartData.length > 6 && (
+              <span className="text-xs text-muted-foreground">+{chartData.length - 6} autres</span>
+            )}
+          </div>
+        </CardContent>
       </Card>
 
       {/* Section actifs non classifiés */}
