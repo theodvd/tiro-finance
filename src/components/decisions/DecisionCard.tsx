@@ -1,11 +1,13 @@
-import { AlertTriangle, TrendingDown, PieChart, Droplets, ChevronRight, X } from 'lucide-react';
+import { AlertTriangle, TrendingDown, PieChart, Droplets, ChevronRight, X, CheckCircle2, XCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Decision } from '@/hooks/useDecisions';
+import { DecisionStatus } from '@/hooks/useDecisionStatus';
 
 interface DecisionCardProps {
   decision: Decision;
+  status?: DecisionStatus;
   onViewDetail?: () => void;
   onDismiss?: () => void;
 }
@@ -51,9 +53,21 @@ const getSeverityStyles = (severity: Decision['severity']) => {
   }
 };
 
-export function DecisionCard({ decision, onViewDetail, onDismiss }: DecisionCardProps) {
+const getStatusBadge = (status: DecisionStatus) => {
+  switch (status) {
+    case 'treated':
+      return { className: 'bg-green-500/10 text-green-600 border-green-500/20', label: 'Traité', icon: CheckCircle2 };
+    case 'ignored':
+      return { className: 'bg-muted text-muted-foreground border-muted', label: 'Ignoré', icon: XCircle };
+    default:
+      return null;
+  }
+};
+
+export function DecisionCard({ decision, status = 'new', onViewDetail, onDismiss }: DecisionCardProps) {
   const Icon = getDecisionIcon(decision.type);
   const styles = getSeverityStyles(decision.severity);
+  const statusBadge = getStatusBadge(status);
 
   return (
     <Card className={`border-l-4 ${styles.border} hover:shadow-md transition-shadow`}>
@@ -65,9 +79,17 @@ export function DecisionCard({ decision, onViewDetail, onDismiss }: DecisionCard
             </div>
             <div>
               <CardTitle className="text-base font-semibold">{decision.title}</CardTitle>
-              <Badge variant="outline" className={`mt-1 text-xs ${styles.badge}`}>
-                {styles.label}
-              </Badge>
+              <div className="flex flex-wrap gap-1 mt-1">
+                <Badge variant="outline" className={`text-xs ${styles.badge}`}>
+                  {styles.label}
+                </Badge>
+                {statusBadge && (
+                  <Badge variant="outline" className={`text-xs ${statusBadge.className}`}>
+                    <statusBadge.icon className="h-3 w-3 mr-1" />
+                    {statusBadge.label}
+                  </Badge>
+                )}
+              </div>
             </div>
           </div>
           <div className="text-right">
