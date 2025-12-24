@@ -482,7 +482,7 @@ export function useDiversification() {
     const recommendations = generateRecommendations(byAssetClass, byRegion, bySector, holdings, concentrationRisks);
 
     // Data quality - check using enrichment utility
-    const classified = holdings.filter((h) => {
+    const classifiedCount = holdings.filter((h) => {
       const metadata = {
         region: h.region || "Non classifié",
         sector: h.sector || "Non classifié",
@@ -503,8 +503,8 @@ export function useDiversification() {
       recommendations,
       holdings: holdings.sort((a, b) => b.value - a.value),
       dataQuality: {
-        classified,
-        unclassified: holdings.length - classified,
+        classified: classifiedCount,
+        unclassified: holdings.length - classifiedCount,
         total: holdings.length,
       },
     };
