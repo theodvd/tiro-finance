@@ -713,6 +713,308 @@ export const ETF_COMPOSITIONS: Record<string, ETFComposition> = {
     },
     lastUpdated: '2024-12',
   },
+  
+  // === Amundi PEA S&P 500 ===
+  '500': {
+    symbol: '500',
+    name: 'Amundi PEA S&P 500 UCITS ETF',
+    geographic: {
+      [REGIONS.USA]: 100,
+    },
+    sectoral: {
+      [SECTORS.TECH]: 32,
+      [SECTORS.HEALTHCARE]: 12,
+      [SECTORS.FINANCE]: 12,
+      [SECTORS.CONSUMER_DISC]: 10,
+      [SECTORS.COMMUNICATION]: 9,
+      [SECTORS.INDUSTRIALS]: 8,
+      [SECTORS.CONSUMER_STAPLES]: 6,
+      [SECTORS.ENERGY]: 4,
+      [SECTORS.UTILITIES]: 2,
+      [SECTORS.MATERIALS]: 2,
+      [SECTORS.REAL_ESTATE]: 3,
+    },
+    lastUpdated: '2024-12',
+  },
+  
+  'PSP5': {
+    symbol: 'PSP5',
+    name: 'Amundi PEA S&P 500 ESG UCITS ETF',
+    geographic: {
+      [REGIONS.USA]: 100,
+    },
+    sectoral: {
+      [SECTORS.TECH]: 32,
+      [SECTORS.HEALTHCARE]: 12,
+      [SECTORS.FINANCE]: 12,
+      [SECTORS.CONSUMER_DISC]: 10,
+      [SECTORS.COMMUNICATION]: 9,
+      [SECTORS.INDUSTRIALS]: 8,
+      [SECTORS.CONSUMER_STAPLES]: 6,
+      [SECTORS.ENERGY]: 4,
+      [SECTORS.UTILITIES]: 2,
+      [SECTORS.MATERIALS]: 2,
+      [SECTORS.REAL_ESTATE]: 3,
+    },
+    lastUpdated: '2024-12',
+  },
+  
+  // === Amundi PEA Nasdaq-100 ===
+  'PUST': {
+    symbol: 'PUST',
+    name: 'Amundi PEA Nasdaq-100 UCITS ETF',
+    geographic: {
+      [REGIONS.USA]: 98,
+      [REGIONS.OTHER]: 2,
+    },
+    sectoral: {
+      [SECTORS.TECH]: 58,
+      [SECTORS.COMMUNICATION]: 16,
+      [SECTORS.CONSUMER_DISC]: 13,
+      [SECTORS.HEALTHCARE]: 6,
+      [SECTORS.CONSUMER_STAPLES]: 3,
+      [SECTORS.INDUSTRIALS]: 3,
+      [SECTORS.UTILITIES]: 1,
+    },
+    lastUpdated: '2024-12',
+  },
+  
+  // === Amundi PEA MSCI World ===
+  'WPEA': {
+    symbol: 'WPEA',
+    name: 'Amundi PEA MSCI World UCITS ETF',
+    geographic: {
+      [REGIONS.USA]: 70,
+      [REGIONS.JAPAN]: 6,
+      [REGIONS.UK]: 4,
+      [REGIONS.FRANCE]: 3,
+      [REGIONS.CANADA]: 3,
+      [REGIONS.SWITZERLAND]: 3,
+      [REGIONS.GERMANY]: 2,
+      [REGIONS.AUSTRALIA]: 2,
+      [REGIONS.OTHER]: 7,
+    },
+    sectoral: {
+      [SECTORS.TECH]: 25,
+      [SECTORS.FINANCE]: 15,
+      [SECTORS.HEALTHCARE]: 12,
+      [SECTORS.CONSUMER_DISC]: 11,
+      [SECTORS.INDUSTRIALS]: 11,
+      [SECTORS.COMMUNICATION]: 7,
+      [SECTORS.CONSUMER_STAPLES]: 6,
+      [SECTORS.ENERGY]: 4,
+      [SECTORS.MATERIALS]: 4,
+      [SECTORS.UTILITIES]: 3,
+      [SECTORS.REAL_ESTATE]: 2,
+    },
+    lastUpdated: '2024-12',
+  },
+  
+  // === Amundi MSCI Emerging Markets ===
+  'AEEM': {
+    symbol: 'AEEM',
+    name: 'Amundi MSCI Emerging Markets UCITS ETF',
+    geographic: {
+      [REGIONS.CHINA]: 28,
+      [REGIONS.EMERGING]: 20,
+      [REGIONS.OTHER]: 52, // Taiwan, India, Korea, Brazil, etc.
+    },
+    sectoral: {
+      [SECTORS.TECH]: 22,
+      [SECTORS.FINANCE]: 21,
+      [SECTORS.CONSUMER_DISC]: 13,
+      [SECTORS.COMMUNICATION]: 10,
+      [SECTORS.MATERIALS]: 8,
+      [SECTORS.INDUSTRIALS]: 7,
+      [SECTORS.ENERGY]: 6,
+      [SECTORS.CONSUMER_STAPLES]: 6,
+      [SECTORS.HEALTHCARE]: 4,
+      [SECTORS.UTILITIES]: 3,
+    },
+    lastUpdated: '2024-12',
+  },
+  
+  // === Amundi MSCI EM Asia ===
+  'AASI': {
+    symbol: 'AASI',
+    name: 'Amundi MSCI Emerging Markets Asia UCITS ETF',
+    geographic: {
+      [REGIONS.CHINA]: 35,
+      [REGIONS.ASIA_PACIFIC]: 40, // Taiwan, India, Korea
+      [REGIONS.OTHER]: 25,
+    },
+    sectoral: {
+      [SECTORS.TECH]: 28,
+      [SECTORS.FINANCE]: 18,
+      [SECTORS.CONSUMER_DISC]: 14,
+      [SECTORS.COMMUNICATION]: 10,
+      [SECTORS.MATERIALS]: 6,
+      [SECTORS.INDUSTRIALS]: 8,
+      [SECTORS.ENERGY]: 4,
+      [SECTORS.CONSUMER_STAPLES]: 5,
+      [SECTORS.HEALTHCARE]: 5,
+      [SECTORS.UTILITIES]: 2,
+    },
+    lastUpdated: '2024-12',
+  },
+  
+  // === Stoxx Europe 600 ===
+  'C6E': {
+    symbol: 'C6E',
+    name: 'Amundi Stoxx Europe 600 UCITS ETF',
+    geographic: {
+      [REGIONS.UK]: 23,
+      [REGIONS.FRANCE]: 17,
+      [REGIONS.SWITZERLAND]: 15,
+      [REGIONS.GERMANY]: 13,
+      [REGIONS.OTHER]: 32,
+    },
+    sectoral: {
+      [SECTORS.FINANCE]: 18,
+      [SECTORS.HEALTHCARE]: 15,
+      [SECTORS.INDUSTRIALS]: 14,
+      [SECTORS.CONSUMER_STAPLES]: 11,
+      [SECTORS.CONSUMER_DISC]: 10,
+      [SECTORS.MATERIALS]: 7,
+      [SECTORS.TECH]: 8,
+      [SECTORS.ENERGY]: 6,
+      [SECTORS.COMMUNICATION]: 4,
+      [SECTORS.UTILITIES]: 5,
+      [SECTORS.REAL_ESTATE]: 2,
+    },
+    lastUpdated: '2024-12',
+  },
+  
+  'ETSZ': {
+    symbol: 'ETSZ',
+    name: 'Stoxx Europe 600 UCITS ETF',
+    geographic: {
+      [REGIONS.UK]: 23,
+      [REGIONS.FRANCE]: 17,
+      [REGIONS.SWITZERLAND]: 15,
+      [REGIONS.GERMANY]: 13,
+      [REGIONS.OTHER]: 32,
+    },
+    sectoral: {
+      [SECTORS.FINANCE]: 18,
+      [SECTORS.HEALTHCARE]: 15,
+      [SECTORS.INDUSTRIALS]: 14,
+      [SECTORS.CONSUMER_STAPLES]: 11,
+      [SECTORS.CONSUMER_DISC]: 10,
+      [SECTORS.MATERIALS]: 7,
+      [SECTORS.TECH]: 8,
+      [SECTORS.ENERGY]: 6,
+      [SECTORS.COMMUNICATION]: 4,
+      [SECTORS.UTILITIES]: 5,
+      [SECTORS.REAL_ESTATE]: 2,
+    },
+    lastUpdated: '2024-12',
+  },
+  
+  // === Amundi Europe Small Cap ===
+  'CEM': {
+    symbol: 'CEM',
+    name: 'Amundi MSCI Europe Small Cap UCITS ETF',
+    geographic: {
+      [REGIONS.UK]: 22,
+      [REGIONS.GERMANY]: 13,
+      [REGIONS.FRANCE]: 10,
+      [REGIONS.SWITZERLAND]: 8,
+      [REGIONS.OTHER]: 47,
+    },
+    sectoral: {
+      [SECTORS.INDUSTRIALS]: 23,
+      [SECTORS.FINANCE]: 14,
+      [SECTORS.CONSUMER_DISC]: 12,
+      [SECTORS.TECH]: 11,
+      [SECTORS.REAL_ESTATE]: 9,
+      [SECTORS.MATERIALS]: 8,
+      [SECTORS.HEALTHCARE]: 7,
+      [SECTORS.CONSUMER_STAPLES]: 6,
+      [SECTORS.COMMUNICATION]: 4,
+      [SECTORS.UTILITIES]: 4,
+      [SECTORS.ENERGY]: 2,
+    },
+    lastUpdated: '2024-12',
+  },
+  
+  // === Amundi Digital Economy / E-commerce ===
+  'EBUY': {
+    symbol: 'EBUY',
+    name: 'Amundi MSCI Digital Economy ESG Screened UCITS ETF',
+    geographic: {
+      [REGIONS.USA]: 65,
+      [REGIONS.CHINA]: 15,
+      [REGIONS.OTHER]: 20,
+    },
+    sectoral: {
+      [SECTORS.TECH]: 45,
+      [SECTORS.CONSUMER_DISC]: 35,
+      [SECTORS.COMMUNICATION]: 15,
+      [SECTORS.OTHER]: 5,
+    },
+    lastUpdated: '2024-12',
+  },
+  
+  // === MSCI Europe Information Technology ===
+  'ESIT': {
+    symbol: 'ESIT',
+    name: 'iShares MSCI Europe Information Technology Sector UCITS ETF',
+    geographic: {
+      [REGIONS.GERMANY]: 28,
+      [REGIONS.FRANCE]: 22,
+      [REGIONS.UK]: 15,
+      [REGIONS.SWITZERLAND]: 12,
+      [REGIONS.OTHER]: 23,
+    },
+    sectoral: {
+      [SECTORS.TECH]: 100,
+    },
+    lastUpdated: '2024-12',
+  },
+  
+  // === Amundi Robotics & AI ===
+  'GOAI': {
+    symbol: 'GOAI',
+    name: 'Amundi STOXX Global Artificial Intelligence UCITS ETF',
+    geographic: {
+      [REGIONS.USA]: 70,
+      [REGIONS.JAPAN]: 10,
+      [REGIONS.OTHER]: 20,
+    },
+    sectoral: {
+      [SECTORS.TECH]: 65,
+      [SECTORS.INDUSTRIALS]: 15,
+      [SECTORS.COMMUNICATION]: 10,
+      [SECTORS.HEALTHCARE]: 5,
+      [SECTORS.OTHER]: 5,
+    },
+    lastUpdated: '2024-12',
+  },
+};
+
+/**
+ * Alias mappings for equivalent ETFs
+ * Maps common ticker variations to their canonical symbol
+ */
+const ETF_ALIASES: Record<string, string> = {
+  // Amundi PEA equivalents
+  'PE500': 'SPY',
+  'P500': '500',
+  'ANX': 'PUST',
+  'PANX': 'PUST',
+  'PAASI': 'AASI',
+  'PAEEM': 'AEEM',
+  'CLEM': 'AEEM',
+  'PCEU': 'C6E',
+  'EUSRI': 'C6E',
+  // World ETF equivalents
+  'EWLD': 'IWDA',
+  'URTH': 'IWDA',
+  'ACWI': 'VWCE',
+  // S&P 500 equivalents
+  'SPX': 'SPY',
+  'SXR8': 'CSPX',
 };
 
 /**
@@ -725,6 +1027,11 @@ export function getETFComposition(symbol: string): ETFComposition | null {
   // Direct match
   if (ETF_COMPOSITIONS[cleanSymbol]) {
     return ETF_COMPOSITIONS[cleanSymbol];
+  }
+  
+  // Check aliases
+  if (ETF_ALIASES[cleanSymbol] && ETF_COMPOSITIONS[ETF_ALIASES[cleanSymbol]]) {
+    return ETF_COMPOSITIONS[ETF_ALIASES[cleanSymbol]];
   }
   
   // Try common variations
@@ -740,6 +1047,10 @@ export function getETFComposition(symbol: string): ETFComposition | null {
     const base = variant.split('.')[0];
     if (ETF_COMPOSITIONS[base]) {
       return ETF_COMPOSITIONS[base];
+    }
+    // Also check aliases for each variation
+    if (ETF_ALIASES[base] && ETF_COMPOSITIONS[ETF_ALIASES[base]]) {
+      return ETF_COMPOSITIONS[ETF_ALIASES[base]];
     }
   }
   
