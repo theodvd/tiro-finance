@@ -494,6 +494,7 @@ export type Database = {
           pnl_eur: number
           pnl_pct: number
           snapshot_ts: string
+          snapshot_type: string
           total_invested_eur: number
           total_value_eur: number
           user_id: string
@@ -505,6 +506,7 @@ export type Database = {
           pnl_eur?: number
           pnl_pct?: number
           snapshot_ts?: string
+          snapshot_type?: string
           total_invested_eur?: number
           total_value_eur?: number
           user_id: string
@@ -516,6 +518,7 @@ export type Database = {
           pnl_eur?: number
           pnl_pct?: number
           snapshot_ts?: string
+          snapshot_type?: string
           total_invested_eur?: number
           total_value_eur?: number
           user_id?: string
@@ -791,6 +794,15 @@ export type Database = {
     }
     Functions: {
       extract_date_immutable: { Args: { ts: string }; Returns: string }
+      snapshot_exists_for_period: {
+        Args: {
+          p_period_end: string
+          p_period_start: string
+          p_snapshot_type: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
       account_type: "CTO" | "PEA" | "AV" | "CRYPTO" | "LIVRETS" | "OTHER"
