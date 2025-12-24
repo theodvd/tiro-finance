@@ -13,6 +13,7 @@ import Insights from "./pages/Insights";
 import Profile from "./pages/Profile";
 import Diversification from "./pages/Diversification";
 import Decisions from "./pages/Decisions";
+import MonthlyReview from "./pages/MonthlyReview";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -72,6 +73,16 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <Decisions />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/monthly-review"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <MonthlyReview />
                   </Layout>
                 </ProtectedRoute>
               }

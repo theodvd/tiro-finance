@@ -16,6 +16,10 @@ export interface UserProfile {
   age: number | null;
   investment_horizon: string | null;
   max_acceptable_loss: string | null;
+  // Investment thresholds
+  cash_target_pct: number | null;
+  max_position_pct: number | null;
+  max_asset_class_pct: number | null;
   created_at: string;
   updated_at: string;
 }
