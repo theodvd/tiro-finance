@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
 
     if (snapshotError) {
       console.error('[REFRESH-METADATA] Error fetching latest snapshot:', snapshotError);
-      throw new Error('No snapshot found for user');
+      throw new Error('Aucun snapshot trouvé');
     }
 
     console.log(`[REFRESH-METADATA] Latest snapshot ID: ${latestSnapshot.id}`);
@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: true,
-          message: 'No snapshot lines to update',
+          message: 'Aucune ligne de snapshot à mettre à jour',
           snapshot_id: latestSnapshot.id,
           updated_lines: 0,
         }),
@@ -73,11 +73,11 @@ Deno.serve(async (req) => {
 
     console.log(`[REFRESH-METADATA] Found ${snapshotLines.length} snapshot lines to update`);
 
-    // Get all securities
+    // Get all securities with their metadata
     const securityIds = snapshotLines.map(line => line.security_id);
     const { data: securities, error: securitiesError } = await supabase
       .from('securities')
-      .select('id, region, sector')
+      .select('id, region, sector, asset_class')
       .in('id', securityIds);
 
     if (securitiesError) {
@@ -86,40 +86,71 @@ Deno.serve(async (req) => {
     }
 
     // Create a map of security_id to metadata
-    const securityMap = new Map();
+    const securityMap = new Map<string, { region: string | null; sector: string | null; asset_class: string | null }>();
     securities?.forEach(sec => {
-      securityMap.set(sec.id, { region: sec.region, sector: sec.sector });
+      securityMap.set(sec.id, { 
+        region: sec.region, 
+        sector: sec.sector,
+        asset_class: sec.asset_class 
+      });
     });
 
-    // Update each snapshot line
+    // Update each snapshot line - only copy if security has actual data (not just placeholders)
     let updatedCount = 0;
+    let skippedCount = 0;
+
     for (const line of snapshotLines) {
       const metadata = securityMap.get(line.security_id);
+      
       if (metadata) {
-        const { error: updateError } = await supabase
-          .from('snapshot_lines')
-          .update({
-            region: metadata.region || 'Monde',
-            sector: metadata.sector || 'Diversifié'
-          })
-          .eq('id', line.id);
+        // Only update if we have real classified data, not placeholders
+        const hasRealRegion = metadata.region && metadata.region !== 'Non classifié' && metadata.region !== 'Non défini';
+        const hasRealSector = metadata.sector && metadata.sector !== 'Non classifié';
+        
+        if (hasRealRegion || hasRealSector) {
+          const updateData: Record<string, any> = {};
+          
+          // Only set fields that have real values
+          if (hasRealRegion) {
+            updateData.region = metadata.region;
+          }
+          if (hasRealSector) {
+            updateData.sector = metadata.sector;
+          }
+          if (metadata.asset_class) {
+            updateData.asset_class = metadata.asset_class;
+          }
+          
+          const { error: updateError } = await supabase
+            .from('snapshot_lines')
+            .update(updateData)
+            .eq('id', line.id);
 
-        if (!updateError) {
-          updatedCount++;
+          if (!updateError) {
+            updatedCount++;
+          } else {
+            console.error(`[REFRESH-METADATA] Error updating line ${line.id}:`, updateError);
+          }
         } else {
-          console.error(`[REFRESH-METADATA] Error updating line ${line.id}:`, updateError);
+          // Security has no good classification - leave snapshot_line as-is
+          // The frontend hook will try to enrich it locally
+          console.log(`[REFRESH-METADATA] Skipping line ${line.id}: security has placeholder values`);
+          skippedCount++;
         }
+      } else {
+        skippedCount++;
       }
     }
 
-    console.log(`[REFRESH-METADATA] Successfully updated ${updatedCount} snapshot lines`);
+    console.log(`[REFRESH-METADATA] Updated ${updatedCount} lines, skipped ${skippedCount}`);
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Métadonnées mises à jour pour ${updatedCount} positions`,
+        message: `Métadonnées mises à jour pour ${updatedCount} positions (${skippedCount} sans classification)`,
         snapshot_id: latestSnapshot.id,
         updated_lines: updatedCount,
+        skipped_lines: skippedCount,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
