@@ -12,6 +12,7 @@ import Investments from "./pages/Investments";
 import Insights from "./pages/Insights";
 import Profile from "./pages/Profile";
 import Diversification from "./pages/Diversification";
+import Decisions from "./pages/Decisions";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -61,6 +62,16 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <Diversification />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/decisions"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Decisions />
                   </Layout>
                 </ProtectedRoute>
               }
