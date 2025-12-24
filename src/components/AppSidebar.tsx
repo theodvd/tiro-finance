@@ -1,4 +1,4 @@
-import { Home, Briefcase, TrendingUp, BarChart3, User, LogOut, PieChart } from "lucide-react";
+import { Home, Briefcase, TrendingUp, BarChart3, User, LogOut, PieChart, Lightbulb } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -17,6 +17,7 @@ const menuItems = [
   { title: "Overview", url: "/", icon: Home },
   { title: "Investments", url: "/investments", icon: Briefcase },
   { title: "Diversification", url: "/diversification", icon: PieChart },
+  { title: "Décisions", url: "/decisions", icon: Lightbulb },
   { title: "Insights", url: "/insights", icon: BarChart3 },
 ];
 
