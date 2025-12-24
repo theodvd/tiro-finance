@@ -60,9 +60,9 @@ export function PortfolioHistory() {
         <CardTitle className="text-sm sm:text-base md:text-lg">Portfolio History</CardTitle>
       </CardHeader>
       <CardContent className="w-full px-3 sm:px-6 pb-3 sm:pb-6">
-        {snapshots.length === 0 ? (
+        {snapshots.length < 3 ? (
           <p className="text-xs sm:text-sm text-muted-foreground text-center py-8">
-            No historical data. Take your first snapshot to track performance over time.
+            Historique en cours de construction. Les données seront disponibles après quelques semaines de suivi.
           </p>
         ) : (
           <ChartContainer config={{}} className="h-[180px] sm:h-[220px] md:h-[250px] lg:h-[300px] w-full">
