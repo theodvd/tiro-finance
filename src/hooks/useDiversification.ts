@@ -349,23 +349,33 @@ export function useDiversification() {
       let sector = line.sector || security?.sector || null;
       let assetClass = line.asset_class || security?.asset_class || null;
 
-      // Enrich if missing or unknown
-      if (
-        !region ||
-        !sector ||
-        !assetClass ||
-        region === "Unknown" ||
-        sector === "Unknown" ||
-        assetClass === "Unknown" ||
-        (region === "Monde" && sector === "Diversifié")
-      ) {
-        const enriched = enrichAssetMetadata(symbol, name);
+      // Define placeholder values that should be overwritten if better classification exists
+      const placeholderValues = ["Monde", "Non défini", "Unknown", "Non classifié", null, undefined, ""];
+      const placeholderSectors = ["Diversifié", "Unknown", "Non classifié", "Autre", null, undefined, ""];
+      
+      const isPlaceholderRegion = placeholderValues.includes(region);
+      const isPlaceholderSector = placeholderSectors.includes(sector);
+      const isPlaceholderAssetClass = !assetClass || assetClass === "Unknown" || assetClass === "Non classifié";
 
-        // Only use enriched if current is missing/unknown
-        if (!region || region === "Unknown") region = enriched.region;
-        if (!sector || sector === "Unknown") sector = enriched.sector;
-        if (!assetClass || assetClass === "Unknown") assetClass = enriched.assetClass;
+      // Always try to enrich from local database
+      const enriched = enrichAssetMetadata(symbol, name);
+      const hasGoodEnrichment = enriched.region !== "Non classifié" || enriched.sector !== "Non classifié";
+
+      // Apply enrichment: overwrite if current is placeholder OR if enriched gives specific data
+      if (isPlaceholderRegion && enriched.region !== "Non classifié") {
+        region = enriched.region;
       }
+      if (isPlaceholderSector && enriched.sector !== "Non classifié") {
+        sector = enriched.sector;
+      }
+      if (isPlaceholderAssetClass && enriched.assetClass !== "Non classifié") {
+        assetClass = enriched.assetClass;
+      }
+      
+      // Final fallback for display - but keep distinction between "Monde/Diversifié" (real) and "Non classifié" (unknown)
+      if (!region) region = "Non classifié";
+      if (!sector) sector = "Non classifié";
+      if (!assetClass) assetClass = "Actions";
 
       return {
         id: line.id,

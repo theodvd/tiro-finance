@@ -7,212 +7,241 @@ const corsHeaders = {
 
 interface SecurityMetadata {
   symbol: string;
-  region?: string;
-  sector?: string;
-  currency?: string;
+  region: string;
+  sector: string;
+  assetClass: string;
+  source: 'local' | 'api' | 'fallback';
 }
 
-// Map Yahoo Finance regions to our simplified regions
-const mapRegion = (country: string | undefined, exchange: string | undefined): string => {
-  if (!country && !exchange) return 'Non défini';
+// ========== LOCAL DATABASE (Embedded copy from assetEnrichment.ts) ==========
+const ETF_DATABASE: Record<string, { region: string; sector: string; assetClass: string }> = {
+  // World ETFs
+  'VWCE': { region: 'Monde', sector: 'Diversifié', assetClass: 'Actions' },
+  'VWCE.PA': { region: 'Monde', sector: 'Diversifié', assetClass: 'Actions' },
+  'VWCE.AS': { region: 'Monde', sector: 'Diversifié', assetClass: 'Actions' },
+  'VWCE.DE': { region: 'Monde', sector: 'Diversifié', assetClass: 'Actions' },
+  'IWDA': { region: 'Monde', sector: 'Diversifié', assetClass: 'Actions' },
+  'IWDA.AS': { region: 'Monde', sector: 'Diversifié', assetClass: 'Actions' },
+  'IWDA.L': { region: 'Monde', sector: 'Diversifié', assetClass: 'Actions' },
+  'SWDA': { region: 'Monde', sector: 'Diversifié', assetClass: 'Actions' },
+  'SWDA.L': { region: 'Monde', sector: 'Diversifié', assetClass: 'Actions' },
+  'URTH': { region: 'Monde', sector: 'Diversifié', assetClass: 'Actions' },
+  'VT': { region: 'Monde', sector: 'Diversifié', assetClass: 'Actions' },
+  'ACWI': { region: 'Monde', sector: 'Diversifié', assetClass: 'Actions' },
+  'CW8': { region: 'Monde', sector: 'Diversifié', assetClass: 'Actions' },
+  'CW8.PA': { region: 'Monde', sector: 'Diversifié', assetClass: 'Actions' },
+  'MWRD': { region: 'Monde', sector: 'Diversifié', assetClass: 'Actions' },
+  'MWRD.PA': { region: 'Monde', sector: 'Diversifié', assetClass: 'Actions' },
   
-  const regionMap: Record<string, string> = {
-    // États-Unis
-    'US': 'États-Unis',
-    'USA': 'États-Unis',
-    'United States': 'États-Unis',
-    'NASDAQ': 'États-Unis',
-    'NYSE': 'États-Unis',
-    
-    // Europe
-    'FR': 'Europe',
-    'France': 'Europe',
-    'FRA': 'Europe',
-    'DE': 'Europe',
-    'Germany': 'Europe',
-    'GER': 'Europe',
-    'GB': 'Europe',
-    'United Kingdom': 'Europe',
-    'LON': 'Europe',
-    'IT': 'Europe',
-    'Italy': 'Europe',
-    'ITA': 'Europe',
-    'ES': 'Europe',
-    'Spain': 'Europe',
-    'SPA': 'Europe',
-    'NL': 'Europe',
-    'Netherlands': 'Europe',
-    'AMS': 'Europe',
-    'CH': 'Europe',
-    'Switzerland': 'Europe',
-    'SWX': 'Europe',
-    
-    // Asie
-    'JP': 'Asie',
-    'Japan': 'Asie',
-    'JPN': 'Asie',
-    'CN': 'Asie',
-    'China': 'Asie',
-    'SHA': 'Asie',
-    'HK': 'Asie',
-    'Hong Kong': 'Asie',
-    'HKG': 'Asie',
-    'SG': 'Asie',
-    'Singapore': 'Asie',
-    'SGP': 'Asie',
-    'KR': 'Asie',
-    'South Korea': 'Asie',
-    'KOR': 'Asie',
-    
-    // Émergents
-    'IN': 'Émergents',
-    'India': 'Émergents',
-    'IND': 'Émergents',
-    'BR': 'Émergents',
-    'Brazil': 'Émergents',
-    'BRA': 'Émergents',
-    'MX': 'Émergents',
-    'Mexico': 'Émergents',
-    'MEX': 'Émergents',
-    'ZA': 'Émergents',
-    'South Africa': 'Émergents',
-    'ZAF': 'Émergents',
-  };
+  // USA ETFs
+  'SPY': { region: 'USA', sector: 'Diversifié', assetClass: 'Actions' },
+  'VOO': { region: 'USA', sector: 'Diversifié', assetClass: 'Actions' },
+  'VTI': { region: 'USA', sector: 'Diversifié', assetClass: 'Actions' },
+  'IVV': { region: 'USA', sector: 'Diversifié', assetClass: 'Actions' },
+  'ESE': { region: 'USA', sector: 'Diversifié', assetClass: 'Actions' },
+  'ESE.PA': { region: 'USA', sector: 'Diversifié', assetClass: 'Actions' },
+  'PE500': { region: 'USA', sector: 'Diversifié', assetClass: 'Actions' },
+  'PE500.PA': { region: 'USA', sector: 'Diversifié', assetClass: 'Actions' },
   
-  const key = country || exchange || '';
-  return regionMap[key] || 'Monde';
+  // USA Tech ETFs
+  'QQQ': { region: 'USA', sector: 'Technologie', assetClass: 'Actions' },
+  'PANX': { region: 'USA', sector: 'Technologie', assetClass: 'Actions' },
+  'PANX.PA': { region: 'USA', sector: 'Technologie', assetClass: 'Actions' },
+  'UST': { region: 'USA', sector: 'Technologie', assetClass: 'Actions' },
+  'UST.PA': { region: 'USA', sector: 'Technologie', assetClass: 'Actions' },
+  
+  // Europe ETFs
+  'VEUR': { region: 'Europe', sector: 'Diversifié', assetClass: 'Actions' },
+  'VEUR.AS': { region: 'Europe', sector: 'Diversifié', assetClass: 'Actions' },
+  'MEUD': { region: 'Europe', sector: 'Diversifié', assetClass: 'Actions' },
+  'MEUD.PA': { region: 'Europe', sector: 'Diversifié', assetClass: 'Actions' },
+  'CAC': { region: 'Europe', sector: 'Diversifié', assetClass: 'Actions' },
+  'CAC.PA': { region: 'Europe', sector: 'Diversifié', assetClass: 'Actions' },
+  
+  // Emerging Markets
+  'VFEM': { region: 'Émergents', sector: 'Diversifié', assetClass: 'Actions' },
+  'VFEM.AS': { region: 'Émergents', sector: 'Diversifié', assetClass: 'Actions' },
+  'AEEM': { region: 'Émergents', sector: 'Diversifié', assetClass: 'Actions' },
+  'AEEM.PA': { region: 'Émergents', sector: 'Diversifié', assetClass: 'Actions' },
+  'PAEEM': { region: 'Émergents', sector: 'Diversifié', assetClass: 'Actions' },
+  'PAEEM.PA': { region: 'Émergents', sector: 'Diversifié', assetClass: 'Actions' },
+  
+  // Asia ETFs
+  'PASI': { region: 'Asie', sector: 'Diversifié', assetClass: 'Actions' },
+  'PASI.PA': { region: 'Asie', sector: 'Diversifié', assetClass: 'Actions' },
+  
+  // Bond ETFs
+  'AGG': { region: 'USA', sector: 'Diversifié', assetClass: 'Obligations' },
+  'BND': { region: 'USA', sector: 'Diversifié', assetClass: 'Obligations' },
+  'AGGH': { region: 'Monde', sector: 'Diversifié', assetClass: 'Obligations' },
+  'AGGH.AS': { region: 'Monde', sector: 'Diversifié', assetClass: 'Obligations' },
+  
+  // Commodity ETFs
+  'GLD': { region: 'Monde', sector: 'Diversifié', assetClass: 'Matières premières' },
+  'SGLD': { region: 'Monde', sector: 'Diversifié', assetClass: 'Matières premières' },
+  'SGLD.L': { region: 'Monde', sector: 'Diversifié', assetClass: 'Matières premières' },
+  'PHAU': { region: 'Monde', sector: 'Diversifié', assetClass: 'Matières premières' },
+  'PHAU.PA': { region: 'Monde', sector: 'Diversifié', assetClass: 'Matières premières' },
 };
 
-// Map Yahoo Finance sectors to French
-const mapSector = (sector: string | undefined, industry: string | undefined): string => {
-  if (!sector && !industry) return 'Diversifié';
+const STOCK_DATABASE: Record<string, { region: string; sector: string; assetClass: string }> = {
+  // US Tech
+  'AAPL': { region: 'USA', sector: 'Technologie', assetClass: 'Actions' },
+  'MSFT': { region: 'USA', sector: 'Technologie', assetClass: 'Actions' },
+  'GOOGL': { region: 'USA', sector: 'Technologie', assetClass: 'Actions' },
+  'GOOG': { region: 'USA', sector: 'Technologie', assetClass: 'Actions' },
+  'AMZN': { region: 'USA', sector: 'Consommation', assetClass: 'Actions' },
+  'META': { region: 'USA', sector: 'Technologie', assetClass: 'Actions' },
+  'NVDA': { region: 'USA', sector: 'Technologie', assetClass: 'Actions' },
+  'TSLA': { region: 'USA', sector: 'Consommation', assetClass: 'Actions' },
+  'AMD': { region: 'USA', sector: 'Technologie', assetClass: 'Actions' },
   
-  const sectorMap: Record<string, string> = {
-    'Technology': 'Technologie',
-    'Healthcare': 'Santé',
-    'Financial Services': 'Finance',
-    'Consumer Cyclical': 'Consommation',
-    'Consumer Defensive': 'Consommation',
-    'Industrials': 'Industrie',
-    'Energy': 'Énergie',
-    'Basic Materials': 'Matières premières',
-    'Real Estate': 'Immobilier',
-    'Communication Services': 'Télécommunications',
-    'Utilities': 'Services publics',
-    'ETF': 'Diversifié',
-  };
+  // US Finance
+  'JPM': { region: 'USA', sector: 'Finance', assetClass: 'Actions' },
+  'V': { region: 'USA', sector: 'Finance', assetClass: 'Actions' },
+  'MA': { region: 'USA', sector: 'Finance', assetClass: 'Actions' },
   
-  const key = sector || industry || '';
-  return sectorMap[key] || sector || industry || 'Autre';
+  // US Healthcare
+  'JNJ': { region: 'USA', sector: 'Santé', assetClass: 'Actions' },
+  'UNH': { region: 'USA', sector: 'Santé', assetClass: 'Actions' },
+  'PFE': { region: 'USA', sector: 'Santé', assetClass: 'Actions' },
+  'LLY': { region: 'USA', sector: 'Santé', assetClass: 'Actions' },
+  
+  // US Consumer
+  'WMT': { region: 'USA', sector: 'Consommation', assetClass: 'Actions' },
+  'KO': { region: 'USA', sector: 'Consommation', assetClass: 'Actions' },
+  'PG': { region: 'USA', sector: 'Consommation', assetClass: 'Actions' },
+  'DIS': { region: 'USA', sector: 'Consommation', assetClass: 'Actions' },
+  
+  // US Energy
+  'XOM': { region: 'USA', sector: 'Énergie', assetClass: 'Actions' },
+  'CVX': { region: 'USA', sector: 'Énergie', assetClass: 'Actions' },
+  
+  // European stocks
+  'ASML': { region: 'Europe', sector: 'Technologie', assetClass: 'Actions' },
+  'ASML.AS': { region: 'Europe', sector: 'Technologie', assetClass: 'Actions' },
+  'MC.PA': { region: 'Europe', sector: 'Consommation', assetClass: 'Actions' },
+  'OR.PA': { region: 'Europe', sector: 'Consommation', assetClass: 'Actions' },
+  'AIR.PA': { region: 'Europe', sector: 'Industrie', assetClass: 'Actions' },
+  'SAN.PA': { region: 'Europe', sector: 'Santé', assetClass: 'Actions' },
+  'BNP.PA': { region: 'Europe', sector: 'Finance', assetClass: 'Actions' },
+  'TTE.PA': { region: 'Europe', sector: 'Énergie', assetClass: 'Actions' },
+  
+  // Asian stocks
+  'TSM': { region: 'Asie', sector: 'Technologie', assetClass: 'Actions' },
+  'BABA': { region: 'Asie', sector: 'Technologie', assetClass: 'Actions' },
+  
+  // Crypto
+  'BTC-USD': { region: 'Monde', sector: 'Diversifié', assetClass: 'Cryptomonnaies' },
+  'ETH-USD': { region: 'Monde', sector: 'Diversifié', assetClass: 'Cryptomonnaies' },
+  'BTC': { region: 'Monde', sector: 'Diversifié', assetClass: 'Cryptomonnaies' },
+  'ETH': { region: 'Monde', sector: 'Diversifié', assetClass: 'Cryptomonnaies' },
 };
 
-// Fetch metadata from Yahoo Finance API
-async function fetchYahooFinanceMetadata(symbol: string): Promise<SecurityMetadata> {
-  console.log(`[ENRICH] Fetching metadata for ${symbol}`);
+// Keyword patterns for intelligent detection
+const REGION_PATTERNS = [
+  { keywords: ['world', 'monde', 'global', 'all-world', 'acwi', 'msci world', 'ftse all'], region: 'Monde' },
+  { keywords: ['s&p 500', 'sp500', 's&p500', 'us ', 'usa', 'united states', 'america', 'nasdaq', 'dow jones', 'russell'], region: 'USA' },
+  { keywords: ['europe', 'euro', 'stoxx', 'eurostoxx', 'cac', 'dax', 'ftse 100', 'uk ', 'eurozone'], region: 'Europe' },
+  { keywords: ['asia', 'pacific', 'japan', 'china', 'hong kong', 'korea', 'taiwan', 'nikkei', 'hang seng', 'topix'], region: 'Asie' },
+  { keywords: ['emerging', 'émergent', 'em ', 'bric', 'brazil', 'india', 'south africa', 'mexico', 'developing'], region: 'Émergents' },
+];
+
+const SECTOR_PATTERNS = [
+  { keywords: ['tech', 'technology', 'software', 'cloud', 'ai ', 'artificial', 'cyber', 'digital', 'semiconductor', 'chip'], sector: 'Technologie' },
+  { keywords: ['health', 'santé', 'pharma', 'biotech', 'medical', 'healthcare', 'drug', 'therapeut'], sector: 'Santé' },
+  { keywords: ['energy', 'énergie', 'oil', 'gas', 'petrol', 'solar', 'wind', 'clean energy', 'renewable'], sector: 'Énergie' },
+  { keywords: ['financ', 'bank', 'insurance', 'asset', 'credit', 'capital'], sector: 'Finance' },
+  { keywords: ['real estate', 'immobilier', 'reit', 'property', 'housing'], sector: 'Immobilier' },
+  { keywords: ['consumer', 'consomm', 'retail', 'luxury', 'food', 'beverage', 'restaurant', 'hotel', 'travel'], sector: 'Consommation' },
+  { keywords: ['industr', 'manufactur', 'aerospace', 'defense', 'transport', 'logistics', 'machinery'], sector: 'Industrie' },
+];
+
+function normalizeSymbol(symbol: string): string {
+  return symbol.toUpperCase().trim();
+}
+
+function findInLocalDatabase(symbol: string): { region: string; sector: string; assetClass: string } | null {
+  const normalized = normalizeSymbol(symbol);
   
-  try {
-    // Use Yahoo Finance API v8 (unofficial but public)
-    const url = `https://query2.finance.yahoo.com/v8/finance/chart/${symbol}`;
-    console.log(`[ENRICH] Calling ${url}`);
-    
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0',
-      },
-    });
-
-    console.log(`[ENRICH] Chart API response status: ${response.status}`);
-
-    if (!response.ok) {
-      console.warn(`[ENRICH] Yahoo Finance API returned ${response.status} for ${symbol}`);
-      return { symbol, region: 'Monde', sector: 'Diversifié', currency: 'EUR' };
-    }
-
-    const data = await response.json();
-    const meta = data?.chart?.result?.[0]?.meta;
-
-    if (!meta) {
-      console.warn(`[ENRICH] No metadata found for ${symbol}`);
-      return { symbol, region: 'Monde', sector: 'Diversifié', currency: 'EUR' };
-    }
-
-    console.log(`[ENRICH] Meta currency: ${meta.currency}`);
-
-    // Fetch additional quote data for sector information
-    const quoteUrl = `https://query2.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`;
-    console.log(`[ENRICH] Calling ${quoteUrl}`);
-    
-    const quoteResponse = await fetch(quoteUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0',
-      },
-    });
-
-    console.log(`[ENRICH] Quote API response status: ${quoteResponse.status}`);
-
-    let sector = 'Diversifié';
-    let region = 'Monde';
-    
-    if (quoteResponse.ok) {
-      const quoteData = await quoteResponse.json();
-      const quote = quoteData?.quoteResponse?.result?.[0];
-      
-      // Log détaillé des données Yahoo Finance
-      console.log(`[${symbol}] Country: ${quote?.country}, Exchange: ${quote?.exchange}, Sector: ${quote?.sector}`);
-      
-      console.log(`[ENRICH] Quote data:`, JSON.stringify({
-        quoteType: quote?.quoteType,
-        country: quote?.country,
-        exchange: quote?.exchange,
-        sector: quote?.sector,
-        industry: quote?.industry
-      }));
-      
-      if (quote) {
-        // Detect world ETFs (VWCE, IWDA, etc.)
-        const isWorldETF = ['VWCE', 'IWDA', 'SWRD', 'ACWI', 'VT', 'MSCI'].some(ticker => 
-          symbol.toUpperCase().includes(ticker)
-        );
-        
-        if (isWorldETF) {
-          region = 'Monde';
-          sector = 'Diversifié';
-          console.log(`[ENRICH] Detected world ETF: ${symbol}`);
-        } else {
-          region = mapRegion(quote.country, quote.exchange);
-          
-          // For ETFs, check if it's in the name
-          if (quote.quoteType === 'ETF' || symbol.includes('ETF')) {
-            sector = 'Diversifié';
-          } else {
-            sector = mapSector(quote.sector, quote.industry);
-          }
-        }
-        
-        console.log(`[ENRICH] Mapped region: ${region}, sector: ${sector}`);
-      }
-    }
-
-    const currency = meta.currency || 'EUR';
-
-    const result = {
-      symbol,
-      region,
-      sector,
-      currency,
-    };
-    
-    console.log(`[ENRICH] Final result for ${symbol}:`, JSON.stringify(result));
-
-    return result;
-  } catch (error) {
-    console.error(`[ENRICH] Error fetching metadata for ${symbol}:`, error);
-    return { symbol, region: 'Monde', sector: 'Diversifié', currency: 'EUR' };
+  if (ETF_DATABASE[normalized]) return ETF_DATABASE[normalized];
+  if (STOCK_DATABASE[normalized]) return STOCK_DATABASE[normalized];
+  
+  const baseSymbol = normalized.split('.')[0];
+  if (ETF_DATABASE[baseSymbol]) return ETF_DATABASE[baseSymbol];
+  if (STOCK_DATABASE[baseSymbol]) return STOCK_DATABASE[baseSymbol];
+  
+  const suffixes = ['.PA', '.AS', '.DE', '.L', '.SW'];
+  for (const suffix of suffixes) {
+    if (ETF_DATABASE[baseSymbol + suffix]) return ETF_DATABASE[baseSymbol + suffix];
+    if (STOCK_DATABASE[baseSymbol + suffix]) return STOCK_DATABASE[baseSymbol + suffix];
   }
+  
+  return null;
+}
+
+function analyzeByKeywords(symbol: string, name: string): { region: string; sector: string; assetClass: string } {
+  const searchText = `${symbol} ${name}`.toLowerCase();
+  
+  let region = 'Non classifié';
+  let sector = 'Non classifié';
+  let assetClass = 'Actions';
+  
+  for (const pattern of REGION_PATTERNS) {
+    if (pattern.keywords.some(kw => searchText.includes(kw))) {
+      region = pattern.region;
+      break;
+    }
+  }
+  
+  for (const pattern of SECTOR_PATTERNS) {
+    if (pattern.keywords.some(kw => searchText.includes(kw))) {
+      sector = pattern.sector;
+      break;
+    }
+  }
+  
+  // For broad market ETF, set sector to Diversifié
+  if (sector === 'Non classifié' && region !== 'Non classifié') {
+    sector = 'Diversifié';
+  }
+  
+  // Crypto detection
+  if (searchText.includes('crypto') || searchText.includes('bitcoin') || searchText.includes('btc') || searchText.includes('eth')) {
+    assetClass = 'Cryptomonnaies';
+    region = 'Monde';
+    sector = 'Diversifié';
+  }
+  
+  return { region, sector, assetClass };
+}
+
+function enrichFromLocal(symbol: string, name: string): SecurityMetadata {
+  // 1. Try database lookup
+  const dbMatch = findInLocalDatabase(symbol);
+  if (dbMatch) {
+    return {
+      symbol,
+      region: dbMatch.region,
+      sector: dbMatch.sector,
+      assetClass: dbMatch.assetClass,
+      source: 'local',
+    };
+  }
+  
+  // 2. Try keyword analysis
+  const keywordResult = analyzeByKeywords(symbol, name);
+  
+  return {
+    symbol,
+    region: keywordResult.region,
+    sector: keywordResult.sector,
+    assetClass: keywordResult.assetClass,
+    source: keywordResult.region !== 'Non classifié' ? 'local' : 'fallback',
+  };
 }
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -222,13 +251,11 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get the JWT token from the authorization header
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       throw new Error('Missing authorization header');
     }
 
-    // Verify the JWT and get user
     const token = authHeader.replace('Bearer ', '');
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
     
@@ -236,12 +263,12 @@ Deno.serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    console.log(`Enriching securities for user ${user.id}`);
+    console.log(`[ENRICH] Starting enrichment for user ${user.id}`);
 
-    // Fetch all securities for this user
+    // Fetch all securities with their names
     const { data: securities, error: fetchError } = await supabase
       .from('securities')
-      .select('id, symbol, sector, region, asset_class')
+      .select('id, symbol, name, sector, region, asset_class')
       .eq('user_id', user.id);
 
     if (fetchError) {
@@ -252,75 +279,99 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: 'No securities to enrich',
+          message: 'Aucun titre à enrichir',
           updated: 0,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log(`Found ${securities.length} securities to enrich`);
+    console.log(`[ENRICH] Found ${securities.length} securities to process`);
 
-    // Enrich securities
-    const results: Array<{ symbol: string; success: boolean; error?: string }> = [];
+    const results: Array<{ symbol: string; success: boolean; source: string; region?: string; sector?: string }> = [];
     let updated = 0;
+    let skipped = 0;
 
     for (const security of securities) {
-      console.log(`Processing ${security.symbol}...`);
+      console.log(`[ENRICH] Processing ${security.symbol}...`);
       
-      const metadata = await fetchYahooFinanceMetadata(security.symbol);
-
-      // Update the security with enriched metadata
-      console.log(`[ENRICH] Updating ${security.symbol} with:`, {
-        region: metadata.region,
-        sector: metadata.sector,
-        currency: metadata.currency
-      });
+      // PRIORITY 1: Use local database/keywords enrichment
+      const metadata = enrichFromLocal(security.symbol, security.name || '');
       
-      const { error: updateError } = await supabase
-        .from('securities')
-        .update({
-          region: metadata.region || 'Monde',
-          sector: metadata.sector || 'Diversifié',
-          currency_quote: metadata.currency || 'EUR',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', security.id);
+      console.log(`[ENRICH] ${security.symbol} -> region: ${metadata.region}, sector: ${metadata.sector}, source: ${metadata.source}`);
+      
+      // Only update if we got good data (not "Non classifié" placeholders from fallback)
+      if (metadata.source === 'local' || 
+          (metadata.region !== 'Non classifié' && metadata.sector !== 'Non classifié')) {
+        
+        const { error: updateError } = await supabase
+          .from('securities')
+          .update({
+            region: metadata.region,
+            sector: metadata.sector,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', security.id);
 
-      if (updateError) {
-        console.error(`[ENRICH] Error updating ${security.symbol}:`, updateError);
-        results.push({
-          symbol: security.symbol,
-          success: false,
-          error: updateError.message,
-        });
+        if (updateError) {
+          console.error(`[ENRICH] Error updating ${security.symbol}:`, updateError);
+          results.push({
+            symbol: security.symbol,
+            success: false,
+            source: metadata.source,
+          });
+        } else {
+          console.log(`[ENRICH] Successfully updated ${security.symbol}`);
+          results.push({
+            symbol: security.symbol,
+            success: true,
+            source: metadata.source,
+            region: metadata.region,
+            sector: metadata.sector,
+          });
+          updated++;
+        }
       } else {
-        console.log(`[ENRICH] Successfully updated ${security.symbol}`);
-        results.push({
-          symbol: security.symbol,
-          success: true,
-        });
-        updated++;
-      }
+        // Don't write placeholder values - leave as-is or set to "Non classifié"
+        console.log(`[ENRICH] ${security.symbol}: no good classification found, marking as unclassified`);
+        
+        const { error: updateError } = await supabase
+          .from('securities')
+          .update({
+            region: 'Non classifié',
+            sector: 'Non classifié',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', security.id);
 
-      // Add delay to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 1000));
+        if (!updateError) {
+          results.push({
+            symbol: security.symbol,
+            success: true,
+            source: 'unclassified',
+            region: 'Non classifié',
+            sector: 'Non classifié',
+          });
+        }
+        skipped++;
+      }
     }
 
-    console.log(`[ENRICH] Enrichment complete: ${updated}/${securities.length} securities updated`);
+    console.log(`[ENRICH] Complete: ${updated} enriched, ${skipped} unclassified`);
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Enriched ${updated} out of ${securities.length} securities`,
+        message: `${updated} titres enrichis, ${skipped} non classifiés`,
         updated,
+        skipped,
         total: securities.length,
         results,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error: any) {
-    console.error('[ENRICH] Error in enrich-securities function:', error);
+    console.error('[ENRICH] Error:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
       { 
