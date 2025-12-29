@@ -1,21 +1,43 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
+import { AlertCircle, CheckCircle2, RefreshCw, Eye, XCircle, Sparkles } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
 import { DecisionCard } from '@/components/decisions/DecisionCard';
 import { useDecisions } from '@/hooks/useDecisions';
-import { useDecisionStatus } from '@/hooks/useDecisionStatus';
+import { useDecisionStatus, DecisionStatus } from '@/hooks/useDecisionStatus';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
+type FilterType = 'toHandle' | 'ignored' | 'treated' | 'all';
+
 export default function Decisions() {
   const navigate = useNavigate();
+  const [activeFilter, setActiveFilter] = useState<FilterType>('toHandle');
   const { decisions, lastAnalysisDate, loading, error } = useDecisions();
-  const { getStatus, markAsIgnored, resetAll } = useDecisionStatus();
+  const { getStatus, markAsIgnored, resetAll, countByStatus } = useDecisionStatus();
 
-  // Filter out ignored decisions
-  const visibleDecisions = decisions.filter(d => getStatus(d.id) !== 'ignored');
+  const counts = countByStatus(decisions);
+
+  // Filter decisions based on active filter
+  const filteredDecisions = decisions.filter(d => {
+    const status = getStatus(d.id);
+    switch (activeFilter) {
+      case 'toHandle':
+        return status === 'new' || status === 'viewed';
+      case 'ignored':
+        return status === 'ignored';
+      case 'treated':
+        return status === 'treated';
+      case 'all':
+        return true;
+      default:
+        return true;
+    }
+  });
 
   const handleViewDetail = (decisionId: string) => {
     navigate(`/decisions/${decisionId}`);
@@ -64,7 +86,7 @@ export default function Decisions() {
             Dernière analyse : {format(new Date(lastAnalysisDate), 'dd MMMM yyyy à HH:mm', { locale: fr })}
           </p>
         </div>
-        {decisions.some(d => getStatus(d.id) === 'ignored') && (
+        {(counts.ignored > 0 || counts.treated > 0) && (
           <Button variant="outline" size="sm" onClick={resetAll}>
             <RefreshCw className="h-4 w-4 mr-2" />
             Réinitialiser
@@ -72,31 +94,79 @@ export default function Decisions() {
         )}
       </div>
 
+      {/* Filters tabs */}
+      <Tabs value={activeFilter} onValueChange={(v) => setActiveFilter(v as FilterType)}>
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="toHandle" className="flex items-center gap-2">
+            <Eye className="h-4 w-4" />
+            <span className="hidden sm:inline">À traiter</span>
+            {counts.toHandle > 0 && (
+              <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                {counts.toHandle}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="ignored" className="flex items-center gap-2">
+            <XCircle className="h-4 w-4" />
+            <span className="hidden sm:inline">Ignorées</span>
+            {counts.ignored > 0 && (
+              <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                {counts.ignored}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="treated" className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4" />
+            <span className="hidden sm:inline">Traitées</span>
+            {counts.treated > 0 && (
+              <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                {counts.treated}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="all" className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4" />
+            <span className="hidden sm:inline">Tout</span>
+            <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+              {decisions.length}
+            </Badge>
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       {/* No decisions state */}
-      {visibleDecisions.length === 0 && (
+      {filteredDecisions.length === 0 && (
         <Card className="border-green-500/20 bg-green-500/5">
           <CardHeader className="text-center py-12">
             <div className="mx-auto p-3 rounded-full bg-green-500/10 w-fit mb-4">
               <CheckCircle2 className="h-8 w-8 text-green-600" />
             </div>
-            <CardTitle className="text-xl text-green-700">Tout est en ordre</CardTitle>
+            <CardTitle className="text-xl text-green-700">
+              {activeFilter === 'toHandle' && 'Tout est en ordre'}
+              {activeFilter === 'ignored' && 'Aucune décision ignorée'}
+              {activeFilter === 'treated' && 'Aucune décision traitée'}
+              {activeFilter === 'all' && 'Aucune décision détectée'}
+            </CardTitle>
             <CardDescription className="text-green-600/80 max-w-md mx-auto">
-              Aucun point d'attention détecté sur votre portefeuille. Continuez à suivre vos investissements régulièrement.
+              {activeFilter === 'toHandle' && 'Aucun point d\'attention détecté sur votre portefeuille. Continuez à suivre vos investissements régulièrement.'}
+              {activeFilter === 'ignored' && 'Les décisions que vous ignorerez apparaîtront ici.'}
+              {activeFilter === 'treated' && 'Les décisions que vous marquez comme traitées apparaîtront ici.'}
+              {activeFilter === 'all' && 'Votre portefeuille ne présente actuellement aucun point d\'attention.'}
             </CardDescription>
           </CardHeader>
         </Card>
       )}
 
       {/* Decision cards grid */}
-      {visibleDecisions.length > 0 && (
+      {filteredDecisions.length > 0 && (
         <div className="grid gap-4 md:grid-cols-2">
-          {visibleDecisions.map(decision => (
+          {filteredDecisions.map(decision => (
             <DecisionCard
               key={decision.id}
               decision={decision}
               status={getStatus(decision.id)}
               onViewDetail={() => handleViewDetail(decision.id)}
-              onDismiss={() => handleDismiss(decision.id)}
+              onDismiss={activeFilter !== 'ignored' ? () => handleDismiss(decision.id) : undefined}
             />
           ))}
         </div>

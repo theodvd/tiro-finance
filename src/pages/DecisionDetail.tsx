@@ -1,8 +1,8 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, AlertTriangle, TrendingDown, PieChart, Droplets, 
-  CheckCircle2, XCircle, Eye, Target, Info, Zap, Shield
+  CheckCircle2, XCircle, Eye, Target, Info, Zap, Shield, Sparkles
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -11,8 +11,6 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useDecisions, Decision } from '@/hooks/useDecisions';
 import { useDecisionStatus, DecisionStatus } from '@/hooks/useDecisionStatus';
-import { useDiversification } from '@/hooks/useDiversification';
-import { useUserProfile } from '@/hooks/useUserProfile';
 import { toast } from 'sonner';
 
 // Thresholds matching useDecisions
@@ -76,11 +74,17 @@ const getStatusStyles = (status: DecisionStatus) => {
         icon: XCircle,
         label: 'Ignoré',
       };
-    default:
+    case 'new':
       return {
         badge: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
-        icon: Eye,
+        icon: Sparkles,
         label: 'Nouveau',
+      };
+    default:
+      return {
+        badge: 'bg-muted/50 text-muted-foreground border-muted/50',
+        icon: Eye,
+        label: 'Consulté',
       };
   }
 };
@@ -89,110 +93,25 @@ export default function DecisionDetail() {
   const { decisionId } = useParams<{ decisionId: string }>();
   const navigate = useNavigate();
   const { decisions, loading: decisionsLoading, error: decisionsError } = useDecisions();
-  const { data: diversificationData, loading: divLoading } = useDiversification();
-  const { data: userProfile } = useUserProfile();
-  const { getStatus, markAsTreated, markAsIgnored } = useDecisionStatus();
+  const { getStatus, markAsViewed, markAsTreated, markAsIgnored } = useDecisionStatus();
 
   const decision = useMemo(() => {
     return decisions.find(d => d.id === decisionId);
   }, [decisions, decisionId]);
 
+  // Mark as viewed when opening the detail page (only if status is 'new')
+  useEffect(() => {
+    if (decisionId && decision) {
+      markAsViewed(decisionId);
+    }
+  }, [decisionId, decision, markAsViewed]);
+
   const status = decisionId ? getStatus(decisionId) : 'new';
   const statusStyles = getStatusStyles(status);
   const StatusIcon = statusStyles.icon;
 
-  // Calculate diagnostic data
-  const diagnosticData = useMemo(() => {
-    if (!decision || !diversificationData) return null;
-
-    const totalValue = diversificationData.totalValue;
-    const thresholds = {
-      maxPositionPct: userProfile?.max_position_pct ?? DEFAULT_THRESHOLDS.singlePosition,
-      maxAssetClassPct: userProfile?.max_asset_class_pct ?? DEFAULT_THRESHOLDS.assetClass,
-      cashTargetPct: userProfile?.cash_target_pct ?? DEFAULT_THRESHOLDS.liquidity,
-    };
-
-    // For concentration-position decisions
-    if (decision.id.startsWith('concentration-position')) {
-      const ticker = decision.relatedHoldings?.[0];
-      const holding = diversificationData.holdings.find(h => h.ticker === ticker);
-      if (holding) {
-        const currentValue = holding.value;
-        const currentPct = holding.weight;
-        const targetValue = (thresholds.maxPositionPct / 100) * totalValue;
-        const amountToReduce = currentValue - targetValue;
-        
-        return {
-          type: 'position',
-          threshold: thresholds.maxPositionPct,
-          currentValue: currentPct,
-          gap: currentPct - thresholds.maxPositionPct,
-          holdingValue: currentValue,
-          targetValue,
-          amountToReduce: Math.max(0, amountToReduce),
-          ticker,
-        };
-      }
-    }
-
-    // For concentration-class decisions
-    if (decision.id.startsWith('concentration-class')) {
-      const assetClass = diversificationData.byAssetClass.find(
-        ac => decision.title.includes(ac.name)
-      );
-      if (assetClass) {
-        return {
-          type: 'assetClass',
-          threshold: thresholds.maxAssetClassPct,
-          currentValue: assetClass.percentage,
-          gap: assetClass.percentage - thresholds.maxAssetClassPct,
-          assetClassName: assetClass.name,
-        };
-      }
-    }
-
-    // For liquidity decisions
-    if (decision.id === 'liquidity-excess') {
-      const liquidityClasses = ['CASH', 'Livrets', 'Monétaire', 'Épargne'];
-      const liquidityTotal = diversificationData.byAssetClass
-        .filter(ac => liquidityClasses.some(lc => ac.name?.toLowerCase().includes(lc.toLowerCase())))
-        .reduce((sum, ac) => sum + ac.percentage, 0);
-      
-      const currentLiquidityValue = (liquidityTotal / 100) * totalValue;
-      const targetLiquidityValue = (thresholds.cashTargetPct / 100) * totalValue;
-      const excessLiquidity = currentLiquidityValue - targetLiquidityValue;
-      
-      return {
-        type: 'liquidity',
-        threshold: thresholds.cashTargetPct,
-        currentValue: liquidityTotal,
-        gap: liquidityTotal - thresholds.cashTargetPct,
-        excessAmount: Math.max(0, excessLiquidity),
-      };
-    }
-
-    // For diversification decisions
-    if (decision.id === 'diversification-low') {
-      return {
-        type: 'diversification',
-        threshold: DEFAULT_THRESHOLDS.diversificationScore,
-        currentValue: diversificationData.score,
-        gap: DEFAULT_THRESHOLDS.diversificationScore - diversificationData.score,
-      };
-    }
-
-    // For variation decisions
-    if (decision.id === 'variation-unusual') {
-      return {
-        type: 'variation',
-        threshold: DEFAULT_THRESHOLDS.weeklyVariation,
-        currentValue: parseFloat(decision.impact.replace('%', '').replace('+', '')),
-        gap: 0,
-      };
-    }
-
-    return null;
-  }, [decision, diversificationData, userProfile]);
+  // Use metadata from decision for diagnostic data
+  const diagnosticData = decision?.metadata ?? null;
 
   const handleMarkAsTreated = () => {
     if (decisionId) {
@@ -208,7 +127,7 @@ export default function DecisionDetail() {
     }
   };
 
-  if (decisionsLoading || divLoading) {
+  if (decisionsLoading) {
     return (
       <div className="container mx-auto p-4 md:p-6 space-y-6">
         <Skeleton className="h-8 w-32" />
@@ -302,7 +221,7 @@ export default function DecisionDetail() {
               <div className="p-4 rounded-lg bg-muted/50">
                 <p className="text-xs text-muted-foreground mb-1">Seuil configuré</p>
                 <p className="text-lg font-semibold">
-                  {diagnosticData.type === 'diversification' 
+                  {decision.type === 'diversification' 
                     ? `${diagnosticData.threshold}/100`
                     : `${diagnosticData.threshold}%`}
                 </p>
@@ -310,7 +229,7 @@ export default function DecisionDetail() {
               <div className="p-4 rounded-lg bg-muted/50">
                 <p className="text-xs text-muted-foreground mb-1">Valeur actuelle</p>
                 <p className="text-lg font-semibold">
-                  {diagnosticData.type === 'diversification'
+                  {decision.type === 'diversification'
                     ? `${diagnosticData.currentValue}/100`
                     : `${diagnosticData.currentValue.toFixed(1)}%`}
                 </p>
@@ -319,7 +238,7 @@ export default function DecisionDetail() {
                 <p className="text-xs text-muted-foreground mb-1">Écart</p>
                 <p className={`text-lg font-semibold ${diagnosticData.gap > 0 ? 'text-destructive' : 'text-green-600'}`}>
                   {diagnosticData.gap > 0 ? '+' : ''}{diagnosticData.gap.toFixed(1)}
-                  {diagnosticData.type === 'diversification' ? ' pts' : ' pts'}
+                  {decision.type === 'diversification' ? ' pts' : ' pts'}
                 </p>
               </div>
             </div>
@@ -412,28 +331,28 @@ export default function DecisionDetail() {
               </div>
               <div className="flex-1">
                 <h4 className="font-medium mb-1">Option directe</h4>
-                {decision.type === 'concentration' && diagnosticData?.type === 'position' && (
+                {decision.type === 'concentration' && diagnosticData?.ticker && (
                   <div>
                     <p className="text-sm text-muted-foreground mb-2">
                       Réduire la position pour repasser sous le seuil de {diagnosticData.threshold}%.
                     </p>
-                    {diagnosticData.amountToReduce > 0 && (
+                    {diagnosticData.amountToReduce && diagnosticData.amountToReduce > 0 && (
                       <div className="p-3 rounded bg-muted">
                         <p className="text-xs text-muted-foreground">Montant indicatif à céder</p>
                         <p className="text-lg font-semibold">
-                          ~{diagnosticData.amountToReduce.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} €
+                          ~{Math.abs(diagnosticData.amountToReduce).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} €
                         </p>
                       </div>
                     )}
                   </div>
                 )}
-                {decision.type === 'concentration' && diagnosticData?.type === 'assetClass' && (
+                {decision.type === 'concentration' && diagnosticData?.assetClassName && (
                   <p className="text-sm text-muted-foreground">
                     Diversifier vers d'autres classes d'actifs (obligations, immobilier, etc.)
                     pour réduire l'exposition à {diagnosticData.assetClassName}.
                   </p>
                 )}
-                {decision.type === 'liquidity' && diagnosticData?.type === 'liquidity' && (
+                {decision.type === 'liquidity' && diagnosticData?.excessAmount && (
                   <div>
                     <p className="text-sm text-muted-foreground mb-2">
                       Investir l'excédent de liquidités pour optimiser le rendement potentiel.
@@ -442,7 +361,7 @@ export default function DecisionDetail() {
                       <div className="p-3 rounded bg-muted">
                         <p className="text-xs text-muted-foreground">Excédent disponible</p>
                         <p className="text-lg font-semibold">
-                          ~{diagnosticData.excessAmount.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} €
+                          ~{Math.abs(diagnosticData.excessAmount).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} €
                         </p>
                       </div>
                     )}
