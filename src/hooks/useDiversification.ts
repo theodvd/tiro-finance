@@ -1,6 +1,8 @@
-import { useEffect, useState, useMemo } from "react";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { queryKeys } from "@/lib/queryKeys";
 import { enrichAssetMetadata, isClassified } from "@/utils/assetEnrichment";
 import { calculateLookThroughExposure, LookThroughResult } from "@/utils/lookThroughAnalysis";
 
@@ -58,8 +60,14 @@ export interface DiversificationData {
     unclassified: number;
     total: number;
   };
-  /** Look-through analysis data (decomposed ETF exposure) */
   lookThrough: LookThroughResult | null;
+}
+
+interface RawDiversificationData {
+  snapshotLines: any[];
+  securities: any[];
+  accounts: any[];
+  latestSnapshot: any;
 }
 
 // Thresholds for concentration risks
@@ -271,283 +279,213 @@ function generateRecommendations(
   return recommendations.slice(0, 6);
 }
 
-export function useDiversification() {
-  const { user } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [rawData, setRawData] = useState<{
-    snapshotLines: any[];
-    securities: any[];
-    accounts: any[];
-    latestSnapshot: any;
-  } | null>(null);
+export async function fetchDiversificationData(userId: string): Promise<RawDiversificationData> {
+  const [snapshotLinesRes, securitiesRes, accountsRes, latestSnapshotRes] = await Promise.all([
+    supabase
+      .from("snapshot_lines")
+      .select("*")
+      .eq("user_id", userId)
+      .order("valuation_date", { ascending: false }),
+    supabase.from("securities").select("*").eq("user_id", userId),
+    supabase.from("accounts").select("*").eq("user_id", userId),
+    supabase.from("v_latest_snapshot").select("*").eq("user_id", userId).single(),
+  ]);
 
-  const refetch = async () => {
-    if (!user) {
-      setLoading(false);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-
-      const [snapshotLinesRes, securitiesRes, accountsRes, latestSnapshotRes] = await Promise.all([
-        supabase
-          .from("snapshot_lines")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("valuation_date", { ascending: false }),
-        supabase.from("securities").select("*").eq("user_id", user.id),
-        supabase.from("accounts").select("*").eq("user_id", user.id),
-        supabase.from("v_latest_snapshot").select("*").eq("user_id", user.id).single(),
-      ]);
-
-      if (snapshotLinesRes.error) throw snapshotLinesRes.error;
-      if (securitiesRes.error) throw securitiesRes.error;
-      if (accountsRes.error) throw accountsRes.error;
-
-      setRawData({
-        snapshotLines: snapshotLinesRes.data || [],
-        securities: securitiesRes.data || [],
-        accounts: accountsRes.data || [],
-        latestSnapshot: latestSnapshotRes.data,
-      });
-    } catch (err: any) {
-      console.error("Error fetching diversification data:", err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    refetch();
-  }, [user]);
-
-  const data = useMemo<DiversificationData | null>(() => {
-    if (!rawData) return null;
-
-    const { snapshotLines, securities, accounts, latestSnapshot } = rawData;
-
-    // Get latest snapshot lines only
-    const latestSnapshotId = latestSnapshot?.id;
-    const latestLines = latestSnapshotId
-      ? snapshotLines.filter((l) => l.snapshot_id === latestSnapshotId)
-      : snapshotLines.slice(0, 50); // Fallback to first 50
-
-    const totalValue = latestLines.reduce((sum, l) => sum + Number(l.market_value_eur || 0), 0);
-
-    // Build holdings with enriched metadata
-    const holdings: HoldingDetail[] = latestLines.map((line) => {
-      const security = securities.find((s) => s.id === line.security_id);
-      const account = accounts.find((a) => a.id === line.account_id);
-      const value = Number(line.market_value_eur || 0);
-
-      const symbol = security?.symbol || "N/A";
-      const name = security?.name || "Unknown";
-
-      // Get existing metadata from DB
-      let region = line.region || security?.region || null;
-      let sector = line.sector || security?.sector || null;
-      let assetClass = line.asset_class || security?.asset_class || null;
-
-      // Define placeholder values that should be overwritten if better classification exists
-      const placeholderValues = ["Monde", "Non défini", "Unknown", "Non classifié", null, undefined, ""];
-      const placeholderSectors = ["Diversifié", "Unknown", "Non classifié", "Autre", null, undefined, ""];
-      
-      const isPlaceholderRegion = placeholderValues.includes(region);
-      const isPlaceholderSector = placeholderSectors.includes(sector);
-      const isPlaceholderAssetClass = !assetClass || assetClass === "Unknown" || assetClass === "Non classifié";
-
-      // Always try to enrich from local database
-      const enriched = enrichAssetMetadata(symbol, name);
-      const hasGoodEnrichment = enriched.region !== "Non classifié" || enriched.sector !== "Non classifié";
-
-      // Apply enrichment: overwrite if current is placeholder OR if enriched gives specific data
-      if (isPlaceholderRegion && enriched.region !== "Non classifié") {
-        region = enriched.region;
-      }
-      if (isPlaceholderSector && enriched.sector !== "Non classifié") {
-        sector = enriched.sector;
-      }
-      if (isPlaceholderAssetClass && enriched.assetClass !== "Non classifié") {
-        assetClass = enriched.assetClass;
-      }
-      
-      // Final fallback for display - but keep distinction between "Monde/Diversifié" (real) and "Non classifié" (unknown)
-      if (!region) region = "Non classifié";
-      if (!sector) sector = "Non classifié";
-      if (!assetClass) assetClass = "Actions";
-
-      return {
-        id: line.id,
-        ticker: symbol,
-        name,
-        quantity: Number(line.shares || 0),
-        value,
-        weight: totalValue > 0 ? (value / totalValue) * 100 : 0,
-        sector,
-        region,
-        assetClass,
-        accountName: account?.name || "Unknown",
-      };
-    });
-
-    // Debug log for enrichment verification
-    console.group("🔍 Analyse de diversification");
-    console.log("Total des actifs:", holdings.length);
-    console.log("Valeur totale:", totalValue.toFixed(2), "€");
-
-    const classified = holdings.filter((h) => h.region !== "Non classifié" && h.sector !== "Non classifié").length;
-    const classificationRate = ((classified / holdings.length) * 100).toFixed(1);
-
-    console.log(`✅ Taux de classification: ${classificationRate}% (${classified}/${holdings.length})`);
-
-    const unclassified = holdings.filter((h) => h.region === "Non classifié" || h.sector === "Non classifié");
-    if (unclassified.length > 0) {
-      console.warn(
-        "⚠️ Actifs non classifiés:",
-        unclassified.map((h) => ({
-          symbol: h.ticker,
-          name: h.name,
-          region: h.region,
-          sector: h.sector,
-          assetClass: h.assetClass,
-        })),
-      );
-    }
-
-    console.table(
-      holdings.map((h) => ({
-        Symbole: h.ticker,
-        Nom: h.name.substring(0, 30),
-        Région: h.region,
-        Secteur: h.sector,
-        Classe: h.assetClass,
-        Valeur: h.value.toFixed(0) + "€",
-        Poids: h.weight.toFixed(1) + "%",
-      })),
-    );
-    console.groupEnd();
-
-    // Aggregate by asset class (filter out unclassified for display but keep for stats)
-    const byAssetClassMap = new Map<string, { value: number; holdings: HoldingDetail[] }>();
-    holdings.forEach((h) => {
-      const key = h.assetClass || "Non classifié";
-      const existing = byAssetClassMap.get(key) || { value: 0, holdings: [] };
-      existing.value += h.value;
-      existing.holdings.push(h);
-      byAssetClassMap.set(key, existing);
-    });
-    const byAssetClass: AllocationBreakdown[] = Array.from(byAssetClassMap.entries())
-      .map(([name, data]) => ({
-        name,
-        value: data.value,
-        percentage: totalValue > 0 ? (data.value / totalValue) * 100 : 0,
-        holdings: data.holdings,
-      }))
-      .sort((a, b) => b.value - a.value);
-
-    // Aggregate by region
-    const byRegionMap = new Map<string, { value: number; holdings: HoldingDetail[] }>();
-    holdings.forEach((h) => {
-      const key = h.region || "Non classifié";
-      const existing = byRegionMap.get(key) || { value: 0, holdings: [] };
-      existing.value += h.value;
-      existing.holdings.push(h);
-      byRegionMap.set(key, existing);
-    });
-    const byRegion: AllocationBreakdown[] = Array.from(byRegionMap.entries())
-      .map(([name, data]) => ({
-        name,
-        value: data.value,
-        percentage: totalValue > 0 ? (data.value / totalValue) * 100 : 0,
-        holdings: data.holdings,
-      }))
-      .sort((a, b) => b.value - a.value);
-
-    // Aggregate by sector
-    const bySectorMap = new Map<string, { value: number; holdings: HoldingDetail[] }>();
-    holdings.forEach((h) => {
-      const key = h.sector || "Non classifié";
-      const existing = bySectorMap.get(key) || { value: 0, holdings: [] };
-      existing.value += h.value;
-      existing.holdings.push(h);
-      bySectorMap.set(key, existing);
-    });
-    const bySector: AllocationBreakdown[] = Array.from(bySectorMap.entries())
-      .map(([name, data]) => ({
-        name,
-        value: data.value,
-        percentage: totalValue > 0 ? (data.value / totalValue) * 100 : 0,
-        holdings: data.holdings,
-      }))
-      .sort((a, b) => b.value - a.value);
-
-    // Calculate score
-    const score = calculateDiversificationScore(byAssetClass, byRegion, bySector, holdings);
-
-    // Detect risks
-    const concentrationRisks = detectConcentrationRisks(byAssetClass, byRegion, bySector, holdings);
-
-    // Generate recommendations
-    const recommendations = generateRecommendations(byAssetClass, byRegion, bySector, holdings, concentrationRisks);
-
-    // Data quality - check using enrichment utility
-    const classifiedCount = holdings.filter((h) => {
-      const metadata = {
-        region: h.region || "Non classifié",
-        sector: h.sector || "Non classifié",
-        assetClass: h.assetClass || "Non classifié",
-      };
-      return isClassified(metadata);
-    }).length;
-
-    // Calculate look-through exposure for ETFs
-    const lookThrough = calculateLookThroughExposure(holdings, totalValue);
-
-    // Log look-through analysis
-    if (lookThrough.hasLookThroughData) {
-      console.group("🔍 Analyse Look-Through");
-      console.log(`ETFs avec données: ${lookThrough.etfsWithData.join(", ")}`);
-      console.log(`Couverture: ${lookThrough.lookThroughCoverage.toFixed(1)}% du portefeuille`);
-      if (lookThrough.etfsWithoutData.length > 0) {
-        console.warn(`ETFs sans données: ${lookThrough.etfsWithoutData.join(", ")}`);
-      }
-      console.table(
-        lookThrough.realGeographic.slice(0, 10).map((r) => ({
-          Région: r.name,
-          Pourcentage: r.percentage.toFixed(1) + "%",
-        }))
-      );
-      console.groupEnd();
-    }
-
-    return {
-      score,
-      scoreLabel: getScoreLabel(score),
-      lastUpdated: latestSnapshot?.snapshot_ts || null,
-      totalValue,
-      byAssetClass,
-      byRegion,
-      bySector,
-      concentrationRisks,
-      recommendations,
-      holdings: holdings.sort((a, b) => b.value - a.value),
-      dataQuality: {
-        classified: classifiedCount,
-        unclassified: holdings.length - classifiedCount,
-        total: holdings.length,
-      },
-      lookThrough,
-    };
-  }, [rawData]);
+  if (snapshotLinesRes.error) throw snapshotLinesRes.error;
+  if (securitiesRes.error) throw securitiesRes.error;
+  if (accountsRes.error) throw accountsRes.error;
 
   return {
-    loading,
-    error,
+    snapshotLines: snapshotLinesRes.data || [],
+    securities: securitiesRes.data || [],
+    accounts: accountsRes.data || [],
+    latestSnapshot: latestSnapshotRes.data,
+  };
+}
+
+function processDiversificationData(rawData: RawDiversificationData): DiversificationData | null {
+  const { snapshotLines, securities, accounts, latestSnapshot } = rawData;
+
+  // Get latest snapshot lines only
+  const latestSnapshotId = latestSnapshot?.id;
+  const latestLines = latestSnapshotId
+    ? snapshotLines.filter((l) => l.snapshot_id === latestSnapshotId)
+    : snapshotLines.slice(0, 50);
+
+  const totalValue = latestLines.reduce((sum, l) => sum + Number(l.market_value_eur || 0), 0);
+
+  // Build holdings with enriched metadata
+  const holdings: HoldingDetail[] = latestLines.map((line) => {
+    const security = securities.find((s) => s.id === line.security_id);
+    const account = accounts.find((a) => a.id === line.account_id);
+    const value = Number(line.market_value_eur || 0);
+
+    const symbol = security?.symbol || "N/A";
+    const name = security?.name || "Unknown";
+
+    // Get existing metadata from DB
+    let region = line.region || security?.region || null;
+    let sector = line.sector || security?.sector || null;
+    let assetClass = line.asset_class || security?.asset_class || null;
+
+    // Define placeholder values that should be overwritten if better classification exists
+    const placeholderValues = ["Monde", "Non défini", "Unknown", "Non classifié", null, undefined, ""];
+    const placeholderSectors = ["Diversifié", "Unknown", "Non classifié", "Autre", null, undefined, ""];
+    
+    const isPlaceholderRegion = placeholderValues.includes(region);
+    const isPlaceholderSector = placeholderSectors.includes(sector);
+    const isPlaceholderAssetClass = !assetClass || assetClass === "Unknown" || assetClass === "Non classifié";
+
+    // Always try to enrich from local database
+    const enriched = enrichAssetMetadata(symbol, name);
+
+    // Apply enrichment: overwrite if current is placeholder OR if enriched gives specific data
+    if (isPlaceholderRegion && enriched.region !== "Non classifié") {
+      region = enriched.region;
+    }
+    if (isPlaceholderSector && enriched.sector !== "Non classifié") {
+      sector = enriched.sector;
+    }
+    if (isPlaceholderAssetClass && enriched.assetClass !== "Non classifié") {
+      assetClass = enriched.assetClass;
+    }
+    
+    // Final fallback for display
+    if (!region) region = "Non classifié";
+    if (!sector) sector = "Non classifié";
+    if (!assetClass) assetClass = "Actions";
+
+    return {
+      id: line.id,
+      ticker: symbol,
+      name,
+      quantity: Number(line.shares || 0),
+      value,
+      weight: totalValue > 0 ? (value / totalValue) * 100 : 0,
+      sector,
+      region,
+      assetClass,
+      accountName: account?.name || "Unknown",
+    };
+  });
+
+  // Aggregate by asset class
+  const byAssetClassMap = new Map<string, { value: number; holdings: HoldingDetail[] }>();
+  holdings.forEach((h) => {
+    const key = h.assetClass || "Non classifié";
+    const existing = byAssetClassMap.get(key) || { value: 0, holdings: [] };
+    existing.value += h.value;
+    existing.holdings.push(h);
+    byAssetClassMap.set(key, existing);
+  });
+  const byAssetClass: AllocationBreakdown[] = Array.from(byAssetClassMap.entries())
+    .map(([name, data]) => ({
+      name,
+      value: data.value,
+      percentage: totalValue > 0 ? (data.value / totalValue) * 100 : 0,
+      holdings: data.holdings,
+    }))
+    .sort((a, b) => b.value - a.value);
+
+  // Aggregate by region
+  const byRegionMap = new Map<string, { value: number; holdings: HoldingDetail[] }>();
+  holdings.forEach((h) => {
+    const key = h.region || "Non classifié";
+    const existing = byRegionMap.get(key) || { value: 0, holdings: [] };
+    existing.value += h.value;
+    existing.holdings.push(h);
+    byRegionMap.set(key, existing);
+  });
+  const byRegion: AllocationBreakdown[] = Array.from(byRegionMap.entries())
+    .map(([name, data]) => ({
+      name,
+      value: data.value,
+      percentage: totalValue > 0 ? (data.value / totalValue) * 100 : 0,
+      holdings: data.holdings,
+    }))
+    .sort((a, b) => b.value - a.value);
+
+  // Aggregate by sector
+  const bySectorMap = new Map<string, { value: number; holdings: HoldingDetail[] }>();
+  holdings.forEach((h) => {
+    const key = h.sector || "Non classifié";
+    const existing = bySectorMap.get(key) || { value: 0, holdings: [] };
+    existing.value += h.value;
+    existing.holdings.push(h);
+    bySectorMap.set(key, existing);
+  });
+  const bySector: AllocationBreakdown[] = Array.from(bySectorMap.entries())
+    .map(([name, data]) => ({
+      name,
+      value: data.value,
+      percentage: totalValue > 0 ? (data.value / totalValue) * 100 : 0,
+      holdings: data.holdings,
+    }))
+    .sort((a, b) => b.value - a.value);
+
+  // Calculate score
+  const score = calculateDiversificationScore(byAssetClass, byRegion, bySector, holdings);
+
+  // Detect risks
+  const concentrationRisks = detectConcentrationRisks(byAssetClass, byRegion, bySector, holdings);
+
+  // Generate recommendations
+  const recommendations = generateRecommendations(byAssetClass, byRegion, bySector, holdings, concentrationRisks);
+
+  // Data quality
+  const classifiedCount = holdings.filter((h) => {
+    const metadata = {
+      region: h.region || "Non classifié",
+      sector: h.sector || "Non classifié",
+      assetClass: h.assetClass || "Non classifié",
+    };
+    return isClassified(metadata);
+  }).length;
+
+  // Calculate look-through exposure for ETFs
+  const lookThrough = calculateLookThroughExposure(holdings, totalValue);
+
+  return {
+    score,
+    scoreLabel: getScoreLabel(score),
+    lastUpdated: latestSnapshot?.snapshot_ts || null,
+    totalValue,
+    byAssetClass,
+    byRegion,
+    bySector,
+    concentrationRisks,
+    recommendations,
+    holdings: holdings.sort((a, b) => b.value - a.value),
+    dataQuality: {
+      classified: classifiedCount,
+      unclassified: holdings.length - classifiedCount,
+      total: holdings.length,
+    },
+    lookThrough,
+  };
+}
+
+export function useDiversification() {
+  const { user } = useAuth();
+
+  const query = useQuery({
+    queryKey: queryKeys.diversification(user?.id ?? ''),
+    queryFn: () => fetchDiversificationData(user!.id),
+    enabled: !!user,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
+    refetchOnWindowFocus: false,
+  });
+
+  const data = useMemo<DiversificationData | null>(() => {
+    if (!query.data) return null;
+    return processDiversificationData(query.data);
+  }, [query.data]);
+
+  return {
+    loading: query.isLoading,
+    error: query.error?.message ?? null,
     data,
-    refetch,
+    refetch: query.refetch,
   };
 }

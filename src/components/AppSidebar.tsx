@@ -1,6 +1,7 @@
-import { Home, Briefcase, TrendingUp, BarChart3, User, LogOut, PieChart, Lightbulb } from "lucide-react";
+import { Home, Briefcase, TrendingUp, BarChart3, LogOut, PieChart, Lightbulb } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePrefetchOnHover } from "@/hooks/usePrefetchOnHover";
 import {
   Sidebar,
   SidebarContent,
@@ -23,6 +24,7 @@ const menuItems = [
 
 export function AppSidebar() {
   const { signOut } = useAuth();
+  const { handleMouseEnter, handleMouseLeave } = usePrefetchOnHover();
 
   return (
     <Sidebar>
@@ -44,6 +46,8 @@ export function AppSidebar() {
                       end={item.url === "/"}
                       className="hover:bg-sidebar-accent"
                       activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
+                      onMouseEnter={handleMouseEnter(item.url)}
+                      onMouseLeave={handleMouseLeave}
                     >
                       <item.icon className="w-4 h-4" />
                       <span>{item.title}</span>

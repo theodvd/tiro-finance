@@ -101,7 +101,7 @@ export default function Diversification() {
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>{error}</AlertDescription>
         </Alert>
-        <Button onClick={refetch} variant="outline">
+        <Button onClick={() => refetch()} variant="outline">
           <RefreshCw className="h-4 w-4 mr-2" />
           Réessayer
         </Button>
@@ -119,7 +119,7 @@ export default function Diversification() {
           <p className="text-sm text-muted-foreground mb-4">
             Ajoutez des holdings à votre portefeuille et prenez un snapshot pour voir votre analyse de diversification.
           </p>
-          <Button onClick={refetch} variant="outline">
+          <Button onClick={() => refetch()} variant="outline">
             <RefreshCw className="h-4 w-4 mr-2" />
             Actualiser
           </Button>
