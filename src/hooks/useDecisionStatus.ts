@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 
-export type DecisionStatus = 'new' | 'ignored' | 'treated';
+export type DecisionStatus = 'new' | 'viewed' | 'ignored' | 'treated';
 
 interface DecisionStatusEntry {
   status: DecisionStatus;
@@ -55,6 +55,23 @@ export function useDecisionStatus() {
     }));
   }, []);
 
+  const markAsViewed = useCallback((decisionId: string) => {
+    // Only mark as viewed if currently new
+    setStatusMap(prev => {
+      const currentStatus = prev[decisionId]?.status || 'new';
+      if (currentStatus === 'new') {
+        return {
+          ...prev,
+          [decisionId]: {
+            status: 'viewed',
+            updated_at: new Date().toISOString(),
+          },
+        };
+      }
+      return prev;
+    });
+  }, []);
+
   const markAsTreated = useCallback((decisionId: string) => {
     setStatus(decisionId, 'treated');
   }, [setStatus]);
@@ -76,13 +93,29 @@ export function useDecisionStatus() {
     localStorage.removeItem(STORAGE_KEY);
   }, []);
 
+  // Count decisions by status
+  const countByStatus = useCallback((decisions: { id: string }[]) => {
+    const counts = { new: 0, viewed: 0, ignored: 0, treated: 0, toHandle: 0 };
+    decisions.forEach(d => {
+      const status = getStatus(d.id);
+      counts[status]++;
+      // "À traiter" = new + viewed (not ignored, not treated)
+      if (status === 'new' || status === 'viewed') {
+        counts.toHandle++;
+      }
+    });
+    return counts;
+  }, [getStatus]);
+
   return {
     statusMap,
     getStatus,
     setStatus,
+    markAsViewed,
     markAsTreated,
     markAsIgnored,
     resetStatus,
     resetAll,
+    countByStatus,
   };
 }
