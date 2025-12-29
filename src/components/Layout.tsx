@@ -1,7 +1,11 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
+import { useAutoRefreshPrices } from "@/hooks/useAutoRefreshPrices";
 
 export function Layout({ children }: { children: React.ReactNode }) {
+  // Auto-refresh prices on mount, every 3 min, and on tab focus
+  useAutoRefreshPrices();
+
   return (
     <SidebarProvider>
       <div className="flex w-full">
