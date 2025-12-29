@@ -1,4 +1,4 @@
-import { AlertTriangle, TrendingDown, PieChart, Droplets, ChevronRight, X, CheckCircle2, XCircle } from 'lucide-react';
+import { AlertTriangle, TrendingDown, PieChart, Droplets, ChevronRight, X, CheckCircle2, XCircle, Sparkles } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -55,10 +55,14 @@ const getSeverityStyles = (severity: Decision['severity']) => {
 
 const getStatusBadge = (status: DecisionStatus) => {
   switch (status) {
+    case 'new':
+      return { className: 'bg-blue-500/10 text-blue-600 border-blue-500/20', label: 'Nouveau', icon: Sparkles };
     case 'treated':
       return { className: 'bg-green-500/10 text-green-600 border-green-500/20', label: 'Traité', icon: CheckCircle2 };
     case 'ignored':
       return { className: 'bg-muted text-muted-foreground border-muted', label: 'Ignoré', icon: XCircle };
+    case 'viewed':
+      return null; // No badge for viewed status (it's the "normal" state after reading)
     default:
       return null;
   }

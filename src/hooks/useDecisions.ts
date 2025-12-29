@@ -19,6 +19,18 @@ export interface Decision {
   explanation: string;
   impact: string;
   relatedHoldings?: string[];
+  // Additional data for detail page
+  metadata?: {
+    threshold: number;
+    currentValue: number;
+    gap: number;
+    ticker?: string;
+    assetClassName?: string;
+    holdingValue?: number;
+    targetValue?: number;
+    amountToReduce?: number;
+    excessAmount?: number;
+  };
 }
 
 interface DecisionsData {
@@ -27,6 +39,19 @@ interface DecisionsData {
   loading: boolean;
   error: string | null;
 }
+
+// Map real asset classes to user-friendly French labels
+const ASSET_CLASS_LABELS: Record<string, string> = {
+  'STOCK': 'Actions',
+  'ETF': 'Actions', // ETFs are grouped with stocks for decision purposes
+  'CRYPTO': 'Crypto-monnaies',
+  'BOND': 'Obligations',
+  'REIT': 'Immobilier',
+  'CASH': 'Liquidités',
+};
+
+// Classes considered as equity for concentration
+const EQUITY_CLASSES = ['STOCK', 'ETF', 'Actions'];
 
 export function useDecisions(): DecisionsData {
   const { data: diversificationData, loading: divLoading, error: divError } = useDiversification();
@@ -45,38 +70,80 @@ export function useDecisions(): DecisionsData {
       };
     }
 
+    const totalValue = diversificationData.totalValue;
+
     // Rule 1: Single position concentration > 10%
     diversificationData.holdings
       .filter(h => h.weight > THRESHOLDS.singlePosition)
       .sort((a, b) => b.weight - a.weight)
       .slice(0, 2) // Max 2 position alerts
-      .forEach((holding, index) => {
+      .forEach((holding) => {
+        const targetValue = (THRESHOLDS.singlePosition / 100) * totalValue;
+        const amountToReduce = Math.max(0, holding.value - targetValue);
+        
         decisions.push({
-          id: `concentration-position-${index}`,
+          id: `pos_concentration:${holding.ticker}`, // Stable deterministic ID
           type: 'concentration',
           severity: holding.weight > 20 ? 'high' : holding.weight > 15 ? 'medium' : 'low',
           title: `Position concentrée : ${holding.ticker}`,
           explanation: `${holding.name} représente ${holding.weight.toFixed(1)}% de votre portefeuille, dépassant le seuil de ${THRESHOLDS.singlePosition}%. Une forte concentration augmente le risque spécifique.`,
           impact: `${holding.weight.toFixed(1)}% du portefeuille`,
           relatedHoldings: [holding.ticker],
+          metadata: {
+            threshold: THRESHOLDS.singlePosition,
+            currentValue: holding.weight,
+            gap: holding.weight - THRESHOLDS.singlePosition,
+            ticker: holding.ticker,
+            holdingValue: holding.value,
+            targetValue,
+            amountToReduce,
+          },
         });
       });
 
-    // Rule 2: Asset class concentration > 70%
+    // Rule 2: Asset class concentration > 70% (using real asset classes)
+    // Group ETF + STOCK as "Actions" for concentration check
+    const assetClassGroups = new Map<string, { percentage: number; holdings: typeof diversificationData.holdings }>();
+    
     diversificationData.byAssetClass
       .filter(ac => ac.name !== 'Unknown' && ac.name !== 'Non classifié')
-      .filter(ac => ac.percentage > THRESHOLDS.assetClass)
-      .forEach((assetClass, index) => {
-        decisions.push({
-          id: `concentration-class-${index}`,
-          type: 'concentration',
-          severity: assetClass.percentage > 85 ? 'high' : assetClass.percentage > 75 ? 'medium' : 'low',
-          title: `Surexposition : ${assetClass.name}`,
-          explanation: `La classe d'actifs "${assetClass.name}" représente ${assetClass.percentage.toFixed(1)}% de votre portefeuille. Une diversification vers d'autres classes d'actifs pourrait réduire le risque global.`,
-          impact: `${assetClass.percentage.toFixed(1)}% du portefeuille`,
-          relatedHoldings: assetClass.holdings.slice(0, 3).map(h => h.ticker),
-        });
+      .forEach((assetClass) => {
+        // Map to display name (ETF -> Actions)
+        const isEquity = EQUITY_CLASSES.includes(assetClass.name);
+        const groupName = isEquity ? 'Actions' : (ASSET_CLASS_LABELS[assetClass.name] || assetClass.name);
+        
+        const existing = assetClassGroups.get(groupName);
+        if (existing) {
+          existing.percentage += assetClass.percentage;
+          existing.holdings = [...existing.holdings, ...assetClass.holdings];
+        } else {
+          assetClassGroups.set(groupName, {
+            percentage: assetClass.percentage,
+            holdings: [...assetClass.holdings],
+          });
+        }
       });
+
+    // Check for concentration in grouped asset classes
+    assetClassGroups.forEach((data, className) => {
+      if (data.percentage > THRESHOLDS.assetClass) {
+        decisions.push({
+          id: `asset_class_over:${className.toLowerCase().replace(/[^a-z0-9]/g, '_')}`, // Stable ID
+          type: 'concentration',
+          severity: data.percentage > 85 ? 'high' : data.percentage > 75 ? 'medium' : 'low',
+          title: `Surexposition : ${className}`,
+          explanation: `La classe d'actifs "${className}" représente ${data.percentage.toFixed(1)}% de votre portefeuille. Une diversification vers d'autres classes d'actifs pourrait réduire le risque global.`,
+          impact: `${data.percentage.toFixed(1)}% du portefeuille`,
+          relatedHoldings: data.holdings.slice(0, 3).map(h => h.ticker),
+          metadata: {
+            threshold: THRESHOLDS.assetClass,
+            currentValue: data.percentage,
+            gap: data.percentage - THRESHOLDS.assetClass,
+            assetClassName: className,
+          },
+        });
+      }
+    });
 
     // Rule 3: Excess liquidity (CASH + LIVRETS)
     const liquidityClasses = ['CASH', 'Livrets', 'Monétaire', 'Épargne'];
@@ -85,27 +152,42 @@ export function useDecisions(): DecisionsData {
       .reduce((sum, ac) => sum + ac.percentage, 0);
 
     if (liquidityTotal > THRESHOLDS.liquidity) {
+      const currentLiquidityValue = (liquidityTotal / 100) * totalValue;
+      const targetLiquidityValue = (THRESHOLDS.liquidity / 100) * totalValue;
+      const excessAmount = Math.max(0, currentLiquidityValue - targetLiquidityValue);
+      
       decisions.push({
-        id: 'liquidity-excess',
+        id: 'cash_over', // Stable ID
         type: 'liquidity',
         severity: liquidityTotal > 40 ? 'high' : liquidityTotal > 30 ? 'medium' : 'low',
         title: 'Excès de liquidités',
         explanation: `Vous détenez ${liquidityTotal.toFixed(1)}% de votre patrimoine en liquidités. Ce niveau peut être justifié pour un projet à court terme, mais réduit le potentiel de rendement à long terme.`,
         impact: `${liquidityTotal.toFixed(1)}% en cash`,
         relatedHoldings: [],
+        metadata: {
+          threshold: THRESHOLDS.liquidity,
+          currentValue: liquidityTotal,
+          gap: liquidityTotal - THRESHOLDS.liquidity,
+          excessAmount,
+        },
       });
     }
 
     // Rule 4: Under-diversification (score < 40)
     if (diversificationData.score < THRESHOLDS.diversificationScore) {
       decisions.push({
-        id: 'diversification-low',
+        id: 'div_low', // Stable ID
         type: 'diversification',
         severity: diversificationData.score < 25 ? 'high' : diversificationData.score < 35 ? 'medium' : 'low',
         title: 'Diversification insuffisante',
         explanation: `Votre score de diversification est de ${diversificationData.score}/100 (${diversificationData.scoreLabel}). Une meilleure répartition entre régions, secteurs et classes d'actifs renforcerait la résilience de votre portefeuille.`,
         impact: `Score ${diversificationData.score}/100`,
         relatedHoldings: [],
+        metadata: {
+          threshold: THRESHOLDS.diversificationScore,
+          currentValue: diversificationData.score,
+          gap: THRESHOLDS.diversificationScore - diversificationData.score,
+        },
       });
     }
 
@@ -123,7 +205,7 @@ export function useDecisions(): DecisionsData {
         if (Math.abs(weeklyChange) > THRESHOLDS.weeklyVariation) {
           const isPositive = weeklyChange > 0;
           decisions.push({
-            id: 'variation-unusual',
+            id: 'move_abnormal', // Stable ID
             type: 'variation',
             severity: Math.abs(weeklyChange) > 20 ? 'high' : Math.abs(weeklyChange) > 15 ? 'medium' : 'low',
             title: isPositive ? 'Hausse significative récente' : 'Baisse significative récente',
@@ -132,6 +214,11 @@ export function useDecisions(): DecisionsData {
               : `Votre portefeuille a reculé de ${Math.abs(weeklyChange).toFixed(1)}% sur la dernière période. Cette variation peut être due à la volatilité normale des marchés.`,
             impact: `${weeklyChange > 0 ? '+' : ''}${weeklyChange.toFixed(1)}%`,
             relatedHoldings: [],
+            metadata: {
+              threshold: THRESHOLDS.weeklyVariation,
+              currentValue: Math.abs(weeklyChange),
+              gap: Math.abs(weeklyChange) - THRESHOLDS.weeklyVariation,
+            },
           });
         }
       }
