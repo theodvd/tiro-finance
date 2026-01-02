@@ -512,15 +512,15 @@ export default function Investments() {
                 <span className="sm:hidden">Investir</span>
               </Button>
             </DialogTrigger>
-            <DialogContent className="flex flex-col">
+            <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle>Ajouter un investissement</DialogTitle>
                 <DialogDescription>
                   Ajoute rapidement une nouvelle position. L'actif sera créé automatiquement s'il n'existe pas.
                 </DialogDescription>
               </DialogHeader>
-              <form onSubmit={handleQuickAddSubmit} className="flex flex-col flex-1 min-h-0">
-                <DialogBody className="space-y-4">
+              <DialogBody>
+                <form id="quick-add-form" onSubmit={handleQuickAddSubmit} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="quick_account">Compte *</Label>
                     <Select value={quickAddData.account_id} onValueChange={(value) => setQuickAddData({ ...quickAddData, account_id: value })}>
@@ -610,14 +610,14 @@ export default function Investments() {
                       </Select>
                     </div>
                   </div>
-                </DialogBody>
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setQuickAddOpen(false)}>
-                    Annuler
-                  </Button>
-                  <Button type="submit">Ajouter</Button>
-                </DialogFooter>
-              </form>
+                </form>
+              </DialogBody>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setQuickAddOpen(false)}>
+                  Annuler
+                </Button>
+                <Button type="submit" form="quick-add-form">Ajouter</Button>
+              </DialogFooter>
             </DialogContent>
           </Dialog>
 
@@ -635,15 +635,15 @@ export default function Investments() {
                 <span className="sm:hidden">DCA</span>
               </Button>
             </DialogTrigger>
-            <DialogContent className="flex flex-col max-w-lg">
+            <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle>{editingDca ? "Modifier le DCA" : "Nouveau DCA"}</DialogTitle>
                 <DialogDescription>
                   Crée un plan d'investissement récurrent qui s'exécutera automatiquement
                 </DialogDescription>
               </DialogHeader>
-              <form onSubmit={handleDcaSubmit} className="flex flex-col flex-1 min-h-0">
-                <DialogBody className="space-y-4">
+              <DialogBody>
+                <form id="dca-form" onSubmit={handleDcaSubmit} className="space-y-4">
                   {/* Compte & Actif */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -823,14 +823,14 @@ export default function Investments() {
                       <Label htmlFor="dca_active">Actif</Label>
                     </div>
                   </div>
-                </DialogBody>
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setDcaDialogOpen(false)}>
-                    Annuler
-                  </Button>
-                  <Button type="submit">{editingDca ? "Mettre à jour" : "Créer"}</Button>
-                </DialogFooter>
-              </form>
+                </form>
+              </DialogBody>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setDcaDialogOpen(false)}>
+                  Annuler
+                </Button>
+                <Button type="submit" form="dca-form">{editingDca ? "Mettre à jour" : "Créer"}</Button>
+              </DialogFooter>
             </DialogContent>
           </Dialog>
 
@@ -865,12 +865,12 @@ export default function Investments() {
           resetHoldingForm();
         }
       }}>
-        <DialogContent className="flex flex-col">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Modifier la position</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleHoldingSubmit} className="flex flex-col flex-1 min-h-0">
-            <DialogBody className="space-y-4">
+          <DialogBody>
+            <form id="holding-edit-form" onSubmit={handleHoldingSubmit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="edit_account">Compte *</Label>
@@ -926,14 +926,14 @@ export default function Investments() {
                   />
                 </div>
               </div>
-            </DialogBody>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setHoldingDialogOpen(false)}>
-                Annuler
-              </Button>
-              <Button type="submit">Mettre à jour</Button>
-            </DialogFooter>
-          </form>
+            </form>
+          </DialogBody>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setHoldingDialogOpen(false)}>
+              Annuler
+            </Button>
+            <Button type="submit" form="holding-edit-form">Mettre à jour</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
