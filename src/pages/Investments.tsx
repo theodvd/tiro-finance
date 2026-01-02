@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogBody } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -512,104 +512,109 @@ export default function Investments() {
                 <span className="sm:hidden">Investir</span>
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="flex flex-col">
               <DialogHeader>
                 <DialogTitle>Ajouter un investissement</DialogTitle>
                 <DialogDescription>
                   Ajoute rapidement une nouvelle position. L'actif sera créé automatiquement s'il n'existe pas.
                 </DialogDescription>
               </DialogHeader>
-              <form onSubmit={handleQuickAddSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="quick_account">Compte *</Label>
-                  <Select value={quickAddData.account_id} onValueChange={(value) => setQuickAddData({ ...quickAddData, account_id: value })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sélectionne un compte..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {accounts.map((acc) => (
-                        <SelectItem key={acc.id} value={acc.id}>
-                          {acc.name} ({acc.type})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="quick_ticker">Ticker *</Label>
-                  <Input
-                    id="quick_ticker"
-                    placeholder="ex: CW8.PA, BTC"
-                    value={quickAddData.ticker}
-                    onChange={(e) => setQuickAddData({ ...quickAddData, ticker: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="quick_name">Nom (optionnel)</Label>
-                  <Input
-                    id="quick_name"
-                    placeholder="ex: MSCI World ETF"
-                    value={quickAddData.name}
-                    onChange={(e) => setQuickAddData({ ...quickAddData, name: e.target.value })}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
+              <form onSubmit={handleQuickAddSubmit} className="flex flex-col flex-1 min-h-0">
+                <DialogBody className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="quick_quantity">Quantité *</Label>
-                    <Input
-                      id="quick_quantity"
-                      type="number"
-                      step="0.00000001"
-                      placeholder="10"
-                      value={quickAddData.quantity}
-                      onChange={(e) => setQuickAddData({ ...quickAddData, quantity: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="quick_price">Prix unitaire (optionnel)</Label>
-                    <Input
-                      id="quick_price"
-                      type="number"
-                      step="0.01"
-                      placeholder="100.00"
-                      value={quickAddData.purchase_price}
-                      onChange={(e) => setQuickAddData({ ...quickAddData, purchase_price: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="quick_asset">Classe d'actif</Label>
-                    <Select value={quickAddData.asset_class} onValueChange={(value) => setQuickAddData({ ...quickAddData, asset_class: value as AssetClass })}>
+                    <Label htmlFor="quick_account">Compte *</Label>
+                    <Select value={quickAddData.account_id} onValueChange={(value) => setQuickAddData({ ...quickAddData, account_id: value })}>
                       <SelectTrigger>
-                        <SelectValue />
+                        <SelectValue placeholder="Sélectionne un compte..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {ASSET_CLASSES.map((cls) => (
-                          <SelectItem key={cls} value={cls}>
-                            {ASSET_CLASS_LABEL[cls]}
+                        {accounts.map((acc) => (
+                          <SelectItem key={acc.id} value={acc.id}>
+                            {acc.name} ({acc.type})
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="quick_currency">Devise</Label>
-                    <Select value={quickAddData.currency} onValueChange={(value) => setQuickAddData({ ...quickAddData, currency: value })}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="EUR">EUR</SelectItem>
-                        <SelectItem value="USD">USD</SelectItem>
-                        <SelectItem value="GBP">GBP</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label htmlFor="quick_ticker">Ticker *</Label>
+                    <Input
+                      id="quick_ticker"
+                      placeholder="ex: CW8.PA, BTC"
+                      value={quickAddData.ticker}
+                      onChange={(e) => setQuickAddData({ ...quickAddData, ticker: e.target.value })}
+                      required
+                    />
                   </div>
-                </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="quick_name">Nom (optionnel)</Label>
+                    <Input
+                      id="quick_name"
+                      placeholder="ex: MSCI World ETF"
+                      value={quickAddData.name}
+                      onChange={(e) => setQuickAddData({ ...quickAddData, name: e.target.value })}
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="quick_quantity">Quantité *</Label>
+                      <Input
+                        id="quick_quantity"
+                        type="number"
+                        step="0.00000001"
+                        placeholder="10"
+                        value={quickAddData.quantity}
+                        onChange={(e) => setQuickAddData({ ...quickAddData, quantity: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="quick_price">Prix unitaire (optionnel)</Label>
+                      <Input
+                        id="quick_price"
+                        type="number"
+                        step="0.01"
+                        placeholder="100.00"
+                        value={quickAddData.purchase_price}
+                        onChange={(e) => setQuickAddData({ ...quickAddData, purchase_price: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="quick_asset">Classe d'actif</Label>
+                      <Select value={quickAddData.asset_class} onValueChange={(value) => setQuickAddData({ ...quickAddData, asset_class: value as AssetClass })}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ASSET_CLASSES.map((cls) => (
+                            <SelectItem key={cls} value={cls}>
+                              {ASSET_CLASS_LABEL[cls]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="quick_currency">Devise</Label>
+                      <Select value={quickAddData.currency} onValueChange={(value) => setQuickAddData({ ...quickAddData, currency: value })}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="EUR">EUR</SelectItem>
+                          <SelectItem value="USD">USD</SelectItem>
+                          <SelectItem value="GBP">GBP</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </DialogBody>
                 <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setQuickAddOpen(false)}>
+                    Annuler
+                  </Button>
                   <Button type="submit">Ajouter</Button>
                 </DialogFooter>
               </form>
@@ -630,184 +635,195 @@ export default function Investments() {
                 <span className="sm:hidden">DCA</span>
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-lg">
+            <DialogContent className="flex flex-col max-w-lg">
               <DialogHeader>
                 <DialogTitle>{editingDca ? "Modifier le DCA" : "Nouveau DCA"}</DialogTitle>
                 <DialogDescription>
                   Crée un plan d'investissement récurrent qui s'exécutera automatiquement
                 </DialogDescription>
               </DialogHeader>
-              <form onSubmit={handleDcaSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="dca_account">Compte *</Label>
-                  <Select value={dcaFormData.account_id} onValueChange={(value) => setDcaFormData({ ...dcaFormData, account_id: value })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sélectionne un compte..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {accounts.map((acc) => (
-                        <SelectItem key={acc.id} value={acc.id}>
-                          {acc.name} ({acc.type})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              <form onSubmit={handleDcaSubmit} className="flex flex-col flex-1 min-h-0">
+                <DialogBody className="space-y-4">
+                  {/* Compte & Actif */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="dca_account">Compte *</Label>
+                      <Select value={dcaFormData.account_id} onValueChange={(value) => setDcaFormData({ ...dcaFormData, account_id: value })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionne..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {accounts.map((acc) => (
+                            <SelectItem key={acc.id} value={acc.id}>
+                              {acc.name} ({acc.type})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="dca_security">Actif *</Label>
+                      <Select value={dcaFormData.security_id} onValueChange={(value) => setDcaFormData({ ...dcaFormData, security_id: value })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionne..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {securities.map((sec) => (
+                            <SelectItem key={sec.id} value={sec.id}>
+                              {sec.symbol} - {sec.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="dca_security">Actif *</Label>
-                  <Select value={dcaFormData.security_id} onValueChange={(value) => setDcaFormData({ ...dcaFormData, security_id: value })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sélectionne un actif..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {securities.map((sec) => (
-                        <SelectItem key={sec.id} value={sec.id}>
-                          {sec.symbol} - {sec.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="dca_mode">Mode d'investissement *</Label>
-                  <Select value={dcaFormData.investment_mode} onValueChange={(value: "amount" | "shares") => setDcaFormData({ ...dcaFormData, investment_mode: value })}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="amount">Montant fixe (parts fractionnaires)</SelectItem>
-                      <SelectItem value="shares">Parts entières (budget max)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
+                  {/* Mode & Montant */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="dca_mode">Mode *</Label>
+                      <Select value={dcaFormData.investment_mode} onValueChange={(value: "amount" | "shares") => setDcaFormData({ ...dcaFormData, investment_mode: value })}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="amount">Montant fixe</SelectItem>
+                          <SelectItem value="shares">Parts entières</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="dca_amount">
+                        {dcaFormData.investment_mode === 'amount' ? "Montant (€) *" : "Budget max (€) *"}
+                      </Label>
+                      <Input
+                        id="dca_amount"
+                        type="number"
+                        step="0.01"
+                        min="1"
+                        value={dcaFormData.amount}
+                        onChange={(e) => setDcaFormData({ ...dcaFormData, amount: e.target.value })}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground -mt-2">
                     {dcaFormData.investment_mode === 'amount'
-                      ? "Investit le montant exact en EUR, peut acheter des fractions de parts"
+                      ? "Investit le montant exact, peut acheter des fractions"
                       : "Achète des parts entières jusqu'au budget max"}
                   </p>
-                </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="dca_amount">
-                    {dcaFormData.investment_mode === 'amount' ? "Montant (EUR) *" : "Budget max (EUR) *"}
-                  </Label>
-                  <Input
-                    id="dca_amount"
-                    type="number"
-                    step="0.01"
-                    min="1"
-                    value={dcaFormData.amount}
-                    onChange={(e) => setDcaFormData({ ...dcaFormData, amount: e.target.value })}
-                    required
-                  />
-                </div>
+                  {/* Source de liquidité */}
+                  {bridgeAccounts.length > 0 && (
+                    <div className="space-y-2">
+                      <Label htmlFor="dca_source">Source de liquidité (optionnel)</Label>
+                      <Select
+                        value={dcaFormData.source_account_id || "none"}
+                        onValueChange={(value) => setDcaFormData({ ...dcaFormData, source_account_id: value === "none" ? "" : value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Aucune" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Aucune</SelectItem>
+                          {bridgeAccounts.map((acc) => (
+                            <SelectItem key={acc.id} value={acc.id}>
+                              {acc.name} ({acc.balance?.toFixed(2) || 0} {acc.currency})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
-                {bridgeAccounts.length > 0 && (
-                  <div className="space-y-2">
-                    <Label htmlFor="dca_source">Source de liquidité (optionnel)</Label>
-                    <Select
-                      value={dcaFormData.source_account_id || "none"}
-                      onValueChange={(value) => setDcaFormData({ ...dcaFormData, source_account_id: value === "none" ? "" : value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Aucune source sélectionnée" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Aucune</SelectItem>
-                        {bridgeAccounts.map((acc) => (
-                          <SelectItem key={acc.id} value={acc.id}>
-                            {acc.name} ({acc.balance?.toFixed(2) || 0} {acc.currency})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  {/* Fréquence & Paramètres */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="dca_frequency">Fréquence *</Label>
+                      <Select value={dcaFormData.frequency} onValueChange={(value: any) => setDcaFormData({ ...dcaFormData, frequency: value })}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="weekly">Hebdomadaire</SelectItem>
+                          <SelectItem value="monthly">Mensuel</SelectItem>
+                          <SelectItem value="interval">Intervalle</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {dcaFormData.frequency === 'weekly' && (
+                      <div className="space-y-2">
+                        <Label htmlFor="dca_weekday">Jour *</Label>
+                        <Select value={dcaFormData.weekday} onValueChange={(value) => setDcaFormData({ ...dcaFormData, weekday: value })}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="1">Lundi</SelectItem>
+                            <SelectItem value="2">Mardi</SelectItem>
+                            <SelectItem value="3">Mercredi</SelectItem>
+                            <SelectItem value="4">Jeudi</SelectItem>
+                            <SelectItem value="5">Vendredi</SelectItem>
+                            <SelectItem value="6">Samedi</SelectItem>
+                            <SelectItem value="0">Dimanche</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {dcaFormData.frequency === 'monthly' && (
+                      <div className="space-y-2">
+                        <Label htmlFor="dca_monthday">Jour du mois *</Label>
+                        <Input
+                          id="dca_monthday"
+                          type="number"
+                          min="1"
+                          max="31"
+                          value={dcaFormData.monthday}
+                          onChange={(e) => setDcaFormData({ ...dcaFormData, monthday: e.target.value })}
+                          required
+                        />
+                      </div>
+                    )}
+
+                    {dcaFormData.frequency === 'interval' && (
+                      <div className="space-y-2">
+                        <Label htmlFor="dca_interval">Tous les N jours *</Label>
+                        <Input
+                          id="dca_interval"
+                          type="number"
+                          min="1"
+                          value={dcaFormData.interval_days}
+                          onChange={(e) => setDcaFormData({ ...dcaFormData, interval_days: e.target.value })}
+                          required
+                        />
+                      </div>
+                    )}
                   </div>
-                )}
 
-                <div className="space-y-2">
-                  <Label htmlFor="dca_frequency">Fréquence *</Label>
-                  <Select value={dcaFormData.frequency} onValueChange={(value: any) => setDcaFormData({ ...dcaFormData, frequency: value })}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="weekly">Hebdomadaire</SelectItem>
-                      <SelectItem value="monthly">Mensuel</SelectItem>
-                      <SelectItem value="interval">Intervalle personnalisé</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {dcaFormData.frequency === 'weekly' && (
-                  <div className="space-y-2">
-                    <Label htmlFor="dca_weekday">Jour de la semaine *</Label>
-                    <Select value={dcaFormData.weekday} onValueChange={(value) => setDcaFormData({ ...dcaFormData, weekday: value })}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="1">Lundi</SelectItem>
-                        <SelectItem value="2">Mardi</SelectItem>
-                        <SelectItem value="3">Mercredi</SelectItem>
-                        <SelectItem value="4">Jeudi</SelectItem>
-                        <SelectItem value="5">Vendredi</SelectItem>
-                        <SelectItem value="6">Samedi</SelectItem>
-                        <SelectItem value="0">Dimanche</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  {/* Date de début & Actif */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+                    <div className="space-y-2">
+                      <Label htmlFor="dca_start">Date de début *</Label>
+                      <Input
+                        id="dca_start"
+                        type="date"
+                        value={dcaFormData.start_date}
+                        onChange={(e) => setDcaFormData({ ...dcaFormData, start_date: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="flex items-center space-x-2 pb-2">
+                      <Switch
+                        id="dca_active"
+                        checked={dcaFormData.active}
+                        onCheckedChange={(checked) => setDcaFormData({ ...dcaFormData, active: checked })}
+                      />
+                      <Label htmlFor="dca_active">Actif</Label>
+                    </div>
                   </div>
-                )}
-
-                {dcaFormData.frequency === 'monthly' && (
-                  <div className="space-y-2">
-                    <Label htmlFor="dca_monthday">Jour du mois *</Label>
-                    <Input
-                      id="dca_monthday"
-                      type="number"
-                      min="1"
-                      max="31"
-                      value={dcaFormData.monthday}
-                      onChange={(e) => setDcaFormData({ ...dcaFormData, monthday: e.target.value })}
-                      required
-                    />
-                  </div>
-                )}
-
-                {dcaFormData.frequency === 'interval' && (
-                  <div className="space-y-2">
-                    <Label htmlFor="dca_interval">Tous les N jours *</Label>
-                    <Input
-                      id="dca_interval"
-                      type="number"
-                      min="1"
-                      value={dcaFormData.interval_days}
-                      onChange={(e) => setDcaFormData({ ...dcaFormData, interval_days: e.target.value })}
-                      required
-                    />
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  <Label htmlFor="dca_start">Date de début *</Label>
-                  <Input
-                    id="dca_start"
-                    type="date"
-                    value={dcaFormData.start_date}
-                    onChange={(e) => setDcaFormData({ ...dcaFormData, start_date: e.target.value })}
-                    required
-                  />
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="dca_active"
-                    checked={dcaFormData.active}
-                    onCheckedChange={(checked) => setDcaFormData({ ...dcaFormData, active: checked })}
-                  />
-                  <Label htmlFor="dca_active">Actif</Label>
-                </div>
-
+                </DialogBody>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setDcaDialogOpen(false)}>
                     Annuler
@@ -849,62 +865,68 @@ export default function Investments() {
           resetHoldingForm();
         }
       }}>
-        <DialogContent>
+        <DialogContent className="flex flex-col">
           <DialogHeader>
             <DialogTitle>Modifier la position</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleHoldingSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit_account">Compte *</Label>
-              <Select value={holdingFormData.account_id} onValueChange={(value) => setHoldingFormData({ ...holdingFormData, account_id: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionne un compte..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {accounts.map((acc) => (
-                    <SelectItem key={acc.id} value={acc.id}>
-                      {acc.name} ({acc.type})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit_security">Actif *</Label>
-              <Select value={holdingFormData.security_id} onValueChange={(value) => setHoldingFormData({ ...holdingFormData, security_id: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionne un actif..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {securities.map((sec) => (
-                    <SelectItem key={sec.id} value={sec.id}>
-                      {sec.symbol} - {sec.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit_shares">Nombre de parts *</Label>
-              <Input
-                id="edit_shares"
-                type="number"
-                step="0.00000001"
-                value={holdingFormData.shares}
-                onChange={(e) => setHoldingFormData({ ...holdingFormData, shares: e.target.value })}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit_amount">Montant investi (EUR)</Label>
-              <Input
-                id="edit_amount"
-                type="number"
-                step="0.01"
-                value={holdingFormData.amount_invested_eur}
-                onChange={(e) => setHoldingFormData({ ...holdingFormData, amount_invested_eur: e.target.value })}
-              />
-            </div>
+          <form onSubmit={handleHoldingSubmit} className="flex flex-col flex-1 min-h-0">
+            <DialogBody className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit_account">Compte *</Label>
+                  <Select value={holdingFormData.account_id} onValueChange={(value) => setHoldingFormData({ ...holdingFormData, account_id: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sélectionne..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accounts.map((acc) => (
+                        <SelectItem key={acc.id} value={acc.id}>
+                          {acc.name} ({acc.type})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit_security">Actif *</Label>
+                  <Select value={holdingFormData.security_id} onValueChange={(value) => setHoldingFormData({ ...holdingFormData, security_id: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sélectionne..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {securities.map((sec) => (
+                        <SelectItem key={sec.id} value={sec.id}>
+                          {sec.symbol} - {sec.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit_shares">Nombre de parts *</Label>
+                  <Input
+                    id="edit_shares"
+                    type="number"
+                    step="0.00000001"
+                    value={holdingFormData.shares}
+                    onChange={(e) => setHoldingFormData({ ...holdingFormData, shares: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit_amount">Montant investi (€)</Label>
+                  <Input
+                    id="edit_amount"
+                    type="number"
+                    step="0.01"
+                    value={holdingFormData.amount_invested_eur}
+                    onChange={(e) => setHoldingFormData({ ...holdingFormData, amount_invested_eur: e.target.value })}
+                  />
+                </div>
+              </div>
+            </DialogBody>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setHoldingDialogOpen(false)}>
                 Annuler
