@@ -5,6 +5,7 @@ export const queryKeys = {
   diversification: (userId: string) => ['diversification', userId] as const,
   userProfile: (userId: string) => ['userProfile', userId] as const,
   decisions: (userId: string) => ['decisions', userId] as const,
+  insights: (userId: string) => ['insights', userId] as const,
 };
 
 // Route to query keys mapping for prefetching
@@ -14,6 +15,6 @@ export const routeQueryMap: Record<string, (keyof typeof queryKeys)[]> = {
   '/diversification': ['diversification', 'snapshots'],
   '/decisions': ['diversification', 'snapshots'],
   '/monthly-review': ['portfolio', 'snapshots', 'userProfile'],
-  '/insights': ['userProfile', 'diversification'],
+  '/insights': ['userProfile', 'insights'],
   '/profile': ['userProfile'],
 };
