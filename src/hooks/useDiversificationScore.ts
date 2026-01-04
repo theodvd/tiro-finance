@@ -87,7 +87,9 @@ interface RawPrice {
   updated_at: string | null;
 }
 
-const PLACEHOLDER_VALUES = ['Monde', 'Non défini', 'Unknown', 'Non classifié', 'Diversifié', null, undefined, ''];
+// Values that indicate MISSING/unclassified metadata
+// NOTE: 'Monde' and 'Diversifié' are VALID values for global ETFs, not placeholders!
+const PLACEHOLDER_VALUES = ['Non défini', 'Unknown', 'Non classifié', null, undefined, ''];
 
 async function fetchScoreData(userId: string) {
   const [holdingsRes, pricesRes] = await Promise.all([
