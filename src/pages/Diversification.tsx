@@ -38,21 +38,21 @@ interface DiversificationRecommendation {
   relatedHoldings: string[];
 }
 
-// Thresholds for concentration risks
-const THRESHOLDS = {
-  singleStock: 10,
-  sector: 40,
-  region: 70,
-};
-
+// Generate thresholds from strategy
 export default function Diversification() {
   const [lookThroughMode, setLookThroughMode] = useState(false);
-  const { loading, error, data, refetch, maxPositionPct } = useDiversificationScore(lookThroughMode);
+  const { loading, error, data, refetch, maxPositionPct, maxAssetClassPct, strategy } = useDiversificationScore(lookThroughMode);
   const [enriching, setEnriching] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedBreakdown, setSelectedBreakdown] = useState<AllocationBreakdown | null>(null);
   const [panelType, setPanelType] = useState<'asset_class' | 'region' | 'sector'>('asset_class');
 
+  // Thresholds for concentration risks - from user strategy
+  const THRESHOLDS = {
+    singleStock: maxPositionPct,
+    sector: 40,
+    region: maxAssetClassPct, // Use max asset class as region threshold
+  };
   const handleEnrichMetadata = async () => {
     setEnriching(true);
     try {
