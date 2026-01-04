@@ -65,8 +65,11 @@ export default function Diversification() {
       if (error) throw error;
 
       toast.success('Métadonnées enrichies', {
-        description: `${result.updated} actifs mis à jour. Cliquez sur "Rafraîchir" pour voir les changements.`,
+        description: `${result.updated} actifs enrichis, ${result.skipped || 0} non classifiés.`,
       });
+      
+      // Auto-refetch to show updated classification counts
+      await refetch();
     } catch (err: any) {
       toast.error('Erreur lors de l\'enrichissement', { description: err.message });
     } finally {
