@@ -4,15 +4,37 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AllocationBreakdown, HoldingDetail } from '@/hooks/useDiversification';
 import { fmtEUR, fmtPct } from '@/lib/format';
 import { useState, useMemo } from 'react';
 import { ArrowUpDown, Search, X } from 'lucide-react';
 
+// Generic interface for panel - works with both hooks
+interface PanelHolding {
+  id: string;
+  ticker: string;
+  name: string;
+  sector?: string | null;
+  region?: string | null;
+  // Support both naming conventions
+  quantity?: number;
+  shares?: number;
+  value?: number;
+  valueEUR?: number;
+  weight?: number;
+  weightPct?: number;
+}
+
+interface PanelAllocationBreakdown {
+  name: string;
+  value: number;
+  percentage: number;
+  holdings: PanelHolding[];
+}
+
 interface HoldingsPanelProps {
   isOpen: boolean;
   onClose: () => void;
-  breakdown: AllocationBreakdown | null;
+  breakdown: PanelAllocationBreakdown | null;
   type: 'asset_class' | 'region' | 'sector';
 }
 
@@ -48,9 +70,16 @@ export function HoldingsPanel({ isOpen, onClose, breakdown, type }: HoldingsPane
       );
     }
 
-    // Apply sorting
+    // Apply sorting - handle both naming conventions
     filtered.sort((a, b) => {
       let comparison = 0;
+      const aValue = a.value ?? a.valueEUR ?? 0;
+      const bValue = b.value ?? b.valueEUR ?? 0;
+      const aWeight = a.weight ?? a.weightPct ?? 0;
+      const bWeight = b.weight ?? b.weightPct ?? 0;
+      const aQty = a.quantity ?? a.shares ?? 0;
+      const bQty = b.quantity ?? b.shares ?? 0;
+      
       switch (sortField) {
         case 'ticker':
           comparison = a.ticker.localeCompare(b.ticker);
@@ -59,13 +88,13 @@ export function HoldingsPanel({ isOpen, onClose, breakdown, type }: HoldingsPane
           comparison = a.name.localeCompare(b.name);
           break;
         case 'value':
-          comparison = a.value - b.value;
+          comparison = aValue - bValue;
           break;
         case 'weight':
-          comparison = a.weight - b.weight;
+          comparison = aWeight - bWeight;
           break;
         case 'quantity':
-          comparison = a.quantity - b.quantity;
+          comparison = aQty - bQty;
           break;
       }
       return sortDirection === 'asc' ? comparison : -comparison;
@@ -172,44 +201,50 @@ export function HoldingsPanel({ isOpen, onClose, breakdown, type }: HoldingsPane
                   </TableCell>
                 </TableRow>
               ) : (
-                holdings.map(holding => (
-                  <TableRow key={holding.id} className="group">
-                    <TableCell className="font-mono text-xs font-medium">
-                      {holding.ticker}
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="text-sm truncate max-w-[150px]">{holding.name}</p>
-                        <div className="flex gap-1 mt-0.5">
-                          {holding.sector && (
-                            <Badge variant="outline" className="text-[10px] px-1 py-0">
-                              {holding.sector}
-                            </Badge>
-                          )}
-                          {holding.region && (
-                            <Badge variant="outline" className="text-[10px] px-1 py-0">
-                              {holding.region}
-                            </Badge>
-                          )}
+                holdings.map(holding => {
+                  const holdingValue = holding.value ?? holding.valueEUR ?? 0;
+                  const holdingWeight = holding.weight ?? holding.weightPct ?? 0;
+                  const holdingQty = holding.quantity ?? holding.shares ?? 0;
+                  
+                  return (
+                    <TableRow key={holding.id} className="group">
+                      <TableCell className="font-mono text-xs font-medium">
+                        {holding.ticker}
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <p className="text-sm truncate max-w-[150px]">{holding.name}</p>
+                          <div className="flex gap-1 mt-0.5">
+                            {holding.sector && (
+                              <Badge variant="outline" className="text-[10px] px-1 py-0">
+                                {holding.sector}
+                              </Badge>
+                            )}
+                            {holding.region && (
+                              <Badge variant="outline" className="text-[10px] px-1 py-0">
+                                {holding.region}
+                              </Badge>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-xs hidden sm:table-cell">
-                      {holding.quantity.toLocaleString('fr-FR', { maximumFractionDigits: 4 })}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-xs">
-                      {fmtEUR(holding.value)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Badge
-                        variant={holding.weight > 10 ? 'destructive' : holding.weight > 5 ? 'secondary' : 'outline'}
-                        className="text-xs"
-                      >
-                        {holding.weight.toFixed(1)}%
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-xs hidden sm:table-cell">
+                        {holdingQty.toLocaleString('fr-FR', { maximumFractionDigits: 4 })}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-xs">
+                        {fmtEUR(holdingValue)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge
+                          variant={holdingWeight > 10 ? 'destructive' : holdingWeight > 5 ? 'secondary' : 'outline'}
+                          className="text-xs"
+                        >
+                          {holdingWeight.toFixed(1)}%
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>
@@ -219,7 +254,7 @@ export function HoldingsPanel({ isOpen, onClose, breakdown, type }: HoldingsPane
         <div className="mt-4 p-3 bg-muted/50 rounded-lg">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Total affiché</span>
-            <span className="font-medium">{fmtEUR(holdings.reduce((sum, h) => sum + h.value, 0))}</span>
+            <span className="font-medium">{fmtEUR(holdings.reduce((sum, h) => sum + (h.value ?? h.valueEUR ?? 0), 0))}</span>
           </div>
           <div className="flex justify-between text-sm mt-1">
             <span className="text-muted-foreground">Nombre de positions</span>
