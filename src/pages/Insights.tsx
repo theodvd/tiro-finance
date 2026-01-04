@@ -31,11 +31,11 @@ import {
 } from 'lucide-react';
 import { useDiversificationScore } from '@/hooks/useDiversificationScore';
 import { useInsightsData } from '@/hooks/useInsightsData';
+import { useUserStrategy } from '@/hooks/useUserStrategy';
 import { ScoreExplanation } from '@/components/diversification/ScoreExplanation';
 import { supabase } from '@/integrations/supabase/client';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { useUserProfile } from '@/hooks/useUserProfile';
 import { getRiskBasedInsights } from '@/lib/investorRules';
 import { useNavigate } from 'react-router-dom';
 
@@ -51,8 +51,8 @@ const COLORS = [
 ];
 
 export function Insights() {
-  const { data: profile } = useUserProfile();
-  const maxPositionPct = profile?.max_position_pct ?? 10;
+  const { strategy, loading: strategyLoading } = useUserStrategy();
+  const maxPositionPct = strategy.thresholds.max_position_pct;
   
   // Use the SHARED diversification score hook (same as /diversification page)
   const { data: scoreData, loading: scoreLoading, refetch: refetchScore } = useDiversificationScore(false);
@@ -63,9 +63,9 @@ export function Insights() {
   const [enriching, setEnriching] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const navigate = useNavigate();
-  const risk = getRiskBasedInsights(profile?.risk_profile);
+  const risk = getRiskBasedInsights(strategy.rawProfile?.risk_profile);
 
-  const loading = scoreLoading || insightsLoading;
+  const loading = scoreLoading || insightsLoading || strategyLoading;
 
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', notation: 'compact' }).format(value);
@@ -403,12 +403,12 @@ export function Insights() {
         </Card>
 
         {/* Personalized Recommendations */}
-        {profile && (
+        {strategy.profileExists && (
           <Card className="rounded-xl sm:rounded-2xl">
             <CardHeader className="px-4 sm:px-6 py-4">
               <CardTitle className="text-sm sm:text-base flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-primary" />
-                Recommandations
+                Recommandations ({strategy.archetypeLabel})
               </CardTitle>
             </CardHeader>
             <CardContent className="px-4 sm:px-6 pb-4">
