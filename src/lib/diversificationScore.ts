@@ -83,7 +83,9 @@ const DEFAULT_WEIGHTS = {
   concentration: 25,
 };
 
-const UNCLASSIFIED_VALUES = ['Non classifié', 'Unknown', 'Monde', 'Non défini', 'Diversifié', null, undefined, ''];
+// Values that indicate unclassified metadata (for score calculations that filter these out)
+// NOTE: 'Monde' and 'Diversifié' are VALID values for global ETFs, not unclassified!
+const UNCLASSIFIED_VALUES = ['Non classifié', 'Unknown', 'Non défini', null, undefined, ''];
 
 /**
  * Calculate HHI (Herfindahl-Hirschman Index)
@@ -313,15 +315,21 @@ export function computeDiversificationScore(
 /**
  * Check if a position is properly classified
  */
+/**
+ * Check if a position is properly classified
+ * A position is classified if it has BOTH region AND sector that are not placeholders.
+ * 'Monde' and 'Diversifié' are VALID values (for global ETFs).
+ */
 export function isPositionClassified(
   region: string | null,
   sector: string | null,
   assetClass: string | null
 ): boolean {
-  const hasRegion = region && !UNCLASSIFIED_VALUES.includes(region);
-  const hasSector = sector && !UNCLASSIFIED_VALUES.includes(sector);
-  // Asset class is less strict - just needs to exist
-  const hasClass = assetClass && !['Unknown', 'Non classifié', null, undefined, ''].includes(assetClass);
+  // Values that indicate MISSING classification
+  const unclassified = ['Non classifié', 'Unknown', 'Non défini', null, undefined, ''];
+  
+  const hasRegion = region && !unclassified.includes(region);
+  const hasSector = sector && !unclassified.includes(sector);
   
   return Boolean(hasRegion && hasSector);
 }
