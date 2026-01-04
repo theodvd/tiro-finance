@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -8,23 +8,50 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { AlertCircle, RefreshCw, Loader2, ChevronRight, AlertTriangle, Lightbulb, Info, Eye, Layers } from 'lucide-react';
-import { useDiversification, AllocationBreakdown } from '@/hooks/useDiversification';
+import { AlertCircle, RefreshCw, Loader2, Info, Eye, Layers } from 'lucide-react';
+import { useDiversificationScore, AllocationBreakdown } from '@/hooks/useDiversificationScore';
 import { DiversificationScoreCard } from '@/components/diversification/DiversificationScoreCard';
 import { AllocationChart } from '@/components/diversification/AllocationChart';
 import { HoldingsPanel } from '@/components/diversification/HoldingsPanel';
 import { ConcentrationRisksPanel } from '@/components/diversification/ConcentrationRisksPanel';
 import { RecommendationsPanel } from '@/components/diversification/RecommendationsPanel';
+import { ScoreExplanation } from '@/components/diversification/ScoreExplanation';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
+// Types for the panels that expect the old format
+interface ConcentrationRisk {
+  type: "single_stock" | "sector" | "region" | "asset_class";
+  severity: "high" | "medium" | "low";
+  title: string;
+  description: string;
+  percentage: number;
+  threshold: number;
+  holdings: string[];
+}
+
+interface DiversificationRecommendation {
+  id: string;
+  title: string;
+  description: string;
+  priority: "high" | "medium" | "low";
+  relatedHoldings: string[];
+}
+
+// Thresholds for concentration risks
+const THRESHOLDS = {
+  singleStock: 10,
+  sector: 40,
+  region: 70,
+};
+
 export default function Diversification() {
-  const { loading, error, data, refetch } = useDiversification();
+  const [lookThroughMode, setLookThroughMode] = useState(false);
+  const { loading, error, data, refetch, maxPositionPct } = useDiversificationScore(lookThroughMode);
   const [enriching, setEnriching] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedBreakdown, setSelectedBreakdown] = useState<AllocationBreakdown | null>(null);
   const [panelType, setPanelType] = useState<'asset_class' | 'region' | 'sector'>('asset_class');
-  const [lookThroughMode, setLookThroughMode] = useState(false);
 
   const handleEnrichMetadata = async () => {
     setEnriching(true);
@@ -137,6 +164,79 @@ export default function Diversification() {
     ? data.lookThrough!.realSectoral 
     : data.bySector;
 
+  // Generate concentration risks from score data
+  const concentrationRisks: ConcentrationRisk[] = [];
+  
+  // Single stock concentration
+  data.holdings
+    .filter(h => h.weightPct > maxPositionPct)
+    .sort((a, b) => b.weightPct - a.weightPct)
+    .slice(0, 3)
+    .forEach(h => {
+      concentrationRisks.push({
+        type: "single_stock",
+        severity: h.weightPct > 20 ? "high" : h.weightPct > 15 ? "medium" : "low",
+        title: `Position concentrée : ${h.ticker}`,
+        description: `${h.name} représente ${h.weightPct.toFixed(1)}% de votre portefeuille.`,
+        percentage: h.weightPct,
+        threshold: maxPositionPct,
+        holdings: [h.ticker],
+      });
+    });
+
+  // Sector concentration
+  data.bySector
+    .filter(s => s.name !== 'Non classifié' && s.percentage > THRESHOLDS.sector)
+    .forEach(s => {
+      concentrationRisks.push({
+        type: "sector",
+        severity: s.percentage > 60 ? "high" : s.percentage > 50 ? "medium" : "low",
+        title: `Surexposition secteur : ${s.name}`,
+        description: `Le secteur ${s.name} représente ${s.percentage.toFixed(1)}% de votre portefeuille.`,
+        percentage: s.percentage,
+        threshold: THRESHOLDS.sector,
+        holdings: s.holdings.map(h => h.ticker),
+      });
+    });
+
+  // Region concentration
+  data.byRegion
+    .filter(r => r.name !== 'Non classifié' && r.percentage > THRESHOLDS.region)
+    .forEach(r => {
+      concentrationRisks.push({
+        type: "region",
+        severity: r.percentage > 85 ? "high" : r.percentage > 75 ? "medium" : "low",
+        title: `Concentration géographique : ${r.name}`,
+        description: `La région ${r.name} représente ${r.percentage.toFixed(1)}% de votre portefeuille.`,
+        percentage: r.percentage,
+        threshold: THRESHOLDS.region,
+        holdings: r.holdings.map(h => h.ticker),
+      });
+    });
+
+  // Generate recommendations based on risks
+  const recommendations: DiversificationRecommendation[] = concentrationRisks
+    .slice(0, 4)
+    .map((risk, idx) => ({
+      id: `rec-${idx}`,
+      title: risk.type === 'single_stock' 
+        ? 'Rééquilibrer la position'
+        : risk.type === 'sector'
+        ? `Diversifier hors ${risk.title.replace('Surexposition secteur : ', '')}`
+        : 'Exposition internationale',
+      description: risk.description,
+      priority: risk.severity,
+      relatedHoldings: risk.holdings.slice(0, 3),
+    }));
+
+  // Get score label for display
+  const scoreLabel = data.score.label;
+  const dataQuality = {
+    classified: data.score.coverage.classifiedPositions,
+    unclassified: data.score.coverage.totalPositions - data.score.coverage.classifiedPositions,
+    total: data.score.coverage.totalPositions,
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-4 sm:space-y-6">
       {/* Header */}
@@ -168,11 +268,11 @@ export default function Diversification() {
       </div>
 
       {/* Data quality warning */}
-      {data.dataQuality.unclassified > 0 && (
+      {dataQuality.unclassified > 0 && (
         <Alert className="rounded-xl">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription className="text-xs sm:text-sm">
-            {data.dataQuality.unclassified} sur {data.dataQuality.total} positions n'ont pas de métadonnées complètes.
+            {dataQuality.unclassified} sur {dataQuality.total} positions n'ont pas de métadonnées complètes.
             Cliquez sur "Enrichir" puis "Rafraîchir" pour améliorer la précision de l'analyse.
           </AlertDescription>
         </Alert>
@@ -263,11 +363,19 @@ export default function Diversification() {
 
       {/* Score Card */}
       <DiversificationScoreCard
-        score={data.score}
-        scoreLabel={data.scoreLabel}
+        score={data.score.totalScore}
+        scoreLabel={scoreLabel}
         lastUpdated={data.lastUpdated}
         totalValue={data.totalValue}
-        dataQuality={data.dataQuality}
+        dataQuality={dataQuality}
+      />
+
+      {/* Score Explanation */}
+      <ScoreExplanation 
+        score={data.score}
+        lookThroughScore={data.lookThroughScore}
+        isLookThroughMode={lookThroughMode}
+        onEnrichClick={handleEnrichMetadata}
       />
 
       {/* Allocation Charts */}
@@ -298,7 +406,7 @@ export default function Diversification() {
           <AllocationChart
             data={data.byAssetClass}
             title="Allocation par Classe d'Actif"
-            onSliceClick={(b) => handleSliceClick(b, 'asset_class')}
+            onSliceClick={(b) => handleSliceClick(b as AllocationBreakdown, 'asset_class')}
           />
         </TabsContent>
 
@@ -306,7 +414,7 @@ export default function Diversification() {
           <AllocationChart
             data={displayRegion}
             title={lookThroughMode && hasLookThroughData ? "Allocation Géographique (Look-Through)" : "Allocation Géographique"}
-            onSliceClick={(b) => handleSliceClick(b, 'region')}
+            onSliceClick={(b) => handleSliceClick(b as AllocationBreakdown, 'region')}
           />
           {lookThroughMode && hasLookThroughData && (
             <p className="text-xs text-muted-foreground mt-2 text-center">
@@ -320,7 +428,7 @@ export default function Diversification() {
           <AllocationChart
             data={displaySector}
             title={lookThroughMode && hasLookThroughData ? "Allocation par Secteur (Look-Through)" : "Allocation par Secteur"}
-            onSliceClick={(b) => handleSliceClick(b, 'sector')}
+            onSliceClick={(b) => handleSliceClick(b as AllocationBreakdown, 'sector')}
           />
           {lookThroughMode && hasLookThroughData && (
             <p className="text-xs text-muted-foreground mt-2 text-center">
@@ -333,8 +441,8 @@ export default function Diversification() {
 
       {/* Concentration Risks & Recommendations */}
       <div className="grid gap-4 sm:gap-6 grid-cols-1 lg:grid-cols-2">
-        <ConcentrationRisksPanel risks={data.concentrationRisks} />
-        <RecommendationsPanel recommendations={data.recommendations} />
+        <ConcentrationRisksPanel risks={concentrationRisks} />
+        <RecommendationsPanel recommendations={recommendations} />
       </div>
 
       {/* Legal Disclaimer */}

@@ -29,7 +29,9 @@ import {
   Plus,
   Info
 } from 'lucide-react';
-import { useInsightsData, SubScore } from '@/hooks/useInsightsData';
+import { useDiversificationScore } from '@/hooks/useDiversificationScore';
+import { useInsightsData } from '@/hooks/useInsightsData';
+import { ScoreExplanation } from '@/components/diversification/ScoreExplanation';
 import { supabase } from '@/integrations/supabase/client';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -51,11 +53,19 @@ const COLORS = [
 export function Insights() {
   const { data: profile } = useUserProfile();
   const maxPositionPct = profile?.max_position_pct ?? 10;
-  const { loading, error, data, refetch } = useInsightsData(maxPositionPct);
+  
+  // Use the SHARED diversification score hook (same as /diversification page)
+  const { data: scoreData, loading: scoreLoading, refetch: refetchScore } = useDiversificationScore(false);
+  
+  // Use insights data for additional metrics (P/L, snapshots, series)
+  const { loading: insightsLoading, error, data: insightsData, refetch: refetchInsights } = useInsightsData(maxPositionPct);
+  
   const [enriching, setEnriching] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const navigate = useNavigate();
   const risk = getRiskBasedInsights(profile?.risk_profile);
+
+  const loading = scoreLoading || insightsLoading;
 
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', notation: 'compact' }).format(value);
@@ -81,7 +91,7 @@ export function Insights() {
         duration: 5000,
       });
 
-      await refetch();
+      await Promise.all([refetchScore(), refetchInsights()]);
     } catch (err: any) {
       console.error('Error enriching metadata:', err);
       toast.error('Erreur lors de l\'enrichissement', { description: err.message });
@@ -106,7 +116,7 @@ export function Insights() {
         duration: 4000,
       });
 
-      await refetch();
+      await Promise.all([refetchScore(), refetchInsights()]);
     } catch (err: any) {
       console.error('Error refreshing prices:', err);
       toast.error('Erreur lors du rafraîchissement', { description: err.message });
@@ -144,7 +154,7 @@ export function Insights() {
   }
 
   // Empty state
-  if (!data || !data.dataQuality.hasHoldings) {
+  if (!scoreData || !insightsData || !insightsData.dataQuality.hasHoldings) {
     return (
       <div className="max-w-6xl mx-auto space-y-6 p-4 sm:p-6 md:p-8">
         <h1 className="text-xl font-bold tracking-tight">Insights</h1>
@@ -165,12 +175,15 @@ export function Insights() {
     );
   }
 
+  // Use shared score from the same source as /diversification
+  const diversificationScore = scoreData.score;
+  
   const { 
     totalValue, totalInvested, pnl, pnlPct, lastUpdated,
     allocByAccount, allocByClass, allocByRegion, allocBySector,
-    diversificationScore, snapshotVariation, topGainers, topLosers,
+    snapshotVariation, topGainers, topLosers,
     series, snapshots, dataQuality
-  } = data;
+  } = insightsData;
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-[hsl(var(--success))]';
@@ -193,7 +206,7 @@ export function Insights() {
         <div>
           <h1 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight">Insights</h1>
           <p className="text-xs sm:text-sm text-muted-foreground">
-            Analyse basée sur {dataQuality.totalCount} positions • {dataQuality.classifiedCount} classifiées
+            Analyse basée sur {diversificationScore.coverage.totalPositions} positions • {diversificationScore.coverage.classifiedPositions} classifiées
           </p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
@@ -252,18 +265,18 @@ export function Insights() {
         </Card>
       </div>
 
-      {/* Diversification Score with Sub-scores */}
+      {/* Diversification Score with Sub-scores - USING SHARED SCORE */}
       <Card className="rounded-xl sm:rounded-2xl">
         <CardHeader className="px-4 sm:px-6 py-4">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm sm:text-base md:text-lg flex items-center gap-2">
               Score de Diversification
-              <Badge variant={getScoreBadgeVariant(diversificationScore.total)} className="ml-2">
+              <Badge variant={getScoreBadgeVariant(diversificationScore.totalScore)} className="ml-2">
                 {diversificationScore.label}
               </Badge>
             </CardTitle>
-            <span className={`text-2xl sm:text-3xl font-bold ${getScoreColor(diversificationScore.total)}`}>
-              {diversificationScore.total}/100
+            <span className={`text-2xl sm:text-3xl font-bold ${getScoreColor(diversificationScore.totalScore)}`}>
+              {diversificationScore.totalScore}/100
             </span>
           </div>
         </CardHeader>
@@ -272,18 +285,18 @@ export function Insights() {
             <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
               <div
                 className={`h-full transition-all duration-500 ${
-                  diversificationScore.total >= 80 ? 'bg-[hsl(var(--success))]' :
-                  diversificationScore.total >= 60 ? 'bg-[hsl(var(--chart-1))]' :
-                  diversificationScore.total >= 40 ? 'bg-[hsl(var(--accent))]' :
+                  diversificationScore.totalScore >= 80 ? 'bg-[hsl(var(--success))]' :
+                  diversificationScore.totalScore >= 60 ? 'bg-[hsl(var(--chart-1))]' :
+                  diversificationScore.totalScore >= 40 ? 'bg-[hsl(var(--accent))]' :
                   'bg-[hsl(var(--destructive))]'
                 }`}
-                style={{ width: `${diversificationScore.total}%` }}
+                style={{ width: `${diversificationScore.totalScore}%` }}
               />
             </div>
             
             {/* Sub-scores */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2">
-              {diversificationScore.subScores.map((sub: SubScore) => (
+              {diversificationScore.subscores.map((sub) => (
                 <div key={sub.name} className="space-y-1">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-muted-foreground">{sub.name}</span>
@@ -295,10 +308,13 @@ export function Insights() {
               ))}
             </div>
 
-            <p className="text-xs text-muted-foreground pt-2 flex items-start gap-1.5">
-              <Info className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
-              Ce score est calculé via l'indice HHI (concentration) sur vos classes, régions, secteurs + pénalité si positions &gt; {maxPositionPct}%.
-            </p>
+            {/* Score Explanation */}
+            <ScoreExplanation 
+              score={diversificationScore}
+              lookThroughScore={scoreData.lookThroughScore}
+              isLookThroughMode={false}
+              onEnrichClick={handleEnrichMetadata}
+            />
           </div>
         </CardContent>
       </Card>
@@ -365,11 +381,11 @@ export function Insights() {
             )}
 
             {/* Data quality warning */}
-            {dataQuality.classifiedCount < dataQuality.totalCount && (
+            {diversificationScore.coverage.classifiedPositions < diversificationScore.coverage.totalPositions && (
               <div className="flex items-start gap-2 pt-1">
                 <AlertCircle className="h-4 w-4 text-[hsl(var(--accent))] mt-0.5 flex-shrink-0" />
                 <p className="text-xs text-muted-foreground">
-                  {dataQuality.totalCount - dataQuality.classifiedCount} positions non classifiées. 
+                  {diversificationScore.coverage.totalPositions - diversificationScore.coverage.classifiedPositions} positions non classifiées. 
                   Cliquez sur "Enrichir" pour améliorer la précision.
                 </p>
               </div>
@@ -600,9 +616,9 @@ export function Insights() {
           <p className="flex items-start gap-2">
             <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
             <span>
-              <strong>Sources de données :</strong> Les allocations et P/L sont calculés en temps réel depuis vos holdings 
-              et les derniers prix de marché. Le score de diversification utilise l'indice HHI (Herfindahl-Hirschman) 
-              pour mesurer la concentration. L'historique provient des snapshots hebdomadaires automatiques.
+              <strong>Source unique :</strong> Le score de diversification est identique à la page /diversification. 
+              Il utilise l'indice HHI (Herfindahl-Hirschman) pour mesurer la concentration sur 4 dimensions : 
+              classes d'actifs, régions, secteurs et concentration par position.
               {lastUpdated && (
                 <span className="block mt-1">
                   Dernière mise à jour des prix : {new Date(lastUpdated).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}

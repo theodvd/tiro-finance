@@ -1,14 +1,27 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
-import { AllocationBreakdown } from "@/hooks/useDiversification";
 import { fmtEUR, fmtPct } from "@/lib/format";
 import { useState } from "react";
 
+// Generic interface for chart - works with both hooks
+interface ChartAllocationBreakdown {
+  name: string;
+  value: number;
+  percentage: number;
+  holdings: Array<{
+    id: string;
+    ticker: string;
+    name: string;
+    sector?: string | null;
+    region?: string | null;
+  }>;
+}
+
 interface AllocationChartProps {
-  data: AllocationBreakdown[];
+  data: ChartAllocationBreakdown[];
   title: string;
-  onSliceClick: (breakdown: AllocationBreakdown) => void;
+  onSliceClick: (breakdown: ChartAllocationBreakdown) => void;
 }
 
 // Finance-friendly neutral palette with warm accent for risky concentrations
@@ -44,7 +57,7 @@ export function AllocationChart({ data, title, onSliceClick }: AllocationChartPr
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (!active || !payload?.[0]) return null;
-    const item = payload[0].payload as AllocationBreakdown & { fill: string };
+    const item = payload[0].payload as ChartAllocationBreakdown & { fill: string };
 
     return (
       <div className="bg-popover border border-border rounded-lg p-3 shadow-lg">
