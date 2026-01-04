@@ -11,6 +11,7 @@ import Portfolio from "./pages/Portfolio";
 import Investments from "./pages/Investments";
 import Insights from "./pages/Insights";
 import Profile from "./pages/Profile";
+import Settings from "./pages/Settings";
 import Diversification from "./pages/Diversification";
 import Decisions from "./pages/Decisions";
 import DecisionDetail from "./pages/DecisionDetail";
@@ -113,6 +114,16 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <Profile />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Settings />
                   </Layout>
                 </ProtectedRoute>
               }
