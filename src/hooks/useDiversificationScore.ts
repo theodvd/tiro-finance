@@ -8,7 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { queryKeys } from '@/lib/queryKeys';
-import { useUserProfile } from '@/hooks/useUserProfile';
+import { useUserStrategy } from '@/hooks/useUserStrategy';
 import { enrichAssetMetadata } from '@/utils/assetEnrichment';
 import { calculateLookThroughExposure, LookThroughResult } from '@/utils/lookThroughAnalysis';
 import {
@@ -350,13 +350,16 @@ function processScoreData(
 
 export function useDiversificationScore(useLookThrough: boolean = false) {
   const { user } = useAuth();
-  const { data: profile } = useUserProfile();
-  const maxPositionPct = profile?.max_position_pct ?? 10;
+  const { strategy, loading: strategyLoading } = useUserStrategy();
+  
+  // Use thresholds from user strategy (single source of truth)
+  const maxPositionPct = strategy.thresholds.max_position_pct;
+  const maxAssetClassPct = strategy.thresholds.max_asset_class_pct;
 
   const query = useQuery({
-    queryKey: [...queryKeys.diversification(user?.id ?? ''), 'shared-score', maxPositionPct],
+    queryKey: [...queryKeys.diversification(user?.id ?? ''), 'shared-score', maxPositionPct, maxAssetClassPct],
     queryFn: () => fetchScoreData(user!.id),
-    enabled: !!user,
+    enabled: !!user && !strategyLoading,
     staleTime: 2 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -373,10 +376,13 @@ export function useDiversificationScore(useLookThrough: boolean = false) {
   }, [query.data, maxPositionPct, useLookThrough]);
 
   return {
-    loading: query.isLoading,
+    loading: query.isLoading || strategyLoading,
     error: query.error?.message ?? null,
     data,
     refetch: query.refetch,
+    // Expose thresholds for transparency in UI
     maxPositionPct,
+    maxAssetClassPct,
+    strategy,
   };
 }
