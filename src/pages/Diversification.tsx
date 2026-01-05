@@ -41,7 +41,7 @@ interface DiversificationRecommendation {
 // Generate thresholds from strategy
 export default function Diversification() {
   const [lookThroughMode, setLookThroughMode] = useState(false);
-  const { loading, error, data, refetch, maxPositionPct, maxAssetClassPct, strategy } = useDiversificationScore(lookThroughMode);
+  const { loading, error, data, refetch, maxPositionPct, maxAssetClassPct, profile, profileLabel } = useDiversificationScore(lookThroughMode);
   const [enriching, setEnriching] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedBreakdown, setSelectedBreakdown] = useState<AllocationBreakdown | null>(null);

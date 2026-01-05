@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { useUserStrategy } from "@/hooks/useUserStrategy";
+import { useInvestorProfile } from "@/hooks/useInvestorProfile";
 import { StrategyOnboarding } from "@/components/onboarding/StrategyOnboarding";
 
 // Routes that don't require onboarding to be completed
-const ONBOARDING_EXEMPT_ROUTES = ['/profile', '/auth'];
+const ONBOARDING_EXEMPT_ROUTES = ['/profile', '/auth', '/settings'];
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading: authLoading } = useAuth();
-  const { strategy, loading: strategyLoading } = useUserStrategy();
+  const { needsOnboarding, loading: profileLoading } = useInvestorProfile();
   const navigate = useNavigate();
   const location = useLocation();
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -22,7 +22,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   // Determine if we should show onboarding
   useEffect(() => {
-    if (authLoading || strategyLoading || !user) return;
+    if (authLoading || profileLoading || !user) return;
     
     // Don't force onboarding on exempt routes
     const isExempt = ONBOARDING_EXEMPT_ROUTES.some(r => location.pathname.startsWith(r));
@@ -32,15 +32,15 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     }
 
     // Show onboarding if profile doesn't exist or is incomplete
-    if (strategy.needsOnboarding) {
+    if (needsOnboarding) {
       setShowOnboarding(true);
     } else {
       setShowOnboarding(false);
     }
-  }, [authLoading, strategyLoading, user, strategy.needsOnboarding, location.pathname]);
+  }, [authLoading, profileLoading, user, needsOnboarding, location.pathname]);
 
   // Loading state
-  if (authLoading || (user && strategyLoading)) {
+  if (authLoading || (user && profileLoading)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
