@@ -8,7 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { queryKeys } from '@/lib/queryKeys';
-import { useUserStrategy } from '@/hooks/useUserStrategy';
+import { useInvestorProfile } from '@/hooks/useInvestorProfile';
 import { enrichAssetMetadata } from '@/utils/assetEnrichment';
 import { calculateLookThroughExposure, LookThroughResult } from '@/utils/lookThroughAnalysis';
 import {
@@ -350,16 +350,18 @@ function processScoreData(
 
 export function useDiversificationScore(useLookThrough: boolean = false) {
   const { user } = useAuth();
-  const { strategy, loading: strategyLoading } = useUserStrategy();
+  const { thresholds, profile, profileLabel, loading: profileLoading } = useInvestorProfile();
   
-  // Use thresholds from user strategy (single source of truth)
-  const maxPositionPct = strategy.thresholds.max_position_pct;
-  const maxAssetClassPct = strategy.thresholds.max_asset_class_pct;
+  // Use thresholds from investor profile (single source of truth)
+  // Use stock position threshold for actions, but the score module will handle ETF vs stock differentiation
+  const maxPositionPct = thresholds.maxStockPositionPct;
+  const maxEtfPositionPct = thresholds.maxEtfPositionPct;
+  const maxAssetClassPct = thresholds.maxAssetClassPct;
 
   const query = useQuery({
-    queryKey: [...queryKeys.diversification(user?.id ?? ''), 'shared-score', maxPositionPct, maxAssetClassPct],
+    queryKey: [...queryKeys.diversification(user?.id ?? ''), 'shared-score', maxPositionPct, maxEtfPositionPct, maxAssetClassPct],
     queryFn: () => fetchScoreData(user!.id),
-    enabled: !!user && !strategyLoading,
+    enabled: !!user && !profileLoading,
     staleTime: 2 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -376,13 +378,15 @@ export function useDiversificationScore(useLookThrough: boolean = false) {
   }, [query.data, maxPositionPct, useLookThrough]);
 
   return {
-    loading: query.isLoading || strategyLoading,
+    loading: query.isLoading || profileLoading,
     error: query.error?.message ?? null,
     data,
     refetch: query.refetch,
     // Expose thresholds for transparency in UI
     maxPositionPct,
+    maxEtfPositionPct,
     maxAssetClassPct,
-    strategy,
+    profile,
+    profileLabel,
   };
 }
