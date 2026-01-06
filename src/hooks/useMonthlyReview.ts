@@ -2,17 +2,10 @@ import { useMemo } from 'react';
 import { useDiversification } from './useDiversification';
 import { useSnapshots } from './useSnapshots';
 import { usePortfolioData } from './usePortfolioData';
-import { useUserProfile } from './useUserProfile';
+import { useInvestorProfile } from './useInvestorProfile';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useState, useEffect } from 'react';
-
-// Default thresholds
-const DEFAULT_THRESHOLDS = {
-  cashTargetPct: 25,
-  maxPositionPct: 10,
-  maxAssetClassPct: 70,
-};
 
 export interface MonthlyAction {
   id: string;
@@ -57,7 +50,7 @@ export function useMonthlyReview() {
   const { data: diversificationData, loading: divLoading, error: divError } = useDiversification();
   const { snapshots, loading: snapLoading, error: snapError } = useSnapshots();
   const portfolioData = usePortfolioData();
-  const { data: profile, loading: profileLoading } = useUserProfile();
+  const { thresholds: profileThresholds, loading: profileLoading } = useInvestorProfile();
   
   const [totalLiquidity, setTotalLiquidity] = useState<number>(0);
   const [lastMonthlyCheckpoint, setLastMonthlyCheckpoint] = useState<string | null>(null);
@@ -107,11 +100,11 @@ export function useMonthlyReview() {
     const loading = divLoading || snapLoading || portfolioData.loading || profileLoading || liquidityLoading;
     const error = divError || snapError || portfolioData.error || null;
 
-    // Thresholds from profile or defaults
+    // Thresholds from useInvestorProfile
     const thresholds = {
-      cashTargetPct: profile?.cash_target_pct ?? DEFAULT_THRESHOLDS.cashTargetPct,
-      maxPositionPct: profile?.max_position_pct ?? DEFAULT_THRESHOLDS.maxPositionPct,
-      maxAssetClassPct: profile?.max_asset_class_pct ?? DEFAULT_THRESHOLDS.maxAssetClassPct,
+      cashTargetPct: profileThresholds.cashTargetPct,
+      maxPositionPct: profileThresholds.maxStockPositionPct,
+      maxAssetClassPct: profileThresholds.maxAssetClassPct,
     };
 
     // Calculate total wealth
@@ -244,7 +237,7 @@ export function useMonthlyReview() {
     diversificationData,
     snapshots,
     portfolioData,
-    profile,
+    profileThresholds,
     totalLiquidity,
     lastMonthlyCheckpoint,
     divLoading,

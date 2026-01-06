@@ -1,9 +1,16 @@
 /**
- * Hook for accessing investor profile and thresholds
- * Single source of truth for all diversification/decision/insights systems
+ * useInvestorProfile - Single Source of Truth for investor strategy
+ * 
+ * This hook is the ONLY interface for:
+ * - Fetching investor profile and thresholds
+ * - Computing and persisting profile scores
+ * - Saving threshold overrides
+ * - Triggering React Query invalidations
+ * 
+ * All other hooks (useUserStrategy, useUserProfile) are deprecated.
  */
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { queryKeys } from '@/lib/queryKeys';
@@ -19,8 +26,9 @@ import {
   OnboardingAnswers,
 } from '@/lib/investorProfileEngine';
 
+// ============= TYPES =============
+
 export interface UserThresholds {
-  // Effective thresholds (user customized or defaults)
   cashTargetPct: number;
   maxStockPositionPct: number;
   maxEtfPositionPct: number;
@@ -29,27 +37,41 @@ export interface UserThresholds {
   targetScoreMax: number;
 }
 
+export interface PersistedScores {
+  capacity: number;
+  tolerance: number;
+  objectives: number;
+  total: number;
+}
+
 export interface InvestorProfileState {
-  // Profile info
+  // Profile identification
   profile: InvestorProfile;
   profileLabel: string;
   profileDescription: string;
   
-  // Computed profile result (if available)
+  // Persisted scores (from DB, not recomputed)
+  scores: PersistedScores | null;
+  
+  // Profile computation result (for detailed view)
   profileResult: ProfileResult | null;
   
-  // Effective thresholds (considering user overrides)
+  // Confidence
+  confidence: 'high' | 'medium' | 'low';
+  
+  // Effective thresholds (user overrides or defaults)
   thresholds: UserThresholds;
   
   // Default thresholds for current profile
   defaultThresholds: ProfileThresholds;
   
-  // Status
+  // Status flags
   profileExists: boolean;
   profileComplete: boolean;
   needsOnboarding: boolean;
+  profileComputedAt: Date | null;
   
-  // Raw profile data
+  // Raw DB data
   rawProfile: RawProfile | null;
 }
 
@@ -67,8 +89,16 @@ interface RawProfile {
   available_time: string | null;
   management_style: string | null;
   main_project: string | null;
-  // Stored profile
+  // Stored profile result
   risk_profile: string | null;
+  // Persisted computed scores
+  score_capacity_computed: number | null;
+  score_tolerance_computed: number | null;
+  score_objectives_computed: number | null;
+  score_total_computed: number | null;
+  profile_confidence: string | null;
+  profile_computed_at: string | null;
+  onboarding_answers: unknown; // JSON type from Supabase
   // User-customized thresholds
   cash_target_pct: number | null;
   max_position_pct: number | null;
@@ -77,6 +107,8 @@ interface RawProfile {
   first_name: string | null;
   age: number | null;
 }
+
+// ============= DATA FETCHING =============
 
 async function fetchUserProfile(userId: string): Promise<RawProfile | null> {
   const { data, error } = await supabase
@@ -95,6 +127,13 @@ async function fetchUserProfile(userId: string): Promise<RawProfile | null> {
       management_style,
       main_project,
       risk_profile,
+      score_capacity_computed,
+      score_tolerance_computed,
+      score_objectives_computed,
+      score_total_computed,
+      profile_confidence,
+      profile_computed_at,
+      onboarding_answers,
       cash_target_pct,
       max_position_pct,
       max_asset_class_pct,
@@ -112,8 +151,55 @@ async function fetchUserProfile(userId: string): Promise<RawProfile | null> {
   return data;
 }
 
+async function ensureProfileExists(userId: string): Promise<void> {
+  // Check if profile exists
+  const { data } = await supabase
+    .from('user_profile')
+    .select('id')
+    .eq('user_id', userId)
+    .maybeSingle();
+  
+  if (!data) {
+    // Create a minimal profile row
+    const { error } = await supabase
+      .from('user_profile')
+      .insert({
+        user_id: userId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    
+    if (error && !error.message.includes('duplicate')) {
+      console.error('Error creating user profile:', error);
+    }
+  }
+}
+
+// ============= PROCESSING =============
+
+function buildAnswersFromProfile(raw: RawProfile): OnboardingAnswers {
+  // Use stored answers if available, otherwise reconstruct from individual fields
+  if (raw.onboarding_answers && typeof raw.onboarding_answers === 'object') {
+    return raw.onboarding_answers as OnboardingAnswers;
+  }
+  
+  return {
+    portfolioShare: undefined,
+    emergencyFund: raw.financial_resilience_months || undefined,
+    incomeStability: raw.income_stability || undefined,
+    investmentHorizon: raw.investment_horizon || undefined,
+    mainObjective: raw.main_project || undefined,
+    reactionToLoss: raw.reaction_to_volatility || raw.max_acceptable_loss || undefined,
+    riskVision: raw.risk_vision || undefined,
+    experienceLevel: raw.investment_experience || undefined,
+    timeCommitment: raw.available_time || undefined,
+    preferredStyle: raw.management_style || undefined,
+    concentrationAcceptance: undefined,
+  };
+}
+
 function processInvestorProfile(rawProfile: RawProfile | null): InvestorProfileState {
-  // No profile exists
+  // No profile exists - return defaults
   if (!rawProfile) {
     const defaultProfile: InvestorProfile = 'Équilibré';
     const defaults = getProfileThresholds(defaultProfile);
@@ -122,9 +208,11 @@ function processInvestorProfile(rawProfile: RawProfile | null): InvestorProfileS
       profile: defaultProfile,
       profileLabel: PROFILE_LABELS[defaultProfile],
       profileDescription: PROFILE_DESCRIPTIONS[defaultProfile],
+      scores: null,
       profileResult: null,
+      confidence: 'low',
       thresholds: {
-        cashTargetPct: (defaults.cashTargetPct.min + defaults.cashTargetPct.max) / 2,
+        cashTargetPct: Math.round((defaults.cashTargetPct.min + defaults.cashTargetPct.max) / 2),
         maxStockPositionPct: defaults.maxStockPositionPct,
         maxEtfPositionPct: defaults.maxEtfPositionPct,
         maxAssetClassPct: defaults.maxAssetClassPct,
@@ -135,41 +223,56 @@ function processInvestorProfile(rawProfile: RawProfile | null): InvestorProfileS
       profileExists: false,
       profileComplete: false,
       needsOnboarding: true,
+      profileComputedAt: null,
       rawProfile: null,
     };
   }
 
-  // Check completeness - need at least key questions
+  // Check profile completeness
   const hasHorizon = !!rawProfile.investment_horizon;
   const hasLossTolerance = !!rawProfile.max_acceptable_loss || !!rawProfile.reaction_to_volatility;
-  const hasResilience = !!rawProfile.financial_resilience_months;
   const profileComplete = hasHorizon && hasLossTolerance;
 
-  // Build answers for profile computation
-  const answers: OnboardingAnswers = {
-    portfolioShare: undefined, // Not yet collected
-    emergencyFund: rawProfile.financial_resilience_months || undefined,
-    incomeStability: rawProfile.income_stability || undefined,
-    investmentHorizon: rawProfile.investment_horizon || undefined,
-    mainObjective: rawProfile.main_project || undefined,
-    reactionToLoss: rawProfile.reaction_to_volatility || rawProfile.max_acceptable_loss || undefined,
-    riskVision: rawProfile.risk_vision || undefined,
-    experienceLevel: rawProfile.investment_experience || undefined,
-    timeCommitment: rawProfile.available_time || undefined,
-    preferredStyle: rawProfile.management_style || undefined,
-    concentrationAcceptance: undefined, // Not yet collected
-  };
-
-  // Compute profile from answers
-  let profileResult: ProfileResult | null = null;
+  // Determine profile: use stored risk_profile (already computed) or map from legacy
   let profile: InvestorProfile;
+  let profileResult: ProfileResult | null = null;
+  let scores: PersistedScores | null = null;
+  let confidence: 'high' | 'medium' | 'low' = 'low';
 
-  if (profileComplete) {
+  // Use persisted computed data if available
+  if (rawProfile.score_capacity_computed !== null && 
+      rawProfile.score_tolerance_computed !== null &&
+      rawProfile.score_objectives_computed !== null) {
+    scores = {
+      capacity: rawProfile.score_capacity_computed,
+      tolerance: rawProfile.score_tolerance_computed,
+      objectives: rawProfile.score_objectives_computed,
+      total: rawProfile.score_total_computed || 0,
+    };
+    confidence = (rawProfile.profile_confidence as 'high' | 'medium' | 'low') || 'medium';
+  }
+
+  // Determine profile from stored value
+  if (rawProfile.risk_profile) {
+    profile = mapLegacyProfile(rawProfile.risk_profile);
+  } else if (profileComplete) {
+    // Compute on-the-fly if we have answers but no stored profile
+    const answers = buildAnswersFromProfile(rawProfile);
     profileResult = computeInvestorProfile(answers);
     profile = profileResult.profile;
+    confidence = profileResult.confidence;
+    
+    // Also extract scores from computation
+    if (!scores) {
+      scores = {
+        capacity: profileResult.scores.capacity.score,
+        tolerance: profileResult.scores.tolerance.score,
+        objectives: profileResult.scores.objectives.score,
+        total: profileResult.scores.total,
+      };
+    }
   } else {
-    // Use legacy mapping if available
-    profile = mapLegacyProfile(rawProfile.risk_profile);
+    profile = 'Équilibré';
   }
 
   const defaults = getProfileThresholds(profile);
@@ -177,10 +280,9 @@ function processInvestorProfile(rawProfile: RawProfile | null): InvestorProfileS
   // Build effective thresholds (user overrides or defaults)
   const thresholds: UserThresholds = {
     cashTargetPct: rawProfile.cash_target_pct ?? 
-      (defaults.cashTargetPct.min + defaults.cashTargetPct.max) / 2,
-    // max_position_pct in DB is for stocks; ETFs get their own threshold
+      Math.round((defaults.cashTargetPct.min + defaults.cashTargetPct.max) / 2),
     maxStockPositionPct: rawProfile.max_position_pct ?? defaults.maxStockPositionPct,
-    maxEtfPositionPct: defaults.maxEtfPositionPct, // No override in DB yet
+    maxEtfPositionPct: defaults.maxEtfPositionPct, // Not overridable yet
     maxAssetClassPct: rawProfile.max_asset_class_pct ?? defaults.maxAssetClassPct,
     targetScoreMin: defaults.targetScoreRange.min,
     targetScoreMax: defaults.targetScoreRange.max,
@@ -190,31 +292,42 @@ function processInvestorProfile(rawProfile: RawProfile | null): InvestorProfileS
     profile,
     profileLabel: PROFILE_LABELS[profile],
     profileDescription: PROFILE_DESCRIPTIONS[profile],
+    scores,
     profileResult,
+    confidence,
     thresholds,
     defaultThresholds: defaults,
     profileExists: true,
     profileComplete,
     needsOnboarding: !profileComplete,
+    profileComputedAt: rawProfile.profile_computed_at ? new Date(rawProfile.profile_computed_at) : null,
     rawProfile,
   };
 }
+
+// ============= HOOK =============
 
 export function useInvestorProfile() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
+  // Main query - fetch profile
   const query = useQuery({
     queryKey: [...queryKeys.userProfile(user?.id ?? ''), 'investorProfile'],
-    queryFn: () => fetchUserProfile(user!.id),
+    queryFn: async () => {
+      if (!user) return null;
+      // Ensure profile exists first
+      await ensureProfileExists(user.id);
+      return fetchUserProfile(user.id);
+    },
     enabled: !!user,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000, // 2 minutes
     gcTime: 30 * 60 * 1000,
   });
 
   const state = processInvestorProfile(query.data ?? null);
 
-  // Invalidate related queries after profile changes
+  // Invalidate all related queries
   const invalidateRelatedQueries = async () => {
     if (!user) return;
     
@@ -226,59 +339,147 @@ export function useInvestorProfile() {
     ]);
   };
 
-  // Save custom thresholds
-  const saveThresholds = async (updates: Partial<{
-    cashTargetPct: number;
-    maxStockPositionPct: number;
-    maxAssetClassPct: number;
-  }>) => {
-    if (!user) throw new Error('User not authenticated');
+  // Mutation: Save thresholds
+  const saveThresholdsMutation = useMutation({
+    mutationFn: async (updates: Partial<{
+      cashTargetPct: number;
+      maxStockPositionPct: number;
+      maxAssetClassPct: number;
+    }>) => {
+      if (!user) throw new Error('User not authenticated');
 
-    const dbUpdates: Record<string, number | string> = {
-      updated_at: new Date().toISOString(),
-    };
-    
-    if (updates.cashTargetPct !== undefined) {
-      dbUpdates.cash_target_pct = updates.cashTargetPct;
-    }
-    if (updates.maxStockPositionPct !== undefined) {
-      dbUpdates.max_position_pct = updates.maxStockPositionPct;
-    }
-    if (updates.maxAssetClassPct !== undefined) {
-      dbUpdates.max_asset_class_pct = updates.maxAssetClassPct;
-    }
+      const dbUpdates: Record<string, number | string> = {
+        updated_at: new Date().toISOString(),
+      };
+      
+      if (updates.cashTargetPct !== undefined) {
+        dbUpdates.cash_target_pct = updates.cashTargetPct;
+      }
+      if (updates.maxStockPositionPct !== undefined) {
+        dbUpdates.max_position_pct = updates.maxStockPositionPct;
+      }
+      if (updates.maxAssetClassPct !== undefined) {
+        dbUpdates.max_asset_class_pct = updates.maxAssetClassPct;
+      }
 
-    const { error } = await supabase
-      .from('user_profile')
-      .update(dbUpdates)
-      .eq('user_id', user.id);
+      const { error } = await supabase
+        .from('user_profile')
+        .update(dbUpdates)
+        .eq('user_id', user.id);
 
-    if (error) throw error;
-    
-    await invalidateRelatedQueries();
-  };
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidateRelatedQueries();
+    },
+  });
+
+  // Mutation: Recompute profile from answers
+  const recomputeProfileMutation = useMutation({
+    mutationFn: async (answers: OnboardingAnswers) => {
+      if (!user) throw new Error('User not authenticated');
+
+      // Compute profile
+      const result = computeInvestorProfile(answers);
+      const thresholds = result.thresholds;
+
+      // Persist everything
+      const profileData: Record<string, unknown> = {
+        investment_horizon: answers.investmentHorizon || null,
+        financial_resilience_months: answers.emergencyFund || null,
+        income_stability: answers.incomeStability || null,
+        reaction_to_volatility: answers.reactionToLoss || null,
+        risk_vision: answers.riskVision || null,
+        investment_experience: answers.experienceLevel || null,
+        available_time: answers.timeCommitment || null,
+        management_style: answers.preferredStyle || null,
+        main_project: answers.mainObjective || null,
+        risk_profile: result.profile,
+        score_capacity_computed: result.scores.capacity.score,
+        score_tolerance_computed: result.scores.tolerance.score,
+        score_objectives_computed: result.scores.objectives.score,
+        score_total_computed: result.scores.total,
+        profile_confidence: result.confidence,
+        profile_computed_at: new Date().toISOString(),
+        onboarding_answers: answers,
+        cash_target_pct: Math.round((thresholds.cashTargetPct.min + thresholds.cashTargetPct.max) / 2),
+        max_position_pct: thresholds.maxStockPositionPct,
+        max_asset_class_pct: thresholds.maxAssetClassPct,
+        updated_at: new Date().toISOString(),
+      };
+
+      // Try update first
+      const { data: existing } = await supabase
+        .from('user_profile')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      let dbError;
+      if (existing) {
+        const updateResult = await supabase
+          .from('user_profile')
+          .update(profileData as never)
+          .eq('user_id', user.id);
+        dbError = updateResult.error;
+      } else {
+        const insertResult = await supabase
+          .from('user_profile')
+          .insert({ user_id: user.id, ...profileData } as never);
+        dbError = insertResult.error;
+      }
+
+      if (dbError) throw dbError;
+
+      return result;
+    },
+    onSuccess: () => {
+      invalidateRelatedQueries();
+    },
+  });
 
   // Reset thresholds to profile defaults
   const resetToDefaults = async () => {
     const defaults = state.defaultThresholds;
-    await saveThresholds({
-      cashTargetPct: (defaults.cashTargetPct.min + defaults.cashTargetPct.max) / 2,
+    await saveThresholdsMutation.mutateAsync({
+      cashTargetPct: Math.round((defaults.cashTargetPct.min + defaults.cashTargetPct.max) / 2),
       maxStockPositionPct: defaults.maxStockPositionPct,
       maxAssetClassPct: defaults.maxAssetClassPct,
     });
   };
 
+  // Wrapper for saving thresholds
+  const saveThresholds = async (updates: Partial<{
+    cashTargetPct: number;
+    maxStockPositionPct: number;
+    maxAssetClassPct: number;
+  }>) => {
+    await saveThresholdsMutation.mutateAsync(updates);
+  };
+
+  // Wrapper for recomputing profile
+  const recomputeProfile = async (answers: OnboardingAnswers) => {
+    return recomputeProfileMutation.mutateAsync(answers);
+  };
+
   return {
+    // Loading states
     loading: query.isLoading,
+    saving: saveThresholdsMutation.isPending || recomputeProfileMutation.isPending,
     error: query.error?.message ?? null,
+    
+    // Profile state
     ...state,
+    
+    // Actions
     refetch: query.refetch,
     saveThresholds,
     resetToDefaults,
+    recomputeProfile,
     invalidateRelatedQueries,
   };
 }
 
-// Re-export for convenience
+// Re-export types and utilities
 export type { InvestorProfile, ProfileThresholds, ProfileResult, OnboardingAnswers };
 export { PROFILE_LABELS, PROFILE_DESCRIPTIONS, getProfileThresholds, getAllProfiles } from '@/lib/investorProfileEngine';

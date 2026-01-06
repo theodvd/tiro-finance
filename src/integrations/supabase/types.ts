@@ -561,8 +561,11 @@ export type Database = {
           max_position_pct: number | null
           monthly_expenses: Json | null
           monthly_income: Json | null
+          onboarding_answers: Json | null
           panic_selling_history: boolean | null
           priorities: Json | null
+          profile_computed_at: string | null
+          profile_confidence: string | null
           project_budget: number | null
           project_horizon_months: number | null
           reaction_to_gains: string | null
@@ -575,10 +578,14 @@ export type Database = {
           saveable_monthly: number | null
           score_behavior: number | null
           score_capacity: number | null
+          score_capacity_computed: number | null
           score_horizon: number | null
           score_knowledge: number | null
+          score_objectives_computed: number | null
           score_tolerance: number | null
+          score_tolerance_computed: number | null
           score_total: number | null
+          score_total_computed: number | null
           sectors_of_interest: string[] | null
           sectors_to_avoid: string[] | null
           upcoming_constraints: string[] | null
@@ -620,8 +627,11 @@ export type Database = {
           max_position_pct?: number | null
           monthly_expenses?: Json | null
           monthly_income?: Json | null
+          onboarding_answers?: Json | null
           panic_selling_history?: boolean | null
           priorities?: Json | null
+          profile_computed_at?: string | null
+          profile_confidence?: string | null
           project_budget?: number | null
           project_horizon_months?: number | null
           reaction_to_gains?: string | null
@@ -634,10 +644,14 @@ export type Database = {
           saveable_monthly?: number | null
           score_behavior?: number | null
           score_capacity?: number | null
+          score_capacity_computed?: number | null
           score_horizon?: number | null
           score_knowledge?: number | null
+          score_objectives_computed?: number | null
           score_tolerance?: number | null
+          score_tolerance_computed?: number | null
           score_total?: number | null
+          score_total_computed?: number | null
           sectors_of_interest?: string[] | null
           sectors_to_avoid?: string[] | null
           upcoming_constraints?: string[] | null
@@ -679,8 +693,11 @@ export type Database = {
           max_position_pct?: number | null
           monthly_expenses?: Json | null
           monthly_income?: Json | null
+          onboarding_answers?: Json | null
           panic_selling_history?: boolean | null
           priorities?: Json | null
+          profile_computed_at?: string | null
+          profile_confidence?: string | null
           project_budget?: number | null
           project_horizon_months?: number | null
           reaction_to_gains?: string | null
@@ -693,10 +710,14 @@ export type Database = {
           saveable_monthly?: number | null
           score_behavior?: number | null
           score_capacity?: number | null
+          score_capacity_computed?: number | null
           score_horizon?: number | null
           score_knowledge?: number | null
+          score_objectives_computed?: number | null
           score_tolerance?: number | null
+          score_tolerance_computed?: number | null
           score_total?: number | null
+          score_total_computed?: number | null
           sectors_of_interest?: string[] | null
           sectors_to_avoid?: string[] | null
           upcoming_constraints?: string[] | null
