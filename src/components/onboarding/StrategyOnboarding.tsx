@@ -13,7 +13,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { queryKeys } from '@/lib/queryKeys';
-import { computeInvestorProfile, PROFILE_LABELS, PROFILE_DESCRIPTIONS } from '@/lib/investorProfileEngine';
+import { 
+  computeInvestorProfile, 
+  PROFILE_LABELS, 
+  PROFILE_DESCRIPTIONS,
+  OnboardingAnswers as EngineAnswers
+} from '@/lib/investorProfileEngine';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -270,34 +275,58 @@ export function StrategyOnboarding({ onComplete }: OnboardingProps) {
     setSaving(true);
     try {
       // Compute profile
-      const result = computeInvestorProfile(answers as OnboardingAnswers);
+      const result = computeInvestorProfile(answers as EngineAnswers);
       const thresholds = result.thresholds;
 
-      // Upsert profile
-      const { error } = await supabase
-        .from('user_profile')
-        .upsert({
-          user_id: user.id,
-          // Answers
-          investment_horizon: answers.investmentHorizon,
-          financial_resilience_months: answers.emergencyFund,
-          income_stability: answers.incomeStability,
-          reaction_to_volatility: answers.reactionToLoss,
-          risk_vision: answers.riskVision,
-          investment_experience: answers.experienceLevel,
-          available_time: answers.timeCommitment,
-          management_style: answers.preferredStyle,
-          main_project: answers.mainObjective,
-          // Computed profile
-          risk_profile: result.profile,
-          // Default thresholds
-          cash_target_pct: (thresholds.cashTargetPct.min + thresholds.cashTargetPct.max) / 2,
-          max_position_pct: thresholds.maxStockPositionPct,
-          max_asset_class_pct: thresholds.maxAssetClassPct,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'user_id' });
+      // Build profile data with computed scores
+      const profileData: Record<string, unknown> = {
+        investment_horizon: answers.investmentHorizon || null,
+        financial_resilience_months: answers.emergencyFund || null,
+        income_stability: answers.incomeStability || null,
+        reaction_to_volatility: answers.reactionToLoss || null,
+        risk_vision: answers.riskVision || null,
+        investment_experience: answers.experienceLevel || null,
+        available_time: answers.timeCommitment || null,
+        management_style: answers.preferredStyle || null,
+        main_project: answers.mainObjective || null,
+        risk_profile: result.profile,
+        // PERSIST COMPUTED SCORES - critical for Settings display
+        score_capacity_computed: result.scores.capacity.score,
+        score_tolerance_computed: result.scores.tolerance.score,
+        score_objectives_computed: result.scores.objectives.score,
+        score_total_computed: result.scores.total,
+        profile_confidence: result.confidence,
+        profile_computed_at: new Date().toISOString(),
+        onboarding_answers: answers,
+        // Default thresholds
+        cash_target_pct: Math.round((thresholds.cashTargetPct.min + thresholds.cashTargetPct.max) / 2),
+        max_position_pct: thresholds.maxStockPositionPct,
+        max_asset_class_pct: thresholds.maxAssetClassPct,
+        updated_at: new Date().toISOString(),
+      };
 
-      if (error) throw error;
+      // Check if profile exists, then update or insert
+      const { data: existing } = await supabase
+        .from('user_profile')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      let dbError;
+      if (existing) {
+        const updateResult = await supabase
+          .from('user_profile')
+          .update(profileData as never)
+          .eq('user_id', user.id);
+        dbError = updateResult.error;
+      } else {
+        const insertResult = await supabase
+          .from('user_profile')
+          .insert({ user_id: user.id, ...profileData } as never);
+        dbError = insertResult.error;
+      }
+
+      if (dbError) throw dbError;
 
       // Invalidate queries
       await Promise.all([
@@ -312,9 +341,10 @@ export function StrategyOnboarding({ onComplete }: OnboardingProps) {
       });
 
       onComplete();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error saving onboarding:', err);
-      toast.error('Erreur lors de l\'enregistrement', { description: err.message });
+      const message = err instanceof Error ? err.message : 'Erreur inconnue';
+      toast.error('Erreur lors de l\'enregistrement', { description: message });
     } finally {
       setSaving(false);
     }

@@ -1,33 +1,29 @@
 /**
  * Settings page for viewing profile and editing thresholds
+ * Uses persisted scores from DB - single source of truth
  */
 
 import { useState, useEffect } from 'react';
 import { useInvestorProfile } from '@/hooks/useInvestorProfile';
-import { PROFILE_LABELS, PROFILE_DESCRIPTIONS, getProfileThresholds, InvestorProfile } from '@/lib/investorProfileEngine';
+import { PROFILE_LABELS, PROFILE_DESCRIPTIONS, InvestorProfile } from '@/lib/investorProfileEngine';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { 
   Loader2, Settings as SettingsIcon, RotateCcw, Save, 
   Shield, Scale, TrendingUp, Rocket, Target, 
-  Info, ChevronDown, ChevronUp, RefreshCw
+  Info, ChevronDown, ChevronUp, RefreshCw, AlertCircle
 } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion';
 import {
   Collapsible,
   CollapsibleContent,
@@ -42,77 +38,65 @@ const PROFILE_ICONS: Record<InvestorProfile, typeof Shield> = {
   Conviction: Target,
 };
 
+const CONFIDENCE_LABELS = {
+  high: { label: 'Confiance élevée', color: 'bg-green-500/10 text-green-600 border-green-500/20' },
+  medium: { label: 'Confiance moyenne', color: 'bg-amber-500/10 text-amber-600 border-amber-500/20' },
+  low: { label: 'À affiner', color: 'bg-red-500/10 text-red-600 border-red-500/20' },
+};
+
 export default function Settings() {
   const { 
-    loading, error, 
+    loading, saving, error, 
     profile, profileLabel, profileDescription,
-    profileResult, thresholds, defaultThresholds,
-    profileExists, profileComplete,
+    scores, confidence, thresholds, defaultThresholds,
+    profileExists, profileComplete, needsOnboarding,
     saveThresholds, resetToDefaults, refetch 
   } = useInvestorProfile();
   
-  const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
 
-  // Local state for editing
-  const [localThresholds, setLocalThresholds] = useState({
-    cashTargetPct: 10,
-    maxStockPositionPct: 10,
-    maxEtfPositionPct: 25,
-    maxAssetClassPct: 80,
-  });
+  // Local state for editing thresholds - CRITICAL: must be controlled
+  const [localCash, setLocalCash] = useState<number>(10);
+  const [localStock, setLocalStock] = useState<number>(10);
+  const [localAssetClass, setLocalAssetClass] = useState<number>(80);
 
-  // Sync local state with thresholds
+  // Sync local state when thresholds change (on load or after save)
   useEffect(() => {
     if (thresholds) {
-      setLocalThresholds({
-        cashTargetPct: thresholds.cashTargetPct,
-        maxStockPositionPct: thresholds.maxStockPositionPct,
-        maxEtfPositionPct: thresholds.maxEtfPositionPct,
-        maxAssetClassPct: thresholds.maxAssetClassPct,
-      });
+      setLocalCash(thresholds.cashTargetPct);
+      setLocalStock(thresholds.maxStockPositionPct);
+      setLocalAssetClass(thresholds.maxAssetClassPct);
       setHasChanges(false);
     }
   }, [thresholds]);
 
-  const handleChange = (field: keyof typeof localThresholds, value: number) => {
-    setLocalThresholds(prev => ({ ...prev, [field]: value }));
-    setHasChanges(true);
-  };
-
   const handleSave = async () => {
-    setSaving(true);
     try {
       await saveThresholds({
-        cashTargetPct: localThresholds.cashTargetPct,
-        maxStockPositionPct: localThresholds.maxStockPositionPct,
-        maxAssetClassPct: localThresholds.maxAssetClassPct,
+        cashTargetPct: localCash,
+        maxStockPositionPct: localStock,
+        maxAssetClassPct: localAssetClass,
       });
-      await refetch();
       setHasChanges(false);
       toast.success('Seuils enregistrés', {
         description: 'Vos préférences ont été mises à jour.',
       });
-    } catch (err: any) {
-      toast.error('Erreur', { description: err.message });
-    } finally {
-      setSaving(false);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Erreur inconnue';
+      toast.error('Erreur', { description: message });
     }
   };
 
   const handleReset = async () => {
-    setSaving(true);
     try {
       await resetToDefaults();
-      await refetch();
       toast.success('Seuils réinitialisés', {
         description: `Retour aux valeurs recommandées pour le profil ${profileLabel}.`,
       });
-    } catch (err: any) {
-      toast.error('Erreur', { description: err.message });
-    } finally {
-      setSaving(false);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Erreur inconnue';
+      toast.error('Erreur', { description: message });
     }
   };
 
@@ -134,14 +118,14 @@ export default function Settings() {
     );
   }
 
-  if (!profileExists) {
+  if (!profileExists || needsOnboarding) {
     return (
       <div className="container max-w-2xl mx-auto p-6">
         <Card className="p-8 text-center space-y-4">
-          <SettingsIcon className="w-12 h-12 mx-auto text-muted-foreground" />
-          <h1 className="text-2xl font-bold text-foreground">Paramètres de stratégie</h1>
+          <AlertCircle className="w-12 h-12 mx-auto text-amber-500" />
+          <h1 className="text-2xl font-bold text-foreground">Profil incomplet</h1>
           <p className="text-muted-foreground">
-            Complétez d'abord le questionnaire pour configurer votre profil investisseur.
+            Complétez d'abord le questionnaire pour configurer votre profil investisseur et définir vos seuils.
           </p>
           <Button onClick={() => window.location.href = '/profile'}>
             Compléter mon profil
@@ -152,7 +136,13 @@ export default function Settings() {
   }
 
   const ProfileIcon = PROFILE_ICONS[profile];
-  const cashDefault = (defaultThresholds.cashTargetPct.min + defaultThresholds.cashTargetPct.max) / 2;
+  const cashDefault = Math.round((defaultThresholds.cashTargetPct.min + defaultThresholds.cashTargetPct.max) / 2);
+  const confidenceInfo = CONFIDENCE_LABELS[confidence];
+
+  // Check if user has customized thresholds
+  const hasCashOverride = localCash !== cashDefault;
+  const hasStockOverride = localStock !== defaultThresholds.maxStockPositionPct;
+  const hasAssetClassOverride = localAssetClass !== defaultThresholds.maxAssetClassPct;
 
   return (
     <div className="container max-w-2xl mx-auto p-6 space-y-6">
@@ -181,11 +171,10 @@ export default function Settings() {
                 Profil {profileLabel}
               </h2>
               <Badge 
-                variant={profileResult?.confidence === 'high' ? 'default' : 'secondary'}
-                className="text-xs"
+                variant="outline"
+                className={`text-xs ${confidenceInfo.color}`}
               >
-                {profileResult?.confidence === 'high' ? 'Confiance élevée' : 
-                 profileResult?.confidence === 'medium' ? 'Confiance moyenne' : 'À affiner'}
+                {confidenceInfo.label}
               </Badge>
               {!profileComplete && (
                 <Badge variant="outline" className="text-xs text-amber-600 border-amber-600">
@@ -199,72 +188,75 @@ export default function Settings() {
           </div>
         </div>
 
-        {/* Scores (if available) */}
-        {profileResult && (
+        {/* Scores - using PERSISTED scores from DB */}
+        {scores && (
           <Collapsible open={showDetails} onOpenChange={setShowDetails} className="mt-4">
             <CollapsibleTrigger asChild>
               <Button variant="ghost" size="sm" className="w-full justify-between">
-                <span className="text-sm">Voir le détail du calcul</span>
+                <span className="text-sm">Voir le détail des scores</span>
                 {showDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent className="mt-4 space-y-4">
-              {/* Scores */}
+              {/* Score cards */}
               <div className="grid grid-cols-3 gap-3">
-                <div className="text-center p-3 bg-muted/50 rounded-lg">
-                  <div className="text-lg font-bold text-foreground">
-                    {profileResult.scores.capacity.score}/{profileResult.scores.capacity.maxScore}
+                <div className="p-3 bg-muted/50 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-muted-foreground">Capacité</span>
+                    <span className="text-sm font-bold text-foreground">
+                      {scores.capacity}/35
+                    </span>
                   </div>
-                  <div className="text-xs text-muted-foreground">Capacité</div>
+                  <Progress value={(scores.capacity / 35) * 100} className="h-2" />
                 </div>
-                <div className="text-center p-3 bg-muted/50 rounded-lg">
-                  <div className="text-lg font-bold text-foreground">
-                    {profileResult.scores.tolerance.score}/{profileResult.scores.tolerance.maxScore}
+                <div className="p-3 bg-muted/50 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-muted-foreground">Tolérance</span>
+                    <span className="text-sm font-bold text-foreground">
+                      {scores.tolerance}/35
+                    </span>
                   </div>
-                  <div className="text-xs text-muted-foreground">Tolérance</div>
+                  <Progress value={(scores.tolerance / 35) * 100} className="h-2" />
                 </div>
-                <div className="text-center p-3 bg-muted/50 rounded-lg">
-                  <div className="text-lg font-bold text-foreground">
-                    {profileResult.scores.objectives.score}/{profileResult.scores.objectives.maxScore}
+                <div className="p-3 bg-muted/50 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-muted-foreground">Objectifs</span>
+                    <span className="text-sm font-bold text-foreground">
+                      {scores.objectives}/30
+                    </span>
                   </div>
-                  <div className="text-xs text-muted-foreground">Objectifs</div>
+                  <Progress value={(scores.objectives / 30) * 100} className="h-2" />
                 </div>
               </div>
 
-              {/* Reasoning */}
-              {profileResult.reasoning.length > 0 && (
-                <div className="text-sm space-y-1">
-                  <p className="font-medium text-foreground">Raisonnement :</p>
-                  <ul className="text-muted-foreground space-y-1">
-                    {profileResult.reasoning.map((r, i) => (
-                      <li key={i} className="flex items-start gap-2">
-                        <span className="text-primary">•</span>
-                        <span>{r}</span>
-                      </li>
-                    ))}
-                  </ul>
+              {/* Total score */}
+              <div className="p-4 bg-primary/5 rounded-lg border border-primary/20">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-foreground">Score total</span>
+                  <span className="text-2xl font-bold text-primary">
+                    {scores.total}/100
+                  </span>
                 </div>
-              )}
+                <Progress value={scores.total} className="h-3 mt-2" />
+              </div>
 
-              {/* Score factors */}
-              <Accordion type="single" collapsible className="w-full">
-                {[profileResult.scores.capacity, profileResult.scores.tolerance, profileResult.scores.objectives].map(score => (
-                  <AccordionItem key={score.name} value={score.name}>
-                    <AccordionTrigger className="text-sm py-2">
-                      {score.name} ({score.score}/{score.maxScore})
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <ul className="text-xs text-muted-foreground space-y-1">
-                        {score.factors.length > 0 ? score.factors.map((f, i) => (
-                          <li key={i}>• {f}</li>
-                        )) : <li>• Données non renseignées</li>}
-                      </ul>
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
+              {/* What each score means */}
+              <div className="text-xs text-muted-foreground space-y-1 p-3 bg-muted/30 rounded-lg">
+                <p><strong>Capacité</strong> : Situation financière objective (épargne, revenus, patrimoine)</p>
+                <p><strong>Tolérance</strong> : Réaction émotionnelle aux pertes et à la volatilité</p>
+                <p><strong>Objectifs</strong> : Horizon d'investissement et buts financiers</p>
+              </div>
             </CollapsibleContent>
           </Collapsible>
+        )}
+
+        {/* No scores - show message */}
+        {!scores && (
+          <div className="mt-4 p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+            <p className="text-sm text-amber-700">
+              Les scores détaillés ne sont pas encore disponibles. Recalculez votre profil pour les voir.
+            </p>
+          </div>
         )}
 
         {/* Recalculate button */}
@@ -319,9 +311,9 @@ export default function Settings() {
               </Label>
               <div className="flex items-center gap-2">
                 <span className="text-lg font-semibold text-primary">
-                  {localThresholds.cashTargetPct}%
+                  {localCash}%
                 </span>
-                {Math.abs(localThresholds.cashTargetPct - cashDefault) > 1 && (
+                {hasCashOverride && (
                   <span className="text-xs text-muted-foreground">
                     (défaut: {defaultThresholds.cashTargetPct.min}-{defaultThresholds.cashTargetPct.max}%)
                   </span>
@@ -329,8 +321,11 @@ export default function Settings() {
               </div>
             </div>
             <Slider
-              value={[localThresholds.cashTargetPct]}
-              onValueChange={([v]) => handleChange('cashTargetPct', v)}
+              value={[localCash]}
+              onValueChange={([v]) => {
+                setLocalCash(v);
+                setHasChanges(true);
+              }}
               min={0}
               max={30}
               step={1}
@@ -354,15 +349,15 @@ export default function Settings() {
                     <Info className="w-4 h-4 text-muted-foreground" />
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p className="max-w-xs">Poids maximum pour une action individuelle. Les ETF ont un seuil plus élevé.</p>
+                    <p className="max-w-xs">Poids maximum pour une action individuelle. Les ETF ont un seuil plus élevé ({thresholds.maxEtfPositionPct}%).</p>
                   </TooltipContent>
                 </Tooltip>
               </Label>
               <div className="flex items-center gap-2">
                 <span className="text-lg font-semibold text-primary">
-                  {localThresholds.maxStockPositionPct}%
+                  {localStock}%
                 </span>
-                {localThresholds.maxStockPositionPct !== defaultThresholds.maxStockPositionPct && (
+                {hasStockOverride && (
                   <span className="text-xs text-muted-foreground">
                     (défaut: {defaultThresholds.maxStockPositionPct}%)
                   </span>
@@ -370,8 +365,11 @@ export default function Settings() {
               </div>
             </div>
             <Slider
-              value={[localThresholds.maxStockPositionPct]}
-              onValueChange={([v]) => handleChange('maxStockPositionPct', v)}
+              value={[localStock]}
+              onValueChange={([v]) => {
+                setLocalStock(v);
+                setHasChanges(true);
+              }}
               min={1}
               max={40}
               step={1}
@@ -383,8 +381,8 @@ export default function Settings() {
             </div>
           </div>
 
-          {/* Max ETF position (display only for now) */}
-          <div className="space-y-3 opacity-60">
+          {/* Max ETF position (display only) */}
+          <div className="space-y-3 opacity-70">
             <div className="flex items-center justify-between">
               <Label className="flex items-center gap-2">
                 Position max (ETF)
@@ -393,7 +391,7 @@ export default function Settings() {
                     <Info className="w-4 h-4 text-muted-foreground" />
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p className="max-w-xs">Seuil plus élevé pour les ETF car ils sont déjà diversifiés. Basé sur votre profil.</p>
+                    <p className="max-w-xs">Seuil plus élevé pour les ETF car ils sont déjà diversifiés. Calculé automatiquement selon votre profil.</p>
                   </TooltipContent>
                 </Tooltip>
               </Label>
@@ -401,10 +399,10 @@ export default function Settings() {
                 {thresholds.maxEtfPositionPct}%
               </span>
             </div>
-            <div className="h-2 bg-muted rounded-full">
+            <div className="h-2 bg-muted rounded-full overflow-hidden">
               <div 
                 className="h-full bg-muted-foreground/30 rounded-full" 
-                style={{ width: `${(thresholds.maxEtfPositionPct / 100) * 100}%` }}
+                style={{ width: `${Math.min(thresholds.maxEtfPositionPct, 100)}%` }}
               />
             </div>
             <p className="text-xs text-muted-foreground italic">
@@ -430,9 +428,9 @@ export default function Settings() {
               </Label>
               <div className="flex items-center gap-2">
                 <span className="text-lg font-semibold text-primary">
-                  {localThresholds.maxAssetClassPct}%
+                  {localAssetClass}%
                 </span>
-                {localThresholds.maxAssetClassPct !== defaultThresholds.maxAssetClassPct && (
+                {hasAssetClassOverride && (
                   <span className="text-xs text-muted-foreground">
                     (défaut: {defaultThresholds.maxAssetClassPct}%)
                   </span>
@@ -440,8 +438,11 @@ export default function Settings() {
               </div>
             </div>
             <Slider
-              value={[localThresholds.maxAssetClassPct]}
-              onValueChange={([v]) => handleChange('maxAssetClassPct', v)}
+              value={[localAssetClass]}
+              onValueChange={([v]) => {
+                setLocalAssetClass(v);
+                setHasChanges(true);
+              }}
               min={50}
               max={100}
               step={5}
@@ -476,22 +477,14 @@ export default function Settings() {
         </div>
       </Card>
 
-      {/* Target score info */}
-      <Card className="p-4 bg-muted/50">
-        <div className="flex items-start gap-3">
-          <Info className="w-5 h-5 text-muted-foreground mt-0.5" />
-          <div className="text-sm text-muted-foreground">
-            <p className="font-medium text-foreground">Score de diversification cible</p>
-            <p className="mt-1">
-              Pour votre profil <strong>{profileLabel}</strong>, un score entre{' '}
-              <strong>{defaultThresholds.targetScoreRange.min}</strong> et{' '}
-              <strong>{defaultThresholds.targetScoreRange.max}</strong>/100 est considéré comme adapté.
-            </p>
-            <p className="mt-1">
-              Un score plus élevé n'est pas toujours meilleur — il dépend de vos objectifs.
-            </p>
-          </div>
-        </div>
+      {/* Info about thresholds impact */}
+      <Card className="p-4 bg-muted/30 border-muted">
+        <h4 className="font-medium text-foreground text-sm mb-2">Impact des seuils</h4>
+        <ul className="text-xs text-muted-foreground space-y-1">
+          <li>• <strong>Score de diversification</strong> : pénalités si positions dépassent les seuils</li>
+          <li>• <strong>Alertes (Décisions)</strong> : notifications si concentration excessive</li>
+          <li>• <strong>Recommandations (Insights)</strong> : conseils personnalisés selon vos limites</li>
+        </ul>
       </Card>
     </div>
   );
