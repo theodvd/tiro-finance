@@ -339,11 +339,12 @@ export function useInvestorProfile() {
     ]);
   };
 
-  // Mutation: Save thresholds
+  // Mutation: Save thresholds (including ETF)
   const saveThresholdsMutation = useMutation({
     mutationFn: async (updates: Partial<{
       cashTargetPct: number;
       maxStockPositionPct: number;
+      maxEtfPositionPct: number;
       maxAssetClassPct: number;
     }>) => {
       if (!user) throw new Error('User not authenticated');
@@ -357,6 +358,9 @@ export function useInvestorProfile() {
       }
       if (updates.maxStockPositionPct !== undefined) {
         dbUpdates.max_position_pct = updates.maxStockPositionPct;
+      }
+      if (updates.maxEtfPositionPct !== undefined) {
+        dbUpdates.max_etf_position_pct = updates.maxEtfPositionPct;
       }
       if (updates.maxAssetClassPct !== undefined) {
         dbUpdates.max_asset_class_pct = updates.maxAssetClassPct;
@@ -444,6 +448,7 @@ export function useInvestorProfile() {
     await saveThresholdsMutation.mutateAsync({
       cashTargetPct: Math.round((defaults.cashTargetPct.min + defaults.cashTargetPct.max) / 2),
       maxStockPositionPct: defaults.maxStockPositionPct,
+      maxEtfPositionPct: defaults.maxEtfPositionPct,
       maxAssetClassPct: defaults.maxAssetClassPct,
     });
   };
@@ -452,6 +457,7 @@ export function useInvestorProfile() {
   const saveThresholds = async (updates: Partial<{
     cashTargetPct: number;
     maxStockPositionPct: number;
+    maxEtfPositionPct: number;
     maxAssetClassPct: number;
   }>) => {
     await saveThresholdsMutation.mutateAsync(updates);

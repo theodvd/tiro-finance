@@ -1,9 +1,10 @@
 /**
- * Settings page for viewing profile and editing thresholds
- * Uses persisted scores from DB - single source of truth
+ * Settings page - Strategy thresholds with auto/manual mode
+ * Uses useInvestorProfile as single source of truth
  */
 
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useInvestorProfile } from '@/hooks/useInvestorProfile';
 import { PROFILE_LABELS, PROFILE_DESCRIPTIONS, InvestorProfile } from '@/lib/investorProfileEngine';
 import { Card } from '@/components/ui/card';
@@ -13,11 +14,12 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { 
   Loader2, Settings as SettingsIcon, RotateCcw, Save, 
   Shield, Scale, TrendingUp, Rocket, Target, 
-  Info, ChevronDown, ChevronUp, RefreshCw, AlertCircle
+  Info, ChevronDown, ChevronUp, RefreshCw, AlertCircle, Lock
 } from 'lucide-react';
 import {
   Tooltip,
@@ -45,6 +47,7 @@ const CONFIDENCE_LABELS = {
 };
 
 export default function Settings() {
+  const navigate = useNavigate();
   const { 
     loading, saving, error, 
     profile, profileLabel, profileDescription,
@@ -55,17 +58,33 @@ export default function Settings() {
   
   const [hasChanges, setHasChanges] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
 
-  // Local state for editing thresholds - CRITICAL: must be controlled
+  // Local state for editing thresholds
   const [localCash, setLocalCash] = useState<number>(10);
   const [localStock, setLocalStock] = useState<number>(10);
+  const [localEtf, setLocalEtf] = useState<number>(25);
   const [localAssetClass, setLocalAssetClass] = useState<number>(80);
 
-  // Sync local state when thresholds change (on load or after save)
+  // Check if thresholds are customized (manual mode)
+  useEffect(() => {
+    if (thresholds && defaultThresholds) {
+      const cashDefault = Math.round((defaultThresholds.cashTargetPct.min + defaultThresholds.cashTargetPct.max) / 2);
+      const isCustomized = 
+        thresholds.cashTargetPct !== cashDefault ||
+        thresholds.maxStockPositionPct !== defaultThresholds.maxStockPositionPct ||
+        thresholds.maxEtfPositionPct !== defaultThresholds.maxEtfPositionPct ||
+        thresholds.maxAssetClassPct !== defaultThresholds.maxAssetClassPct;
+      setManualMode(isCustomized);
+    }
+  }, [thresholds, defaultThresholds]);
+
+  // Sync local state when thresholds change
   useEffect(() => {
     if (thresholds) {
       setLocalCash(thresholds.cashTargetPct);
       setLocalStock(thresholds.maxStockPositionPct);
+      setLocalEtf(thresholds.maxEtfPositionPct);
       setLocalAssetClass(thresholds.maxAssetClassPct);
       setHasChanges(false);
     }
@@ -76,6 +95,7 @@ export default function Settings() {
       await saveThresholds({
         cashTargetPct: localCash,
         maxStockPositionPct: localStock,
+        maxEtfPositionPct: localEtf,
         maxAssetClassPct: localAssetClass,
       });
       setHasChanges(false);
@@ -91,12 +111,26 @@ export default function Settings() {
   const handleReset = async () => {
     try {
       await resetToDefaults();
+      setManualMode(false);
       toast.success('Seuils réinitialisés', {
         description: `Retour aux valeurs recommandées pour le profil ${profileLabel}.`,
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Erreur inconnue';
       toast.error('Erreur', { description: message });
+    }
+  };
+
+  const handleRecalculateProfile = () => {
+    navigate('/profile?returnTo=/settings');
+  };
+
+  const toggleManualMode = () => {
+    if (manualMode) {
+      // Switching to auto - reset to defaults
+      handleReset();
+    } else {
+      setManualMode(true);
     }
   };
 
@@ -113,6 +147,7 @@ export default function Settings() {
       <div className="p-6">
         <Card className="p-6 border-destructive">
           <p className="text-destructive">Erreur: {error}</p>
+          <Button onClick={() => refetch()} className="mt-4">Réessayer</Button>
         </Card>
       </div>
     );
@@ -127,7 +162,7 @@ export default function Settings() {
           <p className="text-muted-foreground">
             Complétez d'abord le questionnaire pour configurer votre profil investisseur et définir vos seuils.
           </p>
-          <Button onClick={() => window.location.href = '/profile'}>
+          <Button onClick={() => navigate('/profile?returnTo=/settings')}>
             Compléter mon profil
           </Button>
         </Card>
@@ -136,13 +171,7 @@ export default function Settings() {
   }
 
   const ProfileIcon = PROFILE_ICONS[profile];
-  const cashDefault = Math.round((defaultThresholds.cashTargetPct.min + defaultThresholds.cashTargetPct.max) / 2);
   const confidenceInfo = CONFIDENCE_LABELS[confidence];
-
-  // Check if user has customized thresholds
-  const hasCashOverride = localCash !== cashDefault;
-  const hasStockOverride = localStock !== defaultThresholds.maxStockPositionPct;
-  const hasAssetClassOverride = localAssetClass !== defaultThresholds.maxAssetClassPct;
 
   return (
     <div className="container max-w-2xl mx-auto p-6 space-y-6">
@@ -176,11 +205,6 @@ export default function Settings() {
               >
                 {confidenceInfo.label}
               </Badge>
-              {!profileComplete && (
-                <Badge variant="outline" className="text-xs text-amber-600 border-amber-600">
-                  Questionnaire incomplet
-                </Badge>
-              )}
             </div>
             <p className="text-sm text-muted-foreground mt-2">
               {profileDescription}
@@ -188,8 +212,8 @@ export default function Settings() {
           </div>
         </div>
 
-        {/* Scores - using PERSISTED scores from DB */}
-        {scores && (
+        {/* Scores */}
+        {scores ? (
           <Collapsible open={showDetails} onOpenChange={setShowDetails} className="mt-4">
             <CollapsibleTrigger asChild>
               <Button variant="ghost" size="sm" className="w-full justify-between">
@@ -198,7 +222,6 @@ export default function Settings() {
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent className="mt-4 space-y-4">
-              {/* Score cards */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="p-3 bg-muted/50 rounded-lg">
                   <div className="flex items-center justify-between mb-2">
@@ -229,7 +252,6 @@ export default function Settings() {
                 </div>
               </div>
 
-              {/* Total score */}
               <div className="p-4 bg-primary/5 rounded-lg border border-primary/20">
                 <div className="flex items-center justify-between">
                   <span className="font-medium text-foreground">Score total</span>
@@ -240,21 +262,17 @@ export default function Settings() {
                 <Progress value={scores.total} className="h-3 mt-2" />
               </div>
 
-              {/* What each score means */}
               <div className="text-xs text-muted-foreground space-y-1 p-3 bg-muted/30 rounded-lg">
-                <p><strong>Capacité</strong> : Situation financière objective (épargne, revenus, patrimoine)</p>
-                <p><strong>Tolérance</strong> : Réaction émotionnelle aux pertes et à la volatilité</p>
-                <p><strong>Objectifs</strong> : Horizon d'investissement et buts financiers</p>
+                <p><strong>Capacité</strong> : Situation financière objective</p>
+                <p><strong>Tolérance</strong> : Réaction émotionnelle aux pertes</p>
+                <p><strong>Objectifs</strong> : Horizon et buts financiers</p>
               </div>
             </CollapsibleContent>
           </Collapsible>
-        )}
-
-        {/* No scores - show message */}
-        {!scores && (
+        ) : (
           <div className="mt-4 p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg">
             <p className="text-sm text-amber-700">
-              Les scores détaillés ne sont pas encore disponibles. Recalculez votre profil pour les voir.
+              Scores détaillés non disponibles. Recalculez votre profil.
             </p>
           </div>
         )}
@@ -264,7 +282,7 @@ export default function Settings() {
           <Button 
             variant="outline" 
             size="sm" 
-            onClick={() => window.location.href = '/profile'}
+            onClick={handleRecalculateProfile}
             className="w-full"
           >
             <RefreshCw className="w-4 h-4 mr-2" />
@@ -273,25 +291,49 @@ export default function Settings() {
         </div>
       </Card>
 
+      {/* Threshold Mode Toggle */}
+      <Card className="p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-foreground">Mode de gestion des seuils</h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              {manualMode 
+                ? 'Vous personnalisez vos seuils manuellement' 
+                : 'Seuils calculés automatiquement selon votre profil'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Auto</span>
+            <Switch 
+              checked={manualMode} 
+              onCheckedChange={toggleManualMode}
+            />
+            <span className="text-sm text-muted-foreground">Manuel</span>
+          </div>
+        </div>
+      </Card>
+
       {/* Threshold Sliders */}
       <Card className="p-6 space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-semibold text-foreground">Seuils personnalisés</h3>
+            <h3 className="font-semibold text-foreground">Seuils de diversification</h3>
             <p className="text-xs text-muted-foreground mt-1">
-              Ces seuils sont utilisés pour les alertes et le score de diversification
+              Utilisés pour les alertes et le score de diversification
             </p>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleReset}
-            disabled={saving}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <RotateCcw className="w-4 h-4 mr-1" />
-            Réinitialiser
-          </Button>
+          {manualMode && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleReset}
+              disabled={saving}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <RotateCcw className="w-4 h-4 mr-1" />
+              Réinitialiser
+            </Button>
+          )}
         </div>
 
         <div className="space-y-8">
@@ -305,36 +347,34 @@ export default function Settings() {
                     <Info className="w-4 h-4 text-muted-foreground" />
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p className="max-w-xs">Pourcentage de votre patrimoine à garder en liquidités (livrets, fonds euros).</p>
+                    <p className="max-w-xs">Part de votre patrimoine à garder en liquidités.</p>
                   </TooltipContent>
                 </Tooltip>
+                {!manualMode && <Lock className="w-3 h-3 text-muted-foreground" />}
               </Label>
               <div className="flex items-center gap-2">
                 <span className="text-lg font-semibold text-primary">
                   {localCash}%
                 </span>
-                {hasCashOverride && (
-                  <span className="text-xs text-muted-foreground">
-                    (défaut: {defaultThresholds.cashTargetPct.min}-{defaultThresholds.cashTargetPct.max}%)
-                  </span>
-                )}
+                <span className="text-xs text-muted-foreground">
+                  (défaut: {defaultThresholds.cashTargetPct.min}-{defaultThresholds.cashTargetPct.max}%)
+                </span>
               </div>
             </div>
             <Slider
               value={[localCash]}
               onValueChange={([v]) => {
-                setLocalCash(v);
-                setHasChanges(true);
+                if (manualMode) {
+                  setLocalCash(v);
+                  setHasChanges(true);
+                }
               }}
               min={0}
               max={30}
               step={1}
+              disabled={!manualMode}
               className="w-full"
             />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>0%</span>
-              <span>30%</span>
-            </div>
           </div>
 
           <Separator />
@@ -349,40 +389,40 @@ export default function Settings() {
                     <Info className="w-4 h-4 text-muted-foreground" />
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p className="max-w-xs">Poids maximum pour une action individuelle. Les ETF ont un seuil plus élevé ({thresholds.maxEtfPositionPct}%).</p>
+                    <p className="max-w-xs">Poids maximum pour une action individuelle.</p>
                   </TooltipContent>
                 </Tooltip>
+                {!manualMode && <Lock className="w-3 h-3 text-muted-foreground" />}
               </Label>
               <div className="flex items-center gap-2">
                 <span className="text-lg font-semibold text-primary">
                   {localStock}%
                 </span>
-                {hasStockOverride && (
-                  <span className="text-xs text-muted-foreground">
-                    (défaut: {defaultThresholds.maxStockPositionPct}%)
-                  </span>
-                )}
+                <span className="text-xs text-muted-foreground">
+                  (défaut: {defaultThresholds.maxStockPositionPct}%)
+                </span>
               </div>
             </div>
             <Slider
               value={[localStock]}
               onValueChange={([v]) => {
-                setLocalStock(v);
-                setHasChanges(true);
+                if (manualMode) {
+                  setLocalStock(v);
+                  setHasChanges(true);
+                }
               }}
               min={1}
               max={40}
               step={1}
+              disabled={!manualMode}
               className="w-full"
             />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>1%</span>
-              <span>40%</span>
-            </div>
           </div>
 
-          {/* Max ETF position (display only) */}
-          <div className="space-y-3 opacity-70">
+          <Separator />
+
+          {/* Max ETF position */}
+          <div className="space-y-3">
             <div className="flex items-center justify-between">
               <Label className="flex items-center gap-2">
                 Position max (ETF)
@@ -391,23 +431,34 @@ export default function Settings() {
                     <Info className="w-4 h-4 text-muted-foreground" />
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p className="max-w-xs">Seuil plus élevé pour les ETF car ils sont déjà diversifiés. Calculé automatiquement selon votre profil.</p>
+                    <p className="max-w-xs">Poids maximum pour un ETF. Plus élevé car déjà diversifiés.</p>
                   </TooltipContent>
                 </Tooltip>
+                {!manualMode && <Lock className="w-3 h-3 text-muted-foreground" />}
               </Label>
-              <span className="text-lg font-semibold text-muted-foreground">
-                {thresholds.maxEtfPositionPct}%
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-lg font-semibold text-primary">
+                  {localEtf}%
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  (défaut: {defaultThresholds.maxEtfPositionPct}%)
+                </span>
+              </div>
             </div>
-            <div className="h-2 bg-muted rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-muted-foreground/30 rounded-full" 
-                style={{ width: `${Math.min(thresholds.maxEtfPositionPct, 100)}%` }}
-              />
-            </div>
-            <p className="text-xs text-muted-foreground italic">
-              Automatique selon le profil {profileLabel}
-            </p>
+            <Slider
+              value={[localEtf]}
+              onValueChange={([v]) => {
+                if (manualMode) {
+                  setLocalEtf(v);
+                  setHasChanges(true);
+                }
+              }}
+              min={10}
+              max={100}
+              step={5}
+              disabled={!manualMode}
+              className="w-full"
+            />
           </div>
 
           <Separator />
@@ -422,68 +473,68 @@ export default function Settings() {
                     <Info className="w-4 h-4 text-muted-foreground" />
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p className="max-w-xs">Poids maximum pour une classe d'actifs (actions, crypto, obligations, etc.).</p>
+                    <p className="max-w-xs">Poids maximum pour une classe d'actifs (actions, crypto, etc.).</p>
                   </TooltipContent>
                 </Tooltip>
+                {!manualMode && <Lock className="w-3 h-3 text-muted-foreground" />}
               </Label>
               <div className="flex items-center gap-2">
                 <span className="text-lg font-semibold text-primary">
                   {localAssetClass}%
                 </span>
-                {hasAssetClassOverride && (
-                  <span className="text-xs text-muted-foreground">
-                    (défaut: {defaultThresholds.maxAssetClassPct}%)
-                  </span>
-                )}
+                <span className="text-xs text-muted-foreground">
+                  (défaut: {defaultThresholds.maxAssetClassPct}%)
+                </span>
               </div>
             </div>
             <Slider
               value={[localAssetClass]}
               onValueChange={([v]) => {
-                setLocalAssetClass(v);
-                setHasChanges(true);
+                if (manualMode) {
+                  setLocalAssetClass(v);
+                  setHasChanges(true);
+                }
               }}
               min={50}
               max={100}
               step={5}
+              disabled={!manualMode}
               className="w-full"
             />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>50%</span>
-              <span>100%</span>
-            </div>
           </div>
         </div>
 
         {/* Save button */}
-        <div className="pt-4">
-          <Button
-            onClick={handleSave}
-            disabled={!hasChanges || saving}
-            className="w-full"
-          >
-            {saving ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Enregistrement...
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4 mr-2" />
-                Enregistrer les modifications
-              </>
-            )}
-          </Button>
-        </div>
+        {manualMode && hasChanges && (
+          <div className="pt-4">
+            <Button 
+              onClick={handleSave} 
+              disabled={saving}
+              className="w-full"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="animate-spin mr-2" size={16} />
+                  Enregistrement...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 mr-2" />
+                  Enregistrer les modifications
+                </>
+              )}
+            </Button>
+          </div>
+        )}
       </Card>
 
-      {/* Info about thresholds impact */}
-      <Card className="p-4 bg-muted/30 border-muted">
-        <h4 className="font-medium text-foreground text-sm mb-2">Impact des seuils</h4>
+      {/* Info Card */}
+      <Card className="p-4 bg-muted/30">
+        <h4 className="font-medium text-sm text-foreground mb-2">Comment sont utilisés ces seuils ?</h4>
         <ul className="text-xs text-muted-foreground space-y-1">
-          <li>• <strong>Score de diversification</strong> : pénalités si positions dépassent les seuils</li>
-          <li>• <strong>Alertes (Décisions)</strong> : notifications si concentration excessive</li>
-          <li>• <strong>Recommandations (Insights)</strong> : conseils personnalisés selon vos limites</li>
+          <li>• <strong>Score de diversification</strong> : pénalités si dépassement</li>
+          <li>• <strong>Alertes</strong> : notification si position trop concentrée</li>
+          <li>• <strong>Recommandations</strong> : suggestions d'actions correctives</li>
         </ul>
       </Card>
     </div>
