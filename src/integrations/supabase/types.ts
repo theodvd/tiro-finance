@@ -558,6 +558,7 @@ export type Database = {
           management_style: string | null
           max_acceptable_loss: string | null
           max_asset_class_pct: number | null
+          max_etf_position_pct: number | null
           max_position_pct: number | null
           monthly_expenses: Json | null
           monthly_income: Json | null
@@ -588,6 +589,7 @@ export type Database = {
           score_total_computed: number | null
           sectors_of_interest: string[] | null
           sectors_to_avoid: string[] | null
+          thresholds_mode: string | null
           upcoming_constraints: string[] | null
           updated_at: string
           user_id: string
@@ -624,6 +626,7 @@ export type Database = {
           management_style?: string | null
           max_acceptable_loss?: string | null
           max_asset_class_pct?: number | null
+          max_etf_position_pct?: number | null
           max_position_pct?: number | null
           monthly_expenses?: Json | null
           monthly_income?: Json | null
@@ -654,6 +657,7 @@ export type Database = {
           score_total_computed?: number | null
           sectors_of_interest?: string[] | null
           sectors_to_avoid?: string[] | null
+          thresholds_mode?: string | null
           upcoming_constraints?: string[] | null
           updated_at?: string
           user_id: string
@@ -690,6 +694,7 @@ export type Database = {
           management_style?: string | null
           max_acceptable_loss?: string | null
           max_asset_class_pct?: number | null
+          max_etf_position_pct?: number | null
           max_position_pct?: number | null
           monthly_expenses?: Json | null
           monthly_income?: Json | null
@@ -720,6 +725,7 @@ export type Database = {
           score_total_computed?: number | null
           sectors_of_interest?: string[] | null
           sectors_to_avoid?: string[] | null
+          thresholds_mode?: string | null
           upcoming_constraints?: string[] | null
           updated_at?: string
           user_id?: string
