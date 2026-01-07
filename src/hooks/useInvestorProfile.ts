@@ -102,7 +102,9 @@ interface RawProfile {
   // User-customized thresholds
   cash_target_pct: number | null;
   max_position_pct: number | null;
+  max_etf_position_pct: number | null;
   max_asset_class_pct: number | null;
+  thresholds_mode: string | null;
   // Personal info
   first_name: string | null;
   age: number | null;
@@ -136,7 +138,9 @@ async function fetchUserProfile(userId: string): Promise<RawProfile | null> {
       onboarding_answers,
       cash_target_pct,
       max_position_pct,
+      max_etf_position_pct,
       max_asset_class_pct,
+      thresholds_mode,
       first_name,
       age
     `)
@@ -282,7 +286,7 @@ function processInvestorProfile(rawProfile: RawProfile | null): InvestorProfileS
     cashTargetPct: rawProfile.cash_target_pct ?? 
       Math.round((defaults.cashTargetPct.min + defaults.cashTargetPct.max) / 2),
     maxStockPositionPct: rawProfile.max_position_pct ?? defaults.maxStockPositionPct,
-    maxEtfPositionPct: defaults.maxEtfPositionPct, // Not overridable yet
+    maxEtfPositionPct: rawProfile.max_etf_position_pct ?? defaults.maxEtfPositionPct,
     maxAssetClassPct: rawProfile.max_asset_class_pct ?? defaults.maxAssetClassPct,
     targetScoreMin: defaults.targetScoreRange.min,
     targetScoreMax: defaults.targetScoreRange.max,
