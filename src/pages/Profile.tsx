@@ -1,12 +1,15 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Form } from "@/components/ui/form";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { Loader2, CheckCircle2, ArrowRight } from "lucide-react";
+import { Loader2, CheckCircle2, ArrowRight, ArrowLeft } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queryKeys";
 
 import { ObjectivesSection } from "@/components/profile/ObjectivesSection";
 import { PersonalInfoSection } from "@/components/profile/PersonalInfoSection";
@@ -15,8 +18,12 @@ import { InvestorProfileSection } from "@/components/profile/InvestorProfileSect
 import { BehavioralSection } from "@/components/profile/BehavioralSection";
 import { PreferencesSection } from "@/components/profile/PreferencesSection";
 import { CommitmentSection } from "@/components/profile/CommitmentSection";
-import { calculateRiskProfile } from "@/lib/calculateRiskProfile";
-import { getRiskBasedInsights } from "@/lib/investorRules";
+import { 
+  computeInvestorProfile, 
+  PROFILE_LABELS, 
+  PROFILE_DESCRIPTIONS,
+  OnboardingAnswers 
+} from "@/lib/investorProfileEngine";
 
 const STEPS = [
   { id: "objectives", label: "Objectifs", component: ObjectivesSection },
@@ -30,10 +37,16 @@ const STEPS = [
 
 export default function Profile() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnTo = searchParams.get("returnTo");
+  const queryClient = useQueryClient();
+  
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [profileExists, setProfileExists] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+  const [computedProfile, setComputedProfile] = useState<ReturnType<typeof computeInvestorProfile> | null>(null);
 
   const form = useForm({
     defaultValues: {
@@ -87,13 +100,6 @@ export default function Profile() {
       commitment_apply_advice: false,
       commitment_regular_learning: false,
       commitment_long_term_investing: false,
-      score_total: 0,
-      score_tolerance: 0,
-      score_capacity: 0,
-      score_behavior: 0,
-      score_horizon: 0,
-      score_knowledge: 0,
-      risk_profile: "",
     },
   });
 
@@ -140,9 +146,42 @@ export default function Profile() {
         sectors_of_interest: Array.isArray(data.sectors_of_interest) ? data.sectors_of_interest : [],
         ai_expectations: Array.isArray(data.ai_expectations) ? data.ai_expectations : [],
       });
+
+      // Compute profile if we have data
+      if (data.score_capacity_computed !== null) {
+        // Profile already computed - load stored result
+        setComputedProfile({
+          profile: data.risk_profile as any || 'Équilibré',
+          scores: {
+            capacity: { name: 'Capacité', score: data.score_capacity_computed || 0, maxScore: 35, weight: 0.35, factors: [] },
+            tolerance: { name: 'Tolérance', score: data.score_tolerance_computed || 0, maxScore: 35, weight: 0.35, factors: [] },
+            objectives: { name: 'Objectifs', score: data.score_objectives_computed || 0, maxScore: 30, weight: 0.30, factors: [] },
+            total: data.score_total_computed || 0,
+          },
+          thresholds: {} as any,
+          confidence: (data.profile_confidence as 'high' | 'medium' | 'low') || 'medium',
+          reasoning: [],
+        });
+      }
     }
 
     setLoading(false);
+  };
+
+  const buildOnboardingAnswers = (data: any): OnboardingAnswers => {
+    return {
+      portfolioShare: undefined,
+      emergencyFund: data.financial_resilience_months || undefined,
+      incomeStability: data.income_stability || undefined,
+      investmentHorizon: data.investment_horizon || undefined,
+      mainObjective: data.main_project || undefined,
+      reactionToLoss: data.reaction_to_volatility || data.max_acceptable_loss || undefined,
+      riskVision: data.risk_vision || undefined,
+      experienceLevel: data.investment_experience || undefined,
+      timeCommitment: data.available_time || undefined,
+      preferredStyle: data.management_style || undefined,
+      concentrationAcceptance: undefined,
+    };
   };
 
   const saveProfile = async (data: any) => {
@@ -150,19 +189,31 @@ export default function Profile() {
 
     setSaving(true);
     
-    // Debug: afficher les données du formulaire
-    console.log("Form data:", data);
+    // Build answers for new engine
+    const answers = buildOnboardingAnswers(data);
     
-    // Calculer le profil de risque
-    const riskProfile = calculateRiskProfile(data);
+    // Compute profile using unified engine
+    const profileResult = computeInvestorProfile(answers);
+    setComputedProfile(profileResult);
     
-    // Debug: afficher le résultat du scoring
-    console.log("Risk profile calculated:", riskProfile);
+    const thresholds = profileResult.thresholds;
     
     const profileData = {
       ...data,
-      ...riskProfile,
       user_id: user.id,
+      // Store using new unified schema
+      risk_profile: profileResult.profile,
+      score_capacity_computed: profileResult.scores.capacity.score,
+      score_tolerance_computed: profileResult.scores.tolerance.score,
+      score_objectives_computed: profileResult.scores.objectives.score,
+      score_total_computed: profileResult.scores.total,
+      profile_confidence: profileResult.confidence,
+      profile_computed_at: new Date().toISOString(),
+      onboarding_answers: answers,
+      // Set default thresholds from profile
+      cash_target_pct: Math.round((thresholds.cashTargetPct.min + thresholds.cashTargetPct.max) / 2),
+      max_position_pct: thresholds.maxStockPositionPct,
+      max_asset_class_pct: thresholds.maxAssetClassPct,
       updated_at: new Date().toISOString(),
     };
 
@@ -174,13 +225,15 @@ export default function Profile() {
       console.error("Error saving profile:", error);
       toast.error("Erreur lors de l'enregistrement");
     } else {
-      // Mettre à jour immédiatement le formulaire avec les scores calculés
-      form.reset({
-        ...data,
-        ...riskProfile,
-      });
+      // Invalidate all related queries
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.userProfile(user.id) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.diversification(user.id) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.insights(user.id) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.decisions(user.id) }),
+      ]);
 
-      toast.success(`Profil enregistré avec succès ! 🎉 Profil de risque: ${riskProfile.risk_profile}`);
+      toast.success(`Profil enregistré ! Profil: ${profileResult.profile}`);
       setProfileExists(true);
     }
 
@@ -199,6 +252,10 @@ export default function Profile() {
     }
   };
 
+  const handleReturnToSettings = () => {
+    navigate(returnTo || "/settings");
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -207,90 +264,67 @@ export default function Profile() {
     );
   }
 
-  if (profileExists) {
-    const risk = getRiskBasedInsights(form.getValues().risk_profile);
-    
+  if (profileExists && computedProfile) {
     return (
       <div className="container max-w-4xl mx-auto p-6 space-y-6">
         <Card className="p-8 border-primary/20">
           <div className="flex items-center gap-3 mb-6">
-            <CheckCircle2 className="text-success" size={32} />
+            <CheckCircle2 className="text-green-500" size={32} />
             <div>
               <h1 className="text-2xl font-bold text-foreground">Profil Complété</h1>
-              <p className="text-muted-foreground">Ton profil investisseur a été enregistré</p>
+              <p className="text-muted-foreground">Ton profil investisseur a été calculé</p>
             </div>
           </div>
 
-          <div className="space-y-4 mt-6">
-            <div className="space-y-6">
-              {/* Profil de risque */}
-              <div className="p-6 bg-primary/10 rounded-lg border border-primary/20">
-                <h3 className="text-xl font-bold text-primary mb-2">
-                  {form.getValues().risk_profile || "Non calculé"}
-                </h3>
-                <p className="text-sm text-muted-foreground mb-4">Score total: {form.getValues().score_total || 0}/100</p>
-                
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">Tolérance:</span>
-                    <span className="ml-2 font-medium">{form.getValues().score_tolerance || 0}/30</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Capacité:</span>
-                    <span className="ml-2 font-medium">{form.getValues().score_capacity || 0}/25</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Comportement:</span>
-                    <span className="ml-2 font-medium">{form.getValues().score_behavior || 0}/25</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Horizon:</span>
-                    <span className="ml-2 font-medium">{form.getValues().score_horizon || 0}/10</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Connaissances:</span>
-                    <span className="ml-2 font-medium">{form.getValues().score_knowledge || 0}/10</span>
-                  </div>
+          <div className="space-y-6">
+            {/* Profil calculé */}
+            <div className="p-6 bg-primary/10 rounded-lg border border-primary/20">
+              <h3 className="text-xl font-bold text-primary mb-2">
+                {PROFILE_LABELS[computedProfile.profile]}
+              </h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                {PROFILE_DESCRIPTIONS[computedProfile.profile]}
+              </p>
+              <p className="text-sm font-medium">
+                Score total: {computedProfile.scores.total}/100
+              </p>
+              
+              <div className="grid grid-cols-3 gap-3 mt-4 text-sm">
+                <div className="p-3 bg-background/50 rounded">
+                  <span className="text-muted-foreground">Capacité</span>
+                  <p className="font-bold">{computedProfile.scores.capacity.score}/35</p>
                 </div>
-              </div>
-
-              {/* Résumé du profil de risque */}
-              <div className="p-6 bg-muted rounded-lg border">
-                <h3 className="text-lg font-semibold mb-3">Résumé du profil</h3>
-                <p className="text-muted-foreground mb-4">{risk.summary}</p>
-
-                <h3 className="text-lg font-semibold mb-3 mt-6">Ce que cela signifie</h3>
-                <p className="text-muted-foreground">{risk.profile_message}</p>
-              </div>
-
-              {/* Informations personnelles */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">Prénom</p>
-                  <p className="text-foreground font-medium">{form.getValues("first_name") || "Non renseigné"}</p>
+                <div className="p-3 bg-background/50 rounded">
+                  <span className="text-muted-foreground">Tolérance</span>
+                  <p className="font-bold">{computedProfile.scores.tolerance.score}/35</p>
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Âge</p>
-                  <p className="text-foreground font-medium">{form.getValues("age") || "Non renseigné"}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Horizon d'investissement</p>
-                  <p className="text-foreground font-medium">
-                    {form.getValues("investment_horizon") || "Non renseigné"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Tolérance au risque</p>
-                  <p className="text-foreground font-medium">
-                    {form.getValues("max_acceptable_loss") || "Non renseigné"}
-                  </p>
+                <div className="p-3 bg-background/50 rounded">
+                  <span className="text-muted-foreground">Objectifs</span>
+                  <p className="font-bold">{computedProfile.scores.objectives.score}/30</p>
                 </div>
               </div>
             </div>
 
-            <Button onClick={() => setProfileExists(false)} variant="outline" className="w-full mt-6">
-              Modifier mon profil
-            </Button>
+            {/* Actions */}
+            <div className="flex gap-3">
+              <Button onClick={() => setProfileExists(false)} variant="outline" className="flex-1">
+                Modifier mon profil
+              </Button>
+              
+              {returnTo && (
+                <Button onClick={handleReturnToSettings} className="flex-1">
+                  <ArrowLeft size={16} className="mr-2" />
+                  Retour à Stratégie
+                </Button>
+              )}
+              
+              {!returnTo && (
+                <Button onClick={() => navigate("/settings")} className="flex-1">
+                  Voir mes seuils
+                  <ArrowRight size={16} className="ml-2" />
+                </Button>
+              )}
+            </div>
           </div>
         </Card>
       </div>
@@ -337,7 +371,7 @@ export default function Profile() {
                   {saving ? (
                     <>
                       <Loader2 className="animate-spin mr-2" size={16} />
-                      Enregistrement...
+                      Calcul en cours...
                     </>
                   ) : (
                     "Enregistrer mon profil"
