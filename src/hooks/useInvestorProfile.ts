@@ -10,6 +10,7 @@
  * All other hooks (useUserStrategy, useUserProfile) are deprecated.
  */
 
+import { useMemo } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -405,7 +406,7 @@ export function useInvestorProfile() {
     gcTime: 30 * 60 * 1000,
   });
 
-  const state = processInvestorProfile(query.data ?? null);
+  const state = useMemo(() => processInvestorProfile(query.data ?? null), [query.data]);
 
   // Invalidate all related queries
   const invalidateRelatedQueries = async () => {
