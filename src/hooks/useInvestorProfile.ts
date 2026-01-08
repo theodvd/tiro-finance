@@ -49,28 +49,31 @@ export interface InvestorProfileState {
   profile: InvestorProfile;
   profileLabel: string;
   profileDescription: string;
-  
+
   // Persisted scores (from DB, not recomputed)
   scores: PersistedScores | null;
-  
+
   // Profile computation result (for detailed view)
   profileResult: ProfileResult | null;
-  
+
   // Confidence
   confidence: 'high' | 'medium' | 'low';
-  
+
+  // Threshold mode (persisted)
+  thresholdsMode: 'auto' | 'manual';
+
   // Effective thresholds (user overrides or defaults)
   thresholds: UserThresholds;
-  
+
   // Default thresholds for current profile
   defaultThresholds: ProfileThresholds;
-  
+
   // Status flags
   profileExists: boolean;
   profileComplete: boolean;
   needsOnboarding: boolean;
   profileComputedAt: Date | null;
-  
+
   // Raw DB data
   rawProfile: RawProfile | null;
 }
@@ -186,7 +189,7 @@ function buildAnswersFromProfile(raw: RawProfile): OnboardingAnswers {
   if (raw.onboarding_answers && typeof raw.onboarding_answers === 'object') {
     return raw.onboarding_answers as OnboardingAnswers;
   }
-  
+
   return {
     portfolioShare: undefined,
     emergencyFund: raw.financial_resilience_months || undefined,
@@ -199,6 +202,61 @@ function buildAnswersFromProfile(raw: RawProfile): OnboardingAnswers {
     timeCommitment: raw.available_time || undefined,
     preferredStyle: raw.management_style || undefined,
     concentrationAcceptance: undefined,
+  };
+}
+
+async function repairComputedProfileIfNeeded(userId: string, raw: RawProfile | null): Promise<RawProfile | null> {
+  if (!raw) return raw;
+
+  const profileComplete =
+    !!raw.investment_horizon && (!!raw.max_acceptable_loss || !!raw.reaction_to_volatility);
+
+  const hasAnyAnswers = !!raw.onboarding_answers && typeof raw.onboarding_answers === 'object';
+
+  const computedLooksMissing =
+    raw.score_capacity_computed === null ||
+    raw.score_tolerance_computed === null ||
+    raw.score_objectives_computed === null;
+
+  const computedLooksInvalid =
+    raw.score_capacity_computed === 0 &&
+    raw.score_tolerance_computed === 0 &&
+    raw.score_objectives_computed === 0;
+
+  if (!profileComplete || !hasAnyAnswers || (!computedLooksMissing && !computedLooksInvalid)) {
+    return raw;
+  }
+
+  const answers = buildAnswersFromProfile(raw);
+  const result = computeInvestorProfile(answers);
+
+  const { error } = await supabase
+    .from('user_profile')
+    .update({
+      risk_profile: result.profile,
+      score_capacity_computed: result.scores.capacity.score,
+      score_tolerance_computed: result.scores.tolerance.score,
+      score_objectives_computed: result.scores.objectives.score,
+      score_total_computed: result.scores.total,
+      profile_confidence: result.confidence,
+      profile_computed_at: new Date().toISOString(),
+      onboarding_answers: answers,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', userId);
+
+  if (error) throw error;
+
+  return {
+    ...raw,
+    risk_profile: result.profile,
+    score_capacity_computed: result.scores.capacity.score,
+    score_tolerance_computed: result.scores.tolerance.score,
+    score_objectives_computed: result.scores.objectives.score,
+    score_total_computed: result.scores.total,
+    profile_confidence: result.confidence,
+    profile_computed_at: new Date().toISOString(),
+    onboarding_answers: answers,
   };
 }
 
@@ -215,6 +273,7 @@ function processInvestorProfile(rawProfile: RawProfile | null): InvestorProfileS
       scores: null,
       profileResult: null,
       confidence: 'low',
+      thresholdsMode: 'auto',
       thresholds: {
         cashTargetPct: Math.round((defaults.cashTargetPct.min + defaults.cashTargetPct.max) / 2),
         maxStockPositionPct: defaults.maxStockPositionPct,
@@ -281,16 +340,30 @@ function processInvestorProfile(rawProfile: RawProfile | null): InvestorProfileS
 
   const defaults = getProfileThresholds(profile);
 
-  // Build effective thresholds (user overrides or defaults)
-  const thresholds: UserThresholds = {
-    cashTargetPct: rawProfile.cash_target_pct ?? 
-      Math.round((defaults.cashTargetPct.min + defaults.cashTargetPct.max) / 2),
-    maxStockPositionPct: rawProfile.max_position_pct ?? defaults.maxStockPositionPct,
-    maxEtfPositionPct: rawProfile.max_etf_position_pct ?? defaults.maxEtfPositionPct,
-    maxAssetClassPct: rawProfile.max_asset_class_pct ?? defaults.maxAssetClassPct,
-    targetScoreMin: defaults.targetScoreRange.min,
-    targetScoreMax: defaults.targetScoreRange.max,
-  };
+  const thresholdsMode: 'auto' | 'manual' = rawProfile.thresholds_mode === 'manual' ? 'manual' : 'auto';
+
+  // Build effective thresholds
+  // - auto: use profile defaults
+  // - manual: use persisted overrides (fallback to defaults)
+  const thresholds: UserThresholds = thresholdsMode === 'manual'
+    ? {
+        cashTargetPct:
+          rawProfile.cash_target_pct ??
+          Math.round((defaults.cashTargetPct.min + defaults.cashTargetPct.max) / 2),
+        maxStockPositionPct: rawProfile.max_position_pct ?? defaults.maxStockPositionPct,
+        maxEtfPositionPct: rawProfile.max_etf_position_pct ?? defaults.maxEtfPositionPct,
+        maxAssetClassPct: rawProfile.max_asset_class_pct ?? defaults.maxAssetClassPct,
+        targetScoreMin: defaults.targetScoreRange.min,
+        targetScoreMax: defaults.targetScoreRange.max,
+      }
+    : {
+        cashTargetPct: Math.round((defaults.cashTargetPct.min + defaults.cashTargetPct.max) / 2),
+        maxStockPositionPct: defaults.maxStockPositionPct,
+        maxEtfPositionPct: defaults.maxEtfPositionPct,
+        maxAssetClassPct: defaults.maxAssetClassPct,
+        targetScoreMin: defaults.targetScoreRange.min,
+        targetScoreMax: defaults.targetScoreRange.max,
+      };
 
   return {
     profile,
@@ -299,6 +372,7 @@ function processInvestorProfile(rawProfile: RawProfile | null): InvestorProfileS
     scores,
     profileResult,
     confidence,
+    thresholdsMode,
     thresholds,
     defaultThresholds: defaults,
     profileExists: true,
@@ -322,7 +396,8 @@ export function useInvestorProfile() {
       if (!user) return null;
       // Ensure profile exists first
       await ensureProfileExists(user.id);
-      return fetchUserProfile(user.id);
+      const raw = await fetchUserProfile(user.id);
+      return repairComputedProfileIfNeeded(user.id, raw);
     },
     enabled: !!user,
     staleTime: 2 * 60 * 1000, // 2 minutes
@@ -343,7 +418,7 @@ export function useInvestorProfile() {
     ]);
   };
 
-  // Mutation: Save thresholds (including ETF)
+  // Mutation: Save thresholds (overrides)
   const saveThresholdsMutation = useMutation({
     mutationFn: async (updates: Partial<{
       cashTargetPct: number;
@@ -356,7 +431,7 @@ export function useInvestorProfile() {
       const dbUpdates: Record<string, number | string> = {
         updated_at: new Date().toISOString(),
       };
-      
+
       if (updates.cashTargetPct !== undefined) {
         dbUpdates.cash_target_pct = updates.cashTargetPct;
       }
@@ -373,6 +448,26 @@ export function useInvestorProfile() {
       const { error } = await supabase
         .from('user_profile')
         .update(dbUpdates)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidateRelatedQueries();
+    },
+  });
+
+  // Mutation: Set thresholds mode (auto/manual)
+  const setThresholdsModeMutation = useMutation({
+    mutationFn: async (mode: 'auto' | 'manual') => {
+      if (!user) throw new Error('User not authenticated');
+
+      const { error } = await supabase
+        .from('user_profile')
+        .update({
+          thresholds_mode: mode,
+          updated_at: new Date().toISOString(),
+        })
         .eq('user_id', user.id);
 
       if (error) throw error;
@@ -472,20 +567,28 @@ export function useInvestorProfile() {
     return recomputeProfileMutation.mutateAsync(answers);
   };
 
+  const setThresholdsMode = async (mode: 'auto' | 'manual') => {
+    await setThresholdsModeMutation.mutateAsync(mode);
+  };
+
   return {
     // Loading states
     loading: query.isLoading,
-    saving: saveThresholdsMutation.isPending || recomputeProfileMutation.isPending,
+    saving:
+      saveThresholdsMutation.isPending ||
+      setThresholdsModeMutation.isPending ||
+      recomputeProfileMutation.isPending,
     error: query.error?.message ?? null,
-    
+
     // Profile state
     ...state,
-    
+
     // Actions
     refetch: query.refetch,
     saveThresholds,
     resetToDefaults,
     recomputeProfile,
+    setThresholdsMode,
     invalidateRelatedQueries,
   };
 }

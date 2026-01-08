@@ -157,7 +157,14 @@ function calculateCapacityScore(answers: OnboardingAnswers): DimensionScore {
   
   // Emergency fund (max 12 pts)
   const emergencyFund = answers.emergencyFund?.toLowerCase() || '';
-  if (emergencyFund.includes('> 6') || emergencyFund.includes('plus de 6') || emergencyFund.includes('6 mois')) {
+  if (
+    emergencyFund.includes('12') ||
+    emergencyFund.includes('> 6') ||
+    emergencyFund.includes('>6') ||
+    emergencyFund.includes('plus de 6') ||
+    emergencyFund.includes('6 mois') ||
+    emergencyFund.includes('1 an')
+  ) {
     score += 12;
     factors.push('Épargne de précaution > 6 mois (+12)');
   } else if (emergencyFund.includes('3') && emergencyFund.includes('6')) {
@@ -179,9 +186,9 @@ function calculateCapacityScore(answers: OnboardingAnswers): DimensionScore {
   } else if (incomeStability.includes('variable')) {
     score += 4;
     factors.push('Revenus variables (+4)');
-  } else if (incomeStability.includes('instable')) {
+  } else if (incomeStability.includes('instable') || incomeStability.includes('inexistan') || incomeStability.includes('aucun')) {
     score += 1;
-    factors.push('Revenus instables (+1)');
+    factors.push('Revenus instables ou inexistants (+1)');
   }
   
   return {
@@ -207,7 +214,13 @@ function calculateToleranceScore(answers: OnboardingAnswers): DimensionScore {
   if (reactionToLoss.includes('investirais') || reactionToLoss.includes('achèterais')) {
     score += 18;
     factors.push('Face à -20%: investirait davantage (+18)');
-  } else if (reactionToLoss.includes('rien') || reactionToLoss.includes('attendre')) {
+  } else if (
+    reactionToLoss.includes('rien') ||
+    reactionToLoss.includes('attendre') ||
+    reactionToLoss.includes("m'en fiche") ||
+    reactionToLoss.includes('men fiche') ||
+    reactionToLoss.includes('m en fiche')
+  ) {
     score += 12;
     factors.push('Face à -20%: ne ferait rien (+12)');
   } else if (reactionToLoss.includes('vendr') || reactionToLoss.includes('limiter')) {
@@ -217,7 +230,12 @@ function calculateToleranceScore(answers: OnboardingAnswers): DimensionScore {
   
   // Risk vision (max 17 pts)
   const riskVision = answers.riskVision?.toLowerCase() || '';
-  if (riskVision.includes('volatilité') && riskVision.includes('ne me dérange')) {
+  if (
+    (riskVision.includes('volatilité') && riskVision.includes('ne me dérange')) ||
+    riskVision.includes('remets') ||
+    riskVision.includes('remet') ||
+    riskVision.includes('rajoute')
+  ) {
     score += 17;
     factors.push('Volatilité acceptée si thèse long terme (+17)');
   } else if (riskVision.includes('accepte') || riskVision.includes('fluctuation')) {
@@ -248,10 +266,16 @@ function calculateObjectivesScore(answers: OnboardingAnswers): DimensionScore {
   
   // Investment horizon (max 18 pts)
   const horizon = answers.investmentHorizon?.toLowerCase() || '';
-  if (horizon.includes('plus de 10') || horizon.includes('> 10')) {
+  if (horizon.includes('plus de 10') || horizon.includes('> 10') || horizon.includes('>10')) {
     score += 18;
     factors.push('Horizon > 10 ans (+18)');
-  } else if (horizon.includes('8') || horizon.includes('5-10') || horizon.includes('5 à 10')) {
+  } else if (
+    horizon.includes('8') ||
+    horizon.includes('5-10') ||
+    horizon.includes('5 à 10') ||
+    horizon.includes('> 5') ||
+    horizon.includes('>5')
+  ) {
     score += 13;
     factors.push('Horizon 5-10 ans (+13)');
   } else if (horizon.includes('3') || horizon.includes('2-5') || horizon.includes('2 à 5')) {
@@ -276,6 +300,10 @@ function calculateObjectivesScore(answers: OnboardingAnswers): DimensionScore {
   } else if (objective.includes('préserver') || objective.includes('précaution') || objective.includes('immobilier')) {
     score += 3;
     factors.push('Objectif: préservation/projet (+3)');
+  } else {
+    // Free-text projects (ex: "voyager") should not zero out the score
+    score += 6;
+    factors.push('Objectif non précisé (+6)');
   }
   
   return {
