@@ -14,6 +14,7 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { queryKeys } from '@/lib/queryKeys';
+import type { Json } from '@/integrations/supabase/types';
 import {
   computeInvestorProfile,
   getProfileThresholds,
@@ -240,7 +241,7 @@ async function repairComputedProfileIfNeeded(userId: string, raw: RawProfile | n
       score_total_computed: result.scores.total,
       profile_confidence: result.confidence,
       profile_computed_at: new Date().toISOString(),
-      onboarding_answers: answers,
+      onboarding_answers: answers as Json,
       updated_at: new Date().toISOString(),
     })
     .eq('user_id', userId);
@@ -256,7 +257,7 @@ async function repairComputedProfileIfNeeded(userId: string, raw: RawProfile | n
     score_total_computed: result.scores.total,
     profile_confidence: result.confidence,
     profile_computed_at: new Date().toISOString(),
-    onboarding_answers: answers,
+    onboarding_answers: answers as Json,
   };
 }
 
@@ -504,7 +505,7 @@ export function useInvestorProfile() {
         score_total_computed: result.scores.total,
         profile_confidence: result.confidence,
         profile_computed_at: new Date().toISOString(),
-        onboarding_answers: answers,
+        onboarding_answers: answers as Json,
         cash_target_pct: Math.round((thresholds.cashTargetPct.min + thresholds.cashTargetPct.max) / 2),
         max_position_pct: thresholds.maxStockPositionPct,
         max_asset_class_pct: thresholds.maxAssetClassPct,
