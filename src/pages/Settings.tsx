@@ -48,14 +48,27 @@ const CONFIDENCE_LABELS = {
 
 export default function Settings() {
   const navigate = useNavigate();
-  const { 
-    loading, saving, error, 
-    profile, profileLabel, profileDescription,
-    scores, confidence, thresholds, defaultThresholds,
-    profileExists, profileComplete, needsOnboarding,
-    saveThresholds, resetToDefaults, refetch 
+  const {
+    loading,
+    saving,
+    error,
+    profile,
+    profileLabel,
+    profileDescription,
+    scores,
+    confidence,
+    thresholds,
+    defaultThresholds,
+    thresholdsMode,
+    profileExists,
+    profileComplete,
+    needsOnboarding,
+    saveThresholds,
+    resetToDefaults,
+    setThresholdsMode,
+    refetch,
   } = useInvestorProfile();
-  
+
   const [hasChanges, setHasChanges] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [manualMode, setManualMode] = useState(false);
@@ -66,18 +79,10 @@ export default function Settings() {
   const [localEtf, setLocalEtf] = useState<number>(25);
   const [localAssetClass, setLocalAssetClass] = useState<number>(80);
 
-  // Check if thresholds are customized (manual mode)
+  // Single source of truth: the persisted thresholds_mode column
   useEffect(() => {
-    if (thresholds && defaultThresholds) {
-      const cashDefault = Math.round((defaultThresholds.cashTargetPct.min + defaultThresholds.cashTargetPct.max) / 2);
-      const isCustomized = 
-        thresholds.cashTargetPct !== cashDefault ||
-        thresholds.maxStockPositionPct !== defaultThresholds.maxStockPositionPct ||
-        thresholds.maxEtfPositionPct !== defaultThresholds.maxEtfPositionPct ||
-        thresholds.maxAssetClassPct !== defaultThresholds.maxAssetClassPct;
-      setManualMode(isCustomized);
-    }
-  }, [thresholds, defaultThresholds]);
+    setManualMode(thresholdsMode === 'manual');
+  }, [thresholdsMode]);
 
   // Sync local state when thresholds change
   useEffect(() => {
@@ -92,6 +97,8 @@ export default function Settings() {
 
   const handleSave = async () => {
     try {
+      // Ensure mode sticks even if thresholds match defaults
+      await setThresholdsMode('manual');
       await saveThresholds({
         cashTargetPct: localCash,
         maxStockPositionPct: localStock,
@@ -110,10 +117,20 @@ export default function Settings() {
 
   const handleReset = async () => {
     try {
-      await resetToDefaults();
-      setManualMode(false);
+      // Reset values to profile defaults (still in manual if user wants)
+      const cashDefault = Math.round(
+        (defaultThresholds.cashTargetPct.min + defaultThresholds.cashTargetPct.max) / 2
+      );
+      await setThresholdsMode('manual');
+      await saveThresholds({
+        cashTargetPct: cashDefault,
+        maxStockPositionPct: defaultThresholds.maxStockPositionPct,
+        maxEtfPositionPct: defaultThresholds.maxEtfPositionPct,
+        maxAssetClassPct: defaultThresholds.maxAssetClassPct,
+      });
+      setHasChanges(false);
       toast.success('Seuils réinitialisés', {
-        description: `Retour aux valeurs recommandées pour le profil ${profileLabel}.`,
+        description: `Valeurs recommandées pour le profil ${profileLabel}.`,
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Erreur inconnue';
@@ -125,12 +142,25 @@ export default function Settings() {
     navigate('/profile?returnTo=/settings');
   };
 
-  const toggleManualMode = () => {
-    if (manualMode) {
-      // Switching to auto - reset to defaults
-      handleReset();
-    } else {
-      setManualMode(true);
+  const toggleManualMode = async (checked: boolean) => {
+    try {
+      if (checked) {
+        await setThresholdsMode('manual');
+        setManualMode(true);
+        toast.message('Mode Manuel activé', {
+          description: 'Vous pouvez maintenant ajuster les seuils.',
+        });
+      } else {
+        await setThresholdsMode('auto');
+        setManualMode(false);
+        setHasChanges(false);
+        toast.message('Mode Auto activé', {
+          description: 'Seuils recalculés automatiquement selon votre profil.',
+        });
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Erreur inconnue';
+      toast.error('Erreur', { description: message });
     }
   };
 
@@ -304,10 +334,7 @@ export default function Settings() {
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Auto</span>
-            <Switch 
-              checked={manualMode} 
-              onCheckedChange={toggleManualMode}
-            />
+            <Switch checked={manualMode} onCheckedChange={toggleManualMode} />
             <span className="text-sm text-muted-foreground">Manuel</span>
           </div>
         </div>
