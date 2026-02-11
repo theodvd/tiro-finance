@@ -15,7 +15,8 @@ export interface BDPosition {
 }
 
 export interface AppHolding {
-  isin: string;   // actually symbol (ticker) since DB has no ISIN column
+  isin: string;
+  symbol: string;
   name: string;
   quantity: number;
   pru: number;
@@ -27,19 +28,21 @@ export interface AppHolding {
  * 1. Exact ISIN match (future-proof if ISIN column is added)
  * 2. Name-based fuzzy match (normalize and compare)
  */
-function findMatch(isin: string, bdName: string, appHoldings: AppHolding[]): AppHolding | undefined {
-  // 1. Exact ISIN/symbol match
-  const exact = appHoldings.find((h) => h.isin === isin);
-  if (exact) return exact;
+function findMatch(bdIsin: string, bdName: string, appHoldings: AppHolding[]): AppHolding | undefined {
+  // 1. Exact ISIN match (most reliable)
+  if (bdIsin) {
+    const isinMatch = appHoldings.find((h) => h.isin && h.isin === bdIsin);
+    if (isinMatch) return isinMatch;
+  }
 
-  // 2. Fuzzy name match — normalize both sides
+  // 2. Fuzzy name match as fallback
   const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
   const bdNorm = normalize(bdName);
   if (!bdNorm) return undefined;
 
   return appHoldings.find((h) => {
     const appNorm = normalize(h.name);
-    // Check if one contains the other (handles truncated names)
+    if (!appNorm) return false;
     return appNorm.includes(bdNorm) || bdNorm.includes(appNorm);
   });
 }
