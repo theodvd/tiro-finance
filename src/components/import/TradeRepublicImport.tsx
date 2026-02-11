@@ -4,12 +4,15 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { FileDropzone } from "./FileDropzone";
 import { parseTradeRepublicPDF, type TRTransaction } from "@/lib/parsers/tradeRepublicParser";
+import { persistTradeRepublicTransactions } from "@/lib/persistTradeRepublicImport";
 import { fmtEUR } from "@/lib/format";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 
 export function TradeRepublicImport() {
-  const [status, setStatus] = useState<"idle" | "parsing" | "success" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "parsing" | "success" | "error" | "importing">("idle");
   const [errorMsg, setErrorMsg] = useState<string>();
+  const [importResult, setImportResult] = useState<{ inserted: number; skipped: number } | null>(null);
   const [transactions, setTransactions] = useState<TRTransaction[]>([]);
 
   const handleFile = async (file: File) => {
@@ -31,15 +34,25 @@ export function TradeRepublicImport() {
     }
   };
 
-  const handleImport = () => {
-    toast.success(`${transactions.length} transactions importées avec succès.`);
-    handleReset();
+  const handleImport = async () => {
+    setStatus("importing");
+    try {
+      const result = await persistTradeRepublicTransactions(transactions);
+      setImportResult(result);
+      toast.success(`${result.inserted} transactions importées, ${result.skipped} ignorées (doublons).`);
+      setStatus("success");
+    } catch (err) {
+      console.error('[TR Import] Persist error:', err);
+      toast.error(err instanceof Error ? err.message : "Erreur lors de l'import.");
+      setStatus("success"); // keep showing the table
+    }
   };
 
   const handleReset = () => {
     setStatus("idle");
     setTransactions([]);
     setErrorMsg(undefined);
+    setImportResult(null);
   };
 
   return (
@@ -49,7 +62,7 @@ export function TradeRepublicImport() {
         <CardDescription>Importe ton relevé de compte PDF pour synchroniser tes transactions.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <FileDropzone accept=".pdf" label="Glisse ton PDF Trade Republic ici, ou clique pour sélectionner" status={status} errorMessage={errorMsg} onFile={handleFile} />
+        <FileDropzone accept=".pdf" label="Glisse ton PDF Trade Republic ici, ou clique pour sélectionner" status={status === "importing" ? "success" : status} errorMessage={errorMsg} onFile={handleFile} />
 
         {transactions.length > 0 && (
           <>
@@ -83,9 +96,21 @@ export function TradeRepublicImport() {
                 </TableBody>
               </Table>
             </div>
+            {importResult && (
+              <div className="rounded-lg bg-muted p-3 text-sm">
+                ✅ {importResult.inserted} transactions insérées, {importResult.skipped} ignorées (doublons ou ISIN inconnu).
+              </div>
+            )}
             <div className="flex gap-3">
-              <Button onClick={handleImport}>Importer {transactions.length} transactions</Button>
-              <Button variant="outline" onClick={handleReset}>Annuler</Button>
+              {!importResult && (
+                <Button onClick={handleImport} disabled={status === "importing"}>
+                  {status === "importing" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Importer {transactions.length} transactions
+                </Button>
+              )}
+              <Button variant="outline" onClick={handleReset}>
+                {importResult ? "Nouvel import" : "Annuler"}
+              </Button>
             </div>
           </>
         )}
