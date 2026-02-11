@@ -10,7 +10,35 @@ interface SecurityMetadata {
   region: string;
   sector: string;
   assetClass: string;
-  source: 'local' | 'api' | 'fallback';
+  source: 'local' | 'yahoo' | 'openfigi' | 'keyword' | 'default';
+}
+
+// ========== FETCH WITH RETRY ==========
+async function fetchWithRetry(url: string, maxRetries = 3, options?: RequestInit): Promise<Response> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const res = await fetch(url, {
+        ...options,
+        headers: {
+          'User-Agent': 'Mozilla/5.0',
+          ...(options?.headers || {}),
+        },
+      });
+      if (res.ok) return res;
+      if (res.status === 429 || res.status >= 500) {
+        console.warn(`[Enrich] Attempt ${attempt + 1} failed for ${url}: ${res.status}`);
+        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+        continue;
+      }
+      return res; // 4xx other than 429 = don't retry
+    } catch (err) {
+      console.warn(`[Enrich] Attempt ${attempt + 1} network error for ${url}:`, err);
+      if (attempt < maxRetries - 1) {
+        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+      }
+    }
+  }
+  throw new Error(`Failed after ${maxRetries} retries: ${url}`);
 }
 
 // ========== LOCAL DATABASE (Embedded copy from assetEnrichment.ts) ==========
@@ -138,7 +166,7 @@ const STOCK_DATABASE: Record<string, { region: string; sector: string; assetClas
   'ETH': { region: 'Monde', sector: 'Diversifié', assetClass: 'Cryptomonnaies' },
 };
 
-// Keyword patterns for intelligent detection
+// ========== KEYWORD PATTERNS ==========
 const REGION_PATTERNS = [
   { keywords: ['world', 'monde', 'global', 'all-world', 'acwi', 'msci world', 'ftse all'], region: 'Monde' },
   { keywords: ['s&p 500', 'sp500', 's&p500', 'us ', 'usa', 'united states', 'america', 'nasdaq', 'dow jones', 'russell'], region: 'USA' },
@@ -157,6 +185,35 @@ const SECTOR_PATTERNS = [
   { keywords: ['industr', 'manufactur', 'aerospace', 'defense', 'transport', 'logistics', 'machinery'], sector: 'Industrie' },
 ];
 
+// ========== YAHOO FINANCE MAPPINGS ==========
+const YAHOO_TYPE_MAPPING: Record<string, string> = {
+  'ETF': 'ETF',
+  'EQUITY': 'Actions',
+  'CRYPTOCURRENCY': 'Cryptomonnaies',
+  'MUTUALFUND': 'Fonds',
+  'INDEX': 'Indice',
+};
+
+const YAHOO_REGION_MAPPING: Record<string, string> = {
+  'United States': 'Amérique du Nord',
+  'Canada': 'Amérique du Nord',
+  'France': 'Europe',
+  'Germany': 'Europe',
+  'United Kingdom': 'Europe',
+  'Netherlands': 'Europe',
+  'Switzerland': 'Europe',
+  'Ireland': 'Europe',
+  'Luxembourg': 'Europe',
+  'Japan': 'Asie-Pacifique',
+  'China': 'Asie-Pacifique',
+  'South Korea': 'Asie-Pacifique',
+  'Australia': 'Asie-Pacifique',
+  'Taiwan': 'Asie-Pacifique',
+  'India': 'Asie-Pacifique',
+  'Brazil': 'Amérique Latine',
+};
+
+// ========== HELPER FUNCTIONS ==========
 function normalizeSymbol(symbol: string): string {
   return symbol.toUpperCase().trim();
 }
@@ -201,12 +258,10 @@ function analyzeByKeywords(symbol: string, name: string): { region: string; sect
     }
   }
   
-  // For broad market ETF, set sector to Diversifié
   if (sector === 'Non classifié' && region !== 'Non classifié') {
     sector = 'Diversifié';
   }
   
-  // Crypto detection
   if (searchText.includes('crypto') || searchText.includes('bitcoin') || searchText.includes('btc') || searchText.includes('eth')) {
     assetClass = 'Cryptomonnaies';
     region = 'Monde';
@@ -216,31 +271,166 @@ function analyzeByKeywords(symbol: string, name: string): { region: string; sect
   return { region, sector, assetClass };
 }
 
-function enrichFromLocal(symbol: string, name: string): SecurityMetadata {
-  // 1. Try database lookup
-  const dbMatch = findInLocalDatabase(symbol);
-  if (dbMatch) {
+// ========== LEVEL 2: YAHOO FINANCE ENRICHMENT ==========
+async function enrichFromYahoo(symbol: string): Promise<{ region: string; sector: string | null; assetClass: string } | null> {
+  try {
+    const yahooUrl = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=assetProfile,quoteType`;
+    const res = await fetchWithRetry(yahooUrl, 2);
+    
+    if (!res.ok) {
+      console.warn(`[Enrich] Yahoo returned ${res.status} for ${symbol}`);
+      return null;
+    }
+    
+    const data = await res.json();
+    const profile = data?.quoteSummary?.result?.[0]?.assetProfile;
+    const quoteType = data?.quoteSummary?.result?.[0]?.quoteType;
+    
+    if (!profile && !quoteType) {
+      console.warn(`[Enrich] Yahoo returned no data for ${symbol}`);
+      return null;
+    }
+    
+    const assetClass = YAHOO_TYPE_MAPPING[quoteType?.quoteType] || 'Autre';
+    const sector = profile?.sector || null;
+    const country = profile?.country;
+    const region = YAHOO_REGION_MAPPING[country] || country || null;
+    
+    // Consider it sufficient if we got at least an asset_class
+    if (assetClass !== 'Autre' || sector) {
+      return { region: region || 'Non classifié', sector, assetClass };
+    }
+    
+    return null;
+  } catch (err) {
+    console.warn(`[Enrich] Yahoo error for ${symbol}:`, err);
+    return null;
+  }
+}
+
+// ========== LEVEL 3: OPENFIGI ENRICHMENT ==========
+const FIGI_SECTOR_MAPPING: Record<string, string> = {
+  'Equity': 'Actions',
+  'Govt': 'Obligations',
+  'Corp': 'Obligations',
+  'Mtge': 'Obligations',
+  'Curncy': 'Devises',
+  'Comdty': 'Matières premières',
+  'Index': 'Indice',
+  'Pfd': 'Actions',
+};
+
+async function enrichFromOpenFIGI(symbol: string): Promise<{ region: string | null; sector: string | null; assetClass: string } | null> {
+  try {
+    const figiRes = await fetchWithRetry('https://api.openfigi.com/v3/mapping', 2, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify([{ idType: 'TICKER', idValue: symbol }]),
+    });
+    
+    if (!figiRes.ok) {
+      console.warn(`[Enrich] OpenFIGI returned ${figiRes.status} for ${symbol}`);
+      return null;
+    }
+    
+    const figiData = await figiRes.json();
+    const results = figiData?.[0]?.data;
+    
+    if (!results || results.length === 0) {
+      console.warn(`[Enrich] OpenFIGI returned no data for ${symbol}`);
+      return null;
+    }
+    
+    const first = results[0];
+    const marketSector = first.marketSector;
+    const securityType = first.securityType;
+    
+    const assetClass = FIGI_SECTOR_MAPPING[marketSector] || 'Autre';
+    
+    // Try to infer region from exchange
+    let region: string | null = null;
+    const exchCode = first.exchCode;
+    if (exchCode) {
+      const usExchanges = ['US', 'UN', 'UW', 'UA', 'UQ', 'UR'];
+      const euExchanges = ['FP', 'GY', 'LN', 'NA', 'SW', 'ID', 'IM', 'SM', 'BB'];
+      const asiaExchanges = ['JT', 'HK', 'KS', 'TT', 'AU', 'SP'];
+      
+      if (usExchanges.includes(exchCode)) region = 'Amérique du Nord';
+      else if (euExchanges.includes(exchCode)) region = 'Europe';
+      else if (asiaExchanges.includes(exchCode)) region = 'Asie-Pacifique';
+    }
+    
+    if (assetClass !== 'Autre' || region) {
+      return { region, sector: securityType || null, assetClass };
+    }
+    
+    return null;
+  } catch (err) {
+    console.warn(`[Enrich] OpenFIGI error for ${symbol}:`, err);
+    return null;
+  }
+}
+
+// ========== MAIN ENRICHMENT PIPELINE ==========
+async function enrichSecurity(symbol: string, name: string): Promise<SecurityMetadata> {
+  // Level 1: Local database
+  const localMatch = findInLocalDatabase(symbol);
+  if (localMatch) {
+    console.log(`[Enrich] ${symbol}: enriched via local`);
+    return { symbol, ...localMatch, source: 'local' };
+  }
+
+  // Level 2: Yahoo Finance quoteSummary
+  const yahooResult = await enrichFromYahoo(symbol);
+  if (yahooResult) {
+    console.log(`[Enrich] ${symbol}: enriched via yahoo`);
+    // Rate limiting
+    await new Promise(r => setTimeout(r, 500));
     return {
       symbol,
-      region: dbMatch.region,
-      sector: dbMatch.sector,
-      assetClass: dbMatch.assetClass,
-      source: 'local',
+      region: yahooResult.region,
+      sector: yahooResult.sector || 'Non classifié',
+      assetClass: yahooResult.assetClass,
+      source: 'yahoo',
     };
   }
-  
-  // 2. Try keyword analysis
+  // Rate limiting after Yahoo attempt even if failed
+  await new Promise(r => setTimeout(r, 500));
+
+  // Level 3: OpenFIGI
+  const figiResult = await enrichFromOpenFIGI(symbol);
+  if (figiResult) {
+    console.log(`[Enrich] ${symbol}: enriched via openfigi`);
+    await new Promise(r => setTimeout(r, 500));
+    return {
+      symbol,
+      region: figiResult.region || 'Non classifié',
+      sector: figiResult.sector || 'Non classifié',
+      assetClass: figiResult.assetClass,
+      source: 'openfigi',
+    };
+  }
+  await new Promise(r => setTimeout(r, 500));
+
+  // Level 4: Keyword matching
   const keywordResult = analyzeByKeywords(symbol, name);
-  
+  if (keywordResult.region !== 'Non classifié' || keywordResult.sector !== 'Non classifié') {
+    console.log(`[Enrich] ${symbol}: enriched via keyword`);
+    return { symbol, ...keywordResult, source: 'keyword' };
+  }
+
+  // Level 5: Default
+  console.log(`[Enrich] ${symbol}: enriched via default`);
   return {
     symbol,
-    region: keywordResult.region,
-    sector: keywordResult.sector,
-    assetClass: keywordResult.assetClass,
-    source: keywordResult.region !== 'Non classifié' ? 'local' : 'fallback',
+    region: 'Non classifié',
+    sector: 'Non classifié',
+    assetClass: 'Actions',
+    source: 'default',
   };
 }
 
+// ========== MAIN HANDLER ==========
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -263,9 +453,8 @@ Deno.serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    console.log(`[ENRICH] Starting enrichment for user ${user.id}`);
+    console.log(`[Enrich] Starting enrichment for user ${user.id}`);
 
-    // Fetch all securities with their names
     const { data: securities, error: fetchError } = await supabase
       .from('securities')
       .select('id, symbol, name, sector, region, asset_class')
@@ -286,24 +475,20 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`[ENRICH] Found ${securities.length} securities to process`);
+    console.log(`[Enrich] Found ${securities.length} securities to process`);
 
     const results: Array<{ symbol: string; success: boolean; source: string; region?: string; sector?: string }> = [];
     let updated = 0;
     let skipped = 0;
 
     for (const security of securities) {
-      console.log(`[ENRICH] Processing ${security.symbol}...`);
+      console.log(`[Enrich] Processing ${security.symbol}...`);
       
-      // PRIORITY 1: Use local database/keywords enrichment
-      const metadata = enrichFromLocal(security.symbol, security.name || '');
+      const metadata = await enrichSecurity(security.symbol, security.name || '');
       
-      console.log(`[ENRICH] ${security.symbol} -> region: ${metadata.region}, sector: ${metadata.sector}, source: ${metadata.source}`);
+      console.log(`[Enrich] ${security.symbol} -> region: ${metadata.region}, sector: ${metadata.sector}, source: ${metadata.source}`);
       
-      // Only update if we got good data (not "Non classifié" placeholders from fallback)
-      if (metadata.source === 'local' || 
-          (metadata.region !== 'Non classifié' && metadata.sector !== 'Non classifié')) {
-        
+      if (metadata.source !== 'default') {
         const { error: updateError } = await supabase
           .from('securities')
           .update({
@@ -314,26 +499,15 @@ Deno.serve(async (req) => {
           .eq('id', security.id);
 
         if (updateError) {
-          console.error(`[ENRICH] Error updating ${security.symbol}:`, updateError);
-          results.push({
-            symbol: security.symbol,
-            success: false,
-            source: metadata.source,
-          });
+          console.error(`[Enrich] Error updating ${security.symbol}:`, updateError);
+          results.push({ symbol: security.symbol, success: false, source: metadata.source });
         } else {
-          console.log(`[ENRICH] Successfully updated ${security.symbol}`);
-          results.push({
-            symbol: security.symbol,
-            success: true,
-            source: metadata.source,
-            region: metadata.region,
-            sector: metadata.sector,
-          });
+          console.log(`[Enrich] Successfully updated ${security.symbol}`);
+          results.push({ symbol: security.symbol, success: true, source: metadata.source, region: metadata.region, sector: metadata.sector });
           updated++;
         }
       } else {
-        // Don't write placeholder values - leave as-is or set to "Non classifié"
-        console.log(`[ENRICH] ${security.symbol}: no good classification found, marking as unclassified`);
+        console.log(`[Enrich] ${security.symbol}: no good classification found, marking as unclassified`);
         
         const { error: updateError } = await supabase
           .from('securities')
@@ -345,19 +519,13 @@ Deno.serve(async (req) => {
           .eq('id', security.id);
 
         if (!updateError) {
-          results.push({
-            symbol: security.symbol,
-            success: true,
-            source: 'unclassified',
-            region: 'Non classifié',
-            sector: 'Non classifié',
-          });
+          results.push({ symbol: security.symbol, success: true, source: 'default', region: 'Non classifié', sector: 'Non classifié' });
         }
         skipped++;
       }
     }
 
-    console.log(`[ENRICH] Complete: ${updated} enriched, ${skipped} unclassified`);
+    console.log(`[Enrich] Complete: ${updated} enriched, ${skipped} unclassified`);
 
     return new Response(
       JSON.stringify({
@@ -371,7 +539,7 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error: any) {
-    console.error('[ENRICH] Error:', error);
+    console.error('[Enrich] Error:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
       { 
