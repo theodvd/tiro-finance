@@ -290,39 +290,6 @@ export type Database = {
           },
         ]
       }
-      import_jobs: {
-        Row: {
-          created_at: string
-          ended_at: string | null
-          id: string
-          message: string | null
-          started_at: string
-          status: Database["public"]["Enums"]["import_job_status"]
-          type: Database["public"]["Enums"]["import_job_type"]
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          ended_at?: string | null
-          id?: string
-          message?: string | null
-          started_at?: string
-          status?: Database["public"]["Enums"]["import_job_status"]
-          type: Database["public"]["Enums"]["import_job_type"]
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          ended_at?: string | null
-          id?: string
-          message?: string | null
-          started_at?: string
-          status?: Database["public"]["Enums"]["import_job_status"]
-          type?: Database["public"]["Enums"]["import_job_type"]
-          user_id?: string
-        }
-        Relationships: []
-      }
       market_data: {
         Row: {
           eur_fx: number
@@ -923,8 +890,6 @@ export type Database = {
     Enums: {
       account_type: "CTO" | "PEA" | "AV" | "CRYPTO" | "LIVRETS" | "OTHER"
       asset_class: "STOCK" | "ETF" | "CRYPTO" | "BOND" | "REIT" | "CASH"
-      import_job_status: "PENDING" | "OK" | "ERROR"
-      import_job_type: "PRICE_REFRESH" | "SNAPSHOT" | "CSV_IMPORT"
       pricing_source: "YFINANCE" | "COINGECKO" | "MANUAL"
       transaction_type: "BUY" | "SELL" | "DCA_BUY" | "DIVIDEND" | "TRANSFER"
     }
@@ -1056,8 +1021,6 @@ export const Constants = {
     Enums: {
       account_type: ["CTO", "PEA", "AV", "CRYPTO", "LIVRETS", "OTHER"],
       asset_class: ["STOCK", "ETF", "CRYPTO", "BOND", "REIT", "CASH"],
-      import_job_status: ["PENDING", "OK", "ERROR"],
-      import_job_type: ["PRICE_REFRESH", "SNAPSHOT", "CSV_IMPORT"],
       pricing_source: ["YFINANCE", "COINGECKO", "MANUAL"],
       transaction_type: ["BUY", "SELL", "DCA_BUY", "DIVIDEND", "TRANSFER"],
     },
