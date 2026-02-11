@@ -1,8 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
-// In pdfjs-dist v4, setting workerSrc to empty string enables the fake worker
-// which runs in the main thread (no web worker needed)
-pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+// pdfjs-dist v4 requires an explicit worker URL
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
 export interface TRTransaction {
   date: string;
