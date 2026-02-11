@@ -59,6 +59,7 @@ export function TradeRepublicImport() {
                   <TableRow>
                     <TableHead>Date</TableHead>
                     <TableHead>Type</TableHead>
+                    <TableHead>Compte</TableHead>
                     <TableHead>ISIN</TableHead>
                     <TableHead>Nom</TableHead>
                     <TableHead className="text-right">Quantité</TableHead>
@@ -71,6 +72,7 @@ export function TradeRepublicImport() {
                     <TableRow key={i}>
                       <TableCell>{tx.date}</TableCell>
                       <TableCell>{tx.type}</TableCell>
+                      <TableCell>{tx.account}</TableCell>
                       <TableCell className="font-mono text-xs">{tx.isin}</TableCell>
                       <TableCell>{tx.name}</TableCell>
                       <TableCell className="text-right">{tx.quantity}</TableCell>
