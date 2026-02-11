@@ -35,34 +35,43 @@ export function BourseDirectReconciliation() {
     setStatus("parsing");
     setErrorMsg(undefined);
     try {
-      // Fetch current holdings from DB
-      const { data: holdings } = await supabase
+      // Fetch current holdings with security name/symbol for matching
+      const { data: holdings, error: holdingsError } = await supabase
         .from('holdings')
-        .select('shares, amount_invested_eur, security:securities(symbol)');
+        .select('shares, amount_invested_eur, security:securities(symbol, name)');
 
-      const appHoldings: AppHolding[] = (holdings ?? [])
+      if (holdingsError) {
+        console.error('[BD Import] Holdings fetch error:', holdingsError);
+      }
+
+      // Note: securities table has no ISIN column, so we can't match by ISIN directly.
+      // We pass symbol and name so the parser can try fuzzy matching.
+      const appHoldings: AppHolding[] = (holdings || [])
         .filter((h: any) => h.security?.symbol)
         .map((h: any) => ({
-          isin: h.security.symbol as string,
-          quantity: Number(h.shares),
-          pru: h.amount_invested_eur && Number(h.shares) > 0
-            ? Number(h.amount_invested_eur) / Number(h.shares)
-            : 0,
+          isin: h.security.symbol as string, // symbol used as fallback identifier
+          name: (h.security.name as string) || '',
+          quantity: Number(h.shares) || 0,
+          pru: Number(h.shares) > 0 ? (Number(h.amount_invested_eur) || 0) / Number(h.shares) : 0,
         }));
+
+      console.log('[BD Import] App holdings loaded:', appHoldings.length, appHoldings);
 
       const result = await parseBourseDirectXLSX(file, appHoldings);
       setPositions(result);
       setStatus("success");
-    } catch (err: any) {
+    } catch (err) {
+      console.error('[BD Import] Error:', err);
       setStatus("error");
-      setErrorMsg(err?.message || "Impossible de lire ce fichier XLSX.");
+      setErrorMsg(err instanceof Error ? err.message : "Impossible de lire ce fichier XLSX.");
     }
   };
 
   const handleApply = () => {
-    const corrections = positions.filter((p) => p.status !== "ok").length;
-    toast.success(`${corrections} correction(s) appliquée(s).`);
-    handleReset();
+    const corrections = positions.filter((p) => p.status !== "ok");
+    toast.info(
+      `${corrections.length} écart(s) détecté(s). La correction automatique sera disponible prochainement. Pour l'instant, corrige manuellement dans la page Investments.`
+    );
   };
 
   const handleReset = () => {
