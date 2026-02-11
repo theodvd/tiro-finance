@@ -1,0 +1,195 @@
+import { supabase } from "@/integrations/supabase/client";
+import type { TRTransaction } from "./parsers/tradeRepublicParser";
+
+/**
+ * Persist Trade Republic transactions to the database.
+ * 1. Ensure accounts (PEA/CTO) exist
+ * 2. Ensure securities exist (by ISIN)
+ * 3. Insert transactions (skip duplicates by account + security + date + shares)
+ * 4. Upsert holdings with aggregated shares
+ */
+export async function persistTradeRepublicTransactions(
+  transactions: TRTransaction[]
+): Promise<{ inserted: number; skipped: number }> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Vous devez être connecté pour importer.");
+
+  // --- 1. Ensure accounts exist ---
+  const accountTypes = [...new Set(transactions.map((t) => t.account))];
+  const accountMap: Record<string, string> = {};
+
+  for (const acctType of accountTypes) {
+    const dbType = acctType === "PEA" ? "PEA" : "CTO";
+    const name = acctType === "PEA" ? "Trade Republic PEA" : "Trade Republic CTO";
+
+    const { data: existing } = await supabase
+      .from("accounts")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("type", dbType)
+      .eq("name", name)
+      .maybeSingle();
+
+    if (existing) {
+      accountMap[acctType] = existing.id;
+    } else {
+      const { data: created, error } = await supabase
+        .from("accounts")
+        .insert({ user_id: user.id, type: dbType, name })
+        .select("id")
+        .single();
+      if (error) throw new Error(`Erreur création compte ${name}: ${error.message}`);
+      accountMap[acctType] = created.id;
+    }
+  }
+
+  // --- 2. Ensure securities exist (by ISIN) ---
+  const uniqueIsins = [...new Set(transactions.filter((t) => t.isin !== "UNKNOWN").map((t) => t.isin))];
+  const securityMap: Record<string, string> = {};
+
+  // Fetch existing securities for this user by ISIN
+  const { data: existingSecurities } = await supabase
+    .from("securities")
+    .select("id, isin")
+    .eq("user_id", user.id)
+    .in("isin", uniqueIsins);
+
+  for (const sec of existingSecurities || []) {
+    if (sec.isin) securityMap[sec.isin] = sec.id;
+  }
+
+  // Create missing securities
+  for (const isin of uniqueIsins) {
+    if (securityMap[isin]) continue;
+    const tx = transactions.find((t) => t.isin === isin)!;
+    const { data: created, error } = await supabase
+      .from("securities")
+      .insert({
+        user_id: user.id,
+        isin,
+        name: tx.name,
+        symbol: isin, // placeholder, will be enriched later
+        currency_quote: "EUR",
+        pricing_source: "YFINANCE" as const,
+        asset_class: "ETF" as const, // default, can be enriched
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(`Erreur création titre ${isin}: ${error.message}`);
+    securityMap[isin] = created.id;
+  }
+
+  // --- 3. Insert transactions (skip duplicates) ---
+  let inserted = 0;
+  let skipped = 0;
+
+  // Fetch existing transactions for dedup
+  const { data: existingTx } = await supabase
+    .from("transactions")
+    .select("account_id, security_id, executed_at, shares, type")
+    .eq("user_id", user.id);
+
+  const existingSet = new Set(
+    (existingTx || []).map((t) =>
+      `${t.account_id}|${t.security_id}|${new Date(t.executed_at).toISOString().split("T")[0]}|${t.shares}|${t.type}`
+    )
+  );
+
+  for (const tx of transactions) {
+    if (tx.isin === "UNKNOWN") {
+      skipped++;
+      continue;
+    }
+
+    const accountId = accountMap[tx.account];
+    const securityId = securityMap[tx.isin];
+    const dbType = tx.type === "Vente" ? "SELL" : tx.type === "DCA" ? "DCA_BUY" : "BUY";
+    const dateStr = tx.date;
+
+    const key = `${accountId}|${securityId}|${dateStr}|${tx.quantity}|${dbType}`;
+    if (existingSet.has(key)) {
+      skipped++;
+      continue;
+    }
+
+    const { error } = await supabase.from("transactions").insert({
+      user_id: user.id,
+      account_id: accountId,
+      security_id: securityId,
+      type: dbType,
+      executed_at: `${dateStr}T12:00:00Z`,
+      shares: tx.quantity,
+      price_eur: tx.unitPrice,
+      total_eur: tx.amountEur,
+      fees_eur: 0,
+      notes: `Import TR - ${tx.name}`,
+    });
+
+    if (error) {
+      console.error(`[TR Import] Failed to insert tx:`, tx, error);
+      skipped++;
+    } else {
+      existingSet.add(key);
+      inserted++;
+    }
+  }
+
+  // --- 4. Upsert holdings ---
+  // Group by account + security and sum shares
+  const holdingsAgg: Record<string, { accountId: string; securityId: string; shares: number; totalInvested: number }> = {};
+
+  for (const tx of transactions) {
+    if (tx.isin === "UNKNOWN") continue;
+    const accountId = accountMap[tx.account];
+    const securityId = securityMap[tx.isin];
+    const key = `${accountId}|${securityId}`;
+
+    if (!holdingsAgg[key]) {
+      holdingsAgg[key] = { accountId, securityId, shares: 0, totalInvested: 0 };
+    }
+
+    if (tx.type === "Vente") {
+      holdingsAgg[key].shares -= tx.quantity;
+      holdingsAgg[key].totalInvested -= tx.amountEur;
+    } else {
+      holdingsAgg[key].shares += tx.quantity;
+      holdingsAgg[key].totalInvested += tx.amountEur;
+    }
+  }
+
+  for (const { accountId, securityId, shares, totalInvested } of Object.values(holdingsAgg)) {
+    const avgPrice = shares > 0 ? Math.round((totalInvested / shares) * 100) / 100 : 0;
+
+    const { data: existing } = await supabase
+      .from("holdings")
+      .select("id, shares, amount_invested_eur")
+      .eq("user_id", user.id)
+      .eq("account_id", accountId)
+      .eq("security_id", securityId)
+      .maybeSingle();
+
+    if (existing) {
+      const newShares = Number(existing.shares) + shares;
+      const newInvested = Number(existing.amount_invested_eur || 0) + totalInvested;
+      await supabase
+        .from("holdings")
+        .update({
+          shares: newShares,
+          amount_invested_eur: newInvested,
+          avg_buy_price_native: newShares > 0 ? Math.round((newInvested / newShares) * 100) / 100 : 0,
+        })
+        .eq("id", existing.id);
+    } else {
+      await supabase.from("holdings").insert({
+        user_id: user.id,
+        account_id: accountId,
+        security_id: securityId,
+        shares,
+        amount_invested_eur: totalInvested,
+        avg_buy_price_native: avgPrice,
+      });
+    }
+  }
+
+  return { inserted, skipped };
+}
