@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.bridge-proxy]
 verify_jwt = true
+
+[functions.resolve-isin]
+verify_jwt = false
