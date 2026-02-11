@@ -91,11 +91,12 @@ export async function parseTradeRepublicPDF(file: File): Promise<TRTransaction[]
       }
 
       // Find EUR amount after the order match
-      const textAfterOrder = fullText.substring(match.index, match.index + match[0].length + 100);
-      const amountMatches = [...textAfterOrder.matchAll(/([\d\s]+[.,]\d{2})\s*€/g)];
+      // Use a tighter regex: 1-6 digits, optional thousands separator, comma/dot, 2 decimals, then €
+      const textAfterOrder = fullText.substring(match.index + match[0].length, match.index + match[0].length + 150);
+      const amountMatches = [...textAfterOrder.matchAll(/(\d{1,3}(?:[\s.]\d{3})*[,]\d{2})\s*€/g)];
       let amountEur = 0;
       if (amountMatches.length > 0) {
-        amountEur = parseFloat(amountMatches[0][1].replace(/\s/g, '').replace(',', '.')) || 0;
+        amountEur = parseFloat(amountMatches[0][1].replace(/[\s.]/g, '').replace(',', '.')) || 0;
       }
 
       const unitPrice = quantity > 0 ? Math.round((amountEur / quantity) * 100) / 100 : 0;
