@@ -400,6 +400,28 @@ Deno.serve(async (req) => {
             }
           }
           
+          // Log transaction for audit trail
+          const { error: txError } = await supabase
+            .from("transactions")
+            .insert({
+              user_id: user.id,
+              account_id: plan.account_id,
+              security_id: plan.security_id,
+              type: 'DCA_BUY',
+              executed_at: execDate.toISOString(),
+              shares: shares,
+              price_eur: priceEur,
+              total_eur: actualInvestedAmount,
+              fees_eur: 0,
+              dca_plan_id: plan.id,
+              source_account_id: plan.source_account_id,
+            });
+
+          if (txError) {
+            console.error(`[DCA] Error logging transaction:`, txError);
+            // Non-blocking: don't stop DCA execution if logging fails
+          }
+
           dcaResults.push({
             plan_id: plan.id,
             execution_date: execDate.toISOString().split('T')[0],
