@@ -1,0 +1,1 @@
+DROP POLICY IF EXISTS "market_data_select_via_security" ON public.market_data;
