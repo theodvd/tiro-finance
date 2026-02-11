@@ -337,6 +337,7 @@ export type Database = {
           created_at: string
           currency_quote: string
           id: string
+          isin: string | null
           name: string
           pricing_source: Database["public"]["Enums"]["pricing_source"]
           region: string | null
@@ -350,6 +351,7 @@ export type Database = {
           created_at?: string
           currency_quote: string
           id?: string
+          isin?: string | null
           name: string
           pricing_source: Database["public"]["Enums"]["pricing_source"]
           region?: string | null
@@ -363,6 +365,7 @@ export type Database = {
           created_at?: string
           currency_quote?: string
           id?: string
+          isin?: string | null
           name?: string
           pricing_source?: Database["public"]["Enums"]["pricing_source"]
           region?: string | null

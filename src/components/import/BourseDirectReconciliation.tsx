@@ -38,7 +38,7 @@ export function BourseDirectReconciliation() {
       // Fetch current holdings with security name/symbol for matching
       const { data: holdings, error: holdingsError } = await supabase
         .from('holdings')
-        .select('shares, amount_invested_eur, security:securities(symbol, name)');
+        .select('shares, amount_invested_eur, security:securities(isin, symbol, name)');
 
       if (holdingsError) {
         console.error('[BD Import] Holdings fetch error:', holdingsError);
@@ -49,7 +49,8 @@ export function BourseDirectReconciliation() {
       const appHoldings: AppHolding[] = (holdings || [])
         .filter((h: any) => h.security?.symbol)
         .map((h: any) => ({
-          isin: h.security.symbol as string, // symbol used as fallback identifier
+          isin: (h.security.isin as string) || '',
+          symbol: (h.security.symbol as string) || '',
           name: (h.security.name as string) || '',
           quantity: Number(h.shares) || 0,
           pru: Number(h.shares) > 0 ? (Number(h.amount_invested_eur) || 0) / Number(h.shares) : 0,
