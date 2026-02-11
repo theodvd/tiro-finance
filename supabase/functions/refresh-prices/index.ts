@@ -14,6 +14,29 @@ type Security = {
   asset_class: string;
 };
 
+async function fetchWithRetry(url: string, maxRetries = 3): Promise<Response> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0' }
+      });
+      if (res.ok) return res;
+      if (res.status === 429 || res.status >= 500) {
+        console.warn(`[Yahoo] Attempt ${attempt + 1} failed for ${url}: ${res.status}`);
+        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+        continue;
+      }
+      return res; // 4xx other than 429 = don't retry
+    } catch (err) {
+      console.warn(`[Yahoo] Attempt ${attempt + 1} network error for ${url}:`, err);
+      if (attempt < maxRetries - 1) {
+        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+      }
+    }
+  }
+  throw new Error(`Failed after ${maxRetries} retries: ${url}`);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -50,8 +73,24 @@ Deno.serve(async (req) => {
       
       for (const security of nonCryptos) {
         try {
+          // Check if we already have a recent price (< 4 hours old)
+          const { data: existingPrice } = await supabase
+            .from("market_data")
+            .select("last_px_eur, updated_at")
+            .eq("security_id", security.id)
+            .maybeSingle();
+
+          if (existingPrice?.updated_at) {
+            const ageMs = Date.now() - new Date(existingPrice.updated_at).getTime();
+            const ageHours = ageMs / (1000 * 60 * 60);
+            if (ageHours < 4) {
+              console.log(`[Yahoo] ${security.symbol}: price is ${ageHours.toFixed(1)}h old, skipping`);
+              continue;
+            }
+          }
+
           const url = `https://query1.finance.yahoo.com/v8/finance/chart/${security.symbol}`;
-          const res = await fetch(url);
+          const res = await fetchWithRetry(url);
           
           if (!res.ok) {
             console.error(`[Yahoo Finance] Error for ${security.symbol}: ${res.status}`);
@@ -74,14 +113,18 @@ Deno.serve(async (req) => {
           let fxRate = 1.0;
           
           if (currency !== "EUR") {
-            const fxUrl = `https://api.frankfurter.app/latest?from=${currency}&to=EUR`;
-            const fxRes = await fetch(fxUrl);
-            
-            if (fxRes.ok) {
+            try {
+              const fxRes = await fetchWithRetry(`https://api.frankfurter.app/latest?from=${currency}&to=EUR`);
               const fxData = await fxRes.json();
-              fxRate = fxData.rates.EUR || 1.0;
-              priceEur = price * fxRate;
+              fxRate = fxData.rates?.EUR || 1.0;
+            } catch (fxErr) {
+              console.warn(`[FX] Fallback for ${currency}: using existing rate`);
+              if (existingPrice?.last_px_eur && existingPrice?.last_px_eur > 0) {
+                // Keep existing EUR price rather than using wrong FX
+                continue;
+              }
             }
+            priceEur = price * fxRate;
           }
           
           await supabase.from("market_data").upsert({
@@ -96,8 +139,8 @@ Deno.serve(async (req) => {
           
           console.log(`[Yahoo Finance] Updated ${security.symbol}: ${priceEur.toFixed(2)} EUR`);
           
-          // Rate limiting
-          await new Promise(resolve => setTimeout(resolve, 100));
+          // Rate limiting - 300ms between calls to avoid 429s
+          await new Promise(resolve => setTimeout(resolve, 300));
         } catch (error) {
           console.error(`[Yahoo Finance] Error processing ${security.symbol}:`, error);
         }
