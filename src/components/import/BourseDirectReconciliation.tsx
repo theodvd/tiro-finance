@@ -3,7 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { FileDropzone } from "./FileDropzone";
-import { parseBourseDirectXLSX, type BDPosition } from "@/lib/parsers/bourseDirectParser";
+import { parseBourseDirectXLSX, type BDPosition, type AppHolding } from "@/lib/parsers/bourseDirectParser";
+import { supabase } from "@/integrations/supabase/client";
 import { fmtEUR } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -34,12 +35,27 @@ export function BourseDirectReconciliation() {
     setStatus("parsing");
     setErrorMsg(undefined);
     try {
-      const result = await parseBourseDirectXLSX(file);
+      // Fetch current holdings from DB
+      const { data: holdings } = await supabase
+        .from('holdings')
+        .select('shares, amount_invested_eur, security:securities(symbol)');
+
+      const appHoldings: AppHolding[] = (holdings ?? [])
+        .filter((h: any) => h.security?.symbol)
+        .map((h: any) => ({
+          isin: h.security.symbol as string,
+          quantity: Number(h.shares),
+          pru: h.amount_invested_eur && Number(h.shares) > 0
+            ? Number(h.amount_invested_eur) / Number(h.shares)
+            : 0,
+        }));
+
+      const result = await parseBourseDirectXLSX(file, appHoldings);
       setPositions(result);
       setStatus("success");
-    } catch {
+    } catch (err: any) {
       setStatus("error");
-      setErrorMsg("Impossible de lire ce fichier XLSX.");
+      setErrorMsg(err?.message || "Impossible de lire ce fichier XLSX.");
     }
   };
 
@@ -78,6 +94,7 @@ export function BourseDirectReconciliation() {
                     <TableHead className="text-right">PRU BD</TableHead>
                     <TableHead className="text-right">PRU App</TableHead>
                     <TableHead className="text-right">Écart PRU</TableHead>
+                    <TableHead className="text-right">Valorisation</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -98,6 +115,7 @@ export function BourseDirectReconciliation() {
                       <TableCell className="text-right">{fmtEUR(pos.pruBD)}</TableCell>
                       <TableCell className="text-right">{pos.pruApp ? fmtEUR(pos.pruApp) : "—"}</TableCell>
                       <TableCell className="text-right font-medium">{pos.diffPRU !== 0 ? fmtEUR(pos.diffPRU) : "—"}</TableCell>
+                      <TableCell className="text-right">{fmtEUR(pos.valorisationBD)}</TableCell>
                       <TableCell>{statusIcon[pos.status]} {statusLabel[pos.status]}</TableCell>
                     </TableRow>
                   ))}
