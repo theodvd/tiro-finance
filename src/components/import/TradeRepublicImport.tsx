@@ -24,9 +24,10 @@ export function TradeRepublicImport() {
       const result = await parseTradeRepublicPDF(file);
       setTransactions(result);
       setStatus("success");
-    } catch {
+    } catch (err) {
+      console.error('[TR Import] Error:', err);
       setStatus("error");
-      setErrorMsg("Impossible de lire ce PDF.");
+      setErrorMsg(err instanceof Error ? err.message : "Impossible de lire ce PDF.");
     }
   };
 
