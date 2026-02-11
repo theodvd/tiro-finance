@@ -525,6 +525,86 @@ export type Database = {
         }
         Relationships: []
       }
+      transactions: {
+        Row: {
+          account_id: string
+          created_at: string
+          dca_plan_id: string | null
+          executed_at: string
+          fees_eur: number | null
+          id: string
+          notes: string | null
+          price_eur: number
+          security_id: string
+          shares: number
+          source_account_id: string | null
+          total_eur: number
+          type: Database["public"]["Enums"]["transaction_type"]
+          user_id: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          dca_plan_id?: string | null
+          executed_at?: string
+          fees_eur?: number | null
+          id?: string
+          notes?: string | null
+          price_eur: number
+          security_id: string
+          shares: number
+          source_account_id?: string | null
+          total_eur: number
+          type: Database["public"]["Enums"]["transaction_type"]
+          user_id: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          dca_plan_id?: string | null
+          executed_at?: string
+          fees_eur?: number | null
+          id?: string
+          notes?: string | null
+          price_eur?: number
+          security_id?: string
+          shares?: number
+          source_account_id?: string | null
+          total_eur?: number
+          type?: Database["public"]["Enums"]["transaction_type"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transactions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_dca_plan_id_fkey"
+            columns: ["dca_plan_id"]
+            isOneToOne: false
+            referencedRelation: "dca_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_security_id_fkey"
+            columns: ["security_id"]
+            isOneToOne: false
+            referencedRelation: "securities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_source_account_id_fkey"
+            columns: ["source_account_id"]
+            isOneToOne: false
+            referencedRelation: "bridge_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_profile: {
         Row: {
           age: number | null
@@ -846,6 +926,7 @@ export type Database = {
       import_job_status: "PENDING" | "OK" | "ERROR"
       import_job_type: "PRICE_REFRESH" | "SNAPSHOT" | "CSV_IMPORT"
       pricing_source: "YFINANCE" | "COINGECKO" | "MANUAL"
+      transaction_type: "BUY" | "SELL" | "DCA_BUY" | "DIVIDEND" | "TRANSFER"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -978,6 +1059,7 @@ export const Constants = {
       import_job_status: ["PENDING", "OK", "ERROR"],
       import_job_type: ["PRICE_REFRESH", "SNAPSHOT", "CSV_IMPORT"],
       pricing_source: ["YFINANCE", "COINGECKO", "MANUAL"],
+      transaction_type: ["BUY", "SELL", "DCA_BUY", "DIVIDEND", "TRANSFER"],
     },
   },
 } as const
