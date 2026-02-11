@@ -18,6 +18,8 @@ interface DcaPlan {
   start_date: string;
   next_execution_date: string | null;
   active: boolean;
+  investment_mode: string;
+  source_account_id: string | null;
 }
 
 Deno.serve(async (req) => {
@@ -78,15 +80,29 @@ Deno.serve(async (req) => {
             .maybeSingle();
 
           const priceEur = marketData?.last_px_eur || 0;
-          const shares = priceEur > 0 ? plan.amount / priceEur : 0;
-
-          if (shares <= 0) {
+          if (priceEur <= 0) {
             console.warn(`[DCA] Plan ${plan.id}: Invalid price (${priceEur}), skipping`);
-            errors.push({
-              plan_id: plan.id,
-              error: 'Invalid or missing market price',
-            });
+            errors.push({ plan_id: plan.id, error: 'Invalid or missing market price' });
             continue;
+          }
+
+          const mode = plan.investment_mode || 'amount';
+          let shares: number;
+          let totalEur: number;
+
+          if (mode === 'shares') {
+            // Fixed whole shares mode
+            shares = Math.floor(plan.amount / priceEur);
+            if (shares < 1) {
+              console.warn(`[DCA] Plan ${plan.id}: price ${priceEur} too high for amount ${plan.amount}, skipping`);
+              errors.push({ plan_id: plan.id, error: `Cannot buy even 1 share at ${priceEur} EUR` });
+              continue;
+            }
+            totalEur = shares * priceEur;
+          } else {
+            // Fixed amount mode (default) — fractional shares
+            shares = plan.amount / priceEur;
+            totalEur = plan.amount;
           }
 
           // Check if holding exists
@@ -101,7 +117,7 @@ Deno.serve(async (req) => {
           if (existingHolding) {
             // Update existing holding
             const newShares = Number(existingHolding.shares) + shares;
-            const newInvested = Number(existingHolding.amount_invested_eur || 0) + plan.amount;
+            const newInvested = Number(existingHolding.amount_invested_eur || 0) + totalEur;
 
             const { error: updateError } = await supabase
               .from('holdings')
@@ -121,10 +137,28 @@ Deno.serve(async (req) => {
                 account_id: plan.account_id,
                 security_id: plan.security_id,
                 shares: shares,
-                amount_invested_eur: plan.amount,
+                amount_invested_eur: totalEur,
               });
 
             if (insertError) throw insertError;
+          }
+
+          // Deduct from source bridge account if linked
+          if (plan.source_account_id) {
+            const { data: bridgeAccount } = await supabase
+              .from('bridge_accounts')
+              .select('id, balance')
+              .eq('id', plan.source_account_id)
+              .maybeSingle();
+
+            if (bridgeAccount) {
+              const newBalance = Number(bridgeAccount.balance || 0) - totalEur;
+              await supabase
+                .from('bridge_accounts')
+                .update({ balance: newBalance })
+                .eq('id', bridgeAccount.id);
+              console.log(`[DCA] Deducted ${totalEur.toFixed(2)} EUR from bridge account ${plan.source_account_id}`);
+            }
           }
 
           // Log transaction for audit trail
@@ -138,7 +172,7 @@ Deno.serve(async (req) => {
               executed_at: new Date().toISOString(),
               shares: shares,
               price_eur: priceEur,
-              total_eur: plan.amount,
+              total_eur: totalEur,
               fees_eur: 0,
               dca_plan_id: plan.id,
               source_account_id: plan.source_account_id || null,
@@ -163,9 +197,10 @@ Deno.serve(async (req) => {
           executedPlans.push({
             plan_id: plan.id,
             user_id: plan.user_id,
-            amount: plan.amount,
+            amount: totalEur,
             shares: shares,
             price: priceEur,
+            mode: mode,
             next_execution: nextExecution,
           });
 
