@@ -1,10 +1,10 @@
 project_id = "ahnxmwixvbfgevujxhgi"
 
 [functions.refresh-prices]
-verify_jwt = false
+verify_jwt = true
 
 [functions.take-snapshot]
-verify_jwt = false
+verify_jwt = true
 
 [functions.scheduled-snapshots]
 verify_jwt = false
