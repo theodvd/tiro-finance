@@ -102,13 +102,31 @@ export function BourseDirectReconciliation() {
 
       for (const pos of positions) {
         if (pos.status === "manquant") {
+          // Resolve ISIN → Yahoo ticker via edge function
+          let resolvedSymbol = pos.isin; // fallback
+          let resolvedName = pos.name;
+          try {
+            const { data: resolved } = await supabase.functions.invoke('resolve-isin', {
+              body: { isin: pos.isin },
+            });
+            if (resolved?.symbol) {
+              resolvedSymbol = resolved.symbol;
+              console.log(`[BD Apply] Resolved ${pos.isin} → ${resolvedSymbol}`);
+            }
+            if (resolved?.name && !pos.name) {
+              resolvedName = resolved.name;
+            }
+          } catch (resolveErr) {
+            console.warn(`[BD Apply] Could not resolve ISIN ${pos.isin}:`, resolveErr);
+          }
+
           // Create security + holding
           const { data: newSec, error: secErr } = await supabase
             .from('securities')
             .upsert({
               user_id: user.id,
-              symbol: pos.isin,
-              name: pos.name,
+              symbol: resolvedSymbol,
+              name: resolvedName,
               isin: pos.isin,
               asset_class: 'ETF' as const,
               currency_quote: pos.currency || 'EUR',
