@@ -14,6 +14,7 @@ const Investments = lazy(() => import("./pages/Investments"));
 const Insights = lazy(() => import("./pages/Insights"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Settings = lazy(() => import("./pages/Settings"));
+const Import = lazy(() => import("./pages/Import"));
 const Diversification = lazy(() => import("./pages/Diversification"));
 const Decisions = lazy(() => import("./pages/Decisions"));
 const DecisionDetail = lazy(() => import("./pages/DecisionDetail"));
@@ -67,6 +68,16 @@ const App = () => (
                   <ProtectedRoute>
                     <Layout>
                       <Insights />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/import"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Import />
                     </Layout>
                   </ProtectedRoute>
                 }
