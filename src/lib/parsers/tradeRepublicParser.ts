@@ -1,7 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Disable worker to avoid CORS/CDN issues in browser
-pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+// Configure worker from CDN — version must match installed package
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 export interface TRTransaction {
   date: string;
