@@ -15,30 +15,33 @@ export async function persistTradeRepublicTransactions(
   if (!user) throw new Error("Vous devez être connecté pour importer.");
 
   // --- 1. Ensure accounts exist ---
+  // Match existing Trade Republic accounts flexibly (name contains "Trade Republic")
   const accountTypes = [...new Set(transactions.map((t) => t.account))];
   const accountMap: Record<string, string> = {};
 
   for (const acctType of accountTypes) {
     const dbType = acctType === "PEA" ? "PEA" : "CTO";
-    const name = acctType === "PEA" ? "Trade Republic PEA" : "Trade Republic CTO";
+    const canonicalName = acctType === "PEA" ? "Trade Republic PEA" : "Trade Republic CTO";
 
-    const { data: existing } = await supabase
+    // Search for any existing TR account with matching type
+    const { data: existingAccounts } = await supabase
       .from("accounts")
-      .select("id")
+      .select("id, name")
       .eq("user_id", user.id)
       .eq("type", dbType)
-      .eq("name", name)
-      .maybeSingle();
+      .ilike("name", "%Trade Republic%");
 
-    if (existing) {
-      accountMap[acctType] = existing.id;
+    if (existingAccounts && existingAccounts.length > 0) {
+      // Prefer exact match, otherwise use the first one found
+      const exact = existingAccounts.find((a) => a.name === canonicalName);
+      accountMap[acctType] = exact ? exact.id : existingAccounts[0].id;
     } else {
       const { data: created, error } = await supabase
         .from("accounts")
-        .insert({ user_id: user.id, type: dbType, name })
+        .insert({ user_id: user.id, type: dbType, name: canonicalName })
         .select("id")
         .single();
-      if (error) throw new Error(`Erreur création compte ${name}: ${error.message}`);
+      if (error) throw new Error(`Erreur création compte ${canonicalName}: ${error.message}`);
       accountMap[acctType] = created.id;
     }
   }
