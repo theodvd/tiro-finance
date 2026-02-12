@@ -187,15 +187,20 @@ export async function persistTradeRepublicTransactions(
       .maybeSingle();
 
     if (existing) {
-      await supabase
-        .from("holdings")
-        .update({
-          shares: totalShares,
-          amount_invested_eur: totalInvested,
-          avg_buy_price_native: avgPrice,
-        })
-        .eq("id", existing.id);
-    } else {
+      if (totalShares <= 0) {
+        // Position fully sold — delete the holding
+        await supabase.from("holdings").delete().eq("id", existing.id);
+      } else {
+        await supabase
+          .from("holdings")
+          .update({
+            shares: totalShares,
+            amount_invested_eur: totalInvested,
+            avg_buy_price_native: avgPrice,
+          })
+          .eq("id", existing.id);
+      }
+    } else if (totalShares > 0) {
       await supabase.from("holdings").insert({
         user_id: user.id,
         account_id: accountId,
