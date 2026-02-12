@@ -137,49 +137,62 @@ export async function persistTradeRepublicTransactions(
     }
   }
 
-  // --- 4. Upsert holdings ---
-  // Group by account + security and sum shares
-  const holdingsAgg: Record<string, { accountId: string; securityId: string; shares: number; totalInvested: number }> = {};
-
+  // --- 4. Recalculate holdings from full transaction history ---
+  // Collect unique (accountId, securityId) pairs touched by this import
+  const touchedPairs = new Set<string>();
   for (const tx of transactions) {
     if (tx.isin === "UNKNOWN") continue;
     const accountId = accountMap[tx.account];
     const securityId = securityMap[tx.isin];
-    const key = `${accountId}|${securityId}`;
-
-    if (!holdingsAgg[key]) {
-      holdingsAgg[key] = { accountId, securityId, shares: 0, totalInvested: 0 };
-    }
-
-    if (tx.type === "Vente") {
-      holdingsAgg[key].shares -= tx.quantity;
-      holdingsAgg[key].totalInvested -= tx.amountEur;
-    } else {
-      holdingsAgg[key].shares += tx.quantity;
-      holdingsAgg[key].totalInvested += tx.amountEur;
-    }
+    touchedPairs.add(`${accountId}|${securityId}`);
   }
 
-  for (const { accountId, securityId, shares, totalInvested } of Object.values(holdingsAgg)) {
-    const avgPrice = shares > 0 ? Math.round((totalInvested / shares) * 100) / 100 : 0;
+  for (const pair of touchedPairs) {
+    const [accountId, securityId] = pair.split("|");
 
+    // Fetch ALL transactions for this (account, security, user) from DB
+    const { data: allTx, error: txError } = await supabase
+      .from("transactions")
+      .select("type, shares, total_eur")
+      .eq("user_id", user.id)
+      .eq("account_id", accountId)
+      .eq("security_id", securityId);
+
+    if (txError) {
+      console.error(`[TR Import] Failed to fetch transactions for recalc:`, txError);
+      continue;
+    }
+
+    let totalShares = 0;
+    let totalInvested = 0;
+    for (const t of allTx || []) {
+      if (t.type === "SELL") {
+        totalShares -= Number(t.shares);
+        totalInvested -= Number(t.total_eur);
+      } else {
+        totalShares += Number(t.shares);
+        totalInvested += Number(t.total_eur);
+      }
+    }
+
+    const avgPrice = totalShares > 0 ? Math.round((totalInvested / totalShares) * 100) / 100 : 0;
+
+    // Upsert holding
     const { data: existing } = await supabase
       .from("holdings")
-      .select("id, shares, amount_invested_eur")
+      .select("id")
       .eq("user_id", user.id)
       .eq("account_id", accountId)
       .eq("security_id", securityId)
       .maybeSingle();
 
     if (existing) {
-      const newShares = Number(existing.shares) + shares;
-      const newInvested = Number(existing.amount_invested_eur || 0) + totalInvested;
       await supabase
         .from("holdings")
         .update({
-          shares: newShares,
-          amount_invested_eur: newInvested,
-          avg_buy_price_native: newShares > 0 ? Math.round((newInvested / newShares) * 100) / 100 : 0,
+          shares: totalShares,
+          amount_invested_eur: totalInvested,
+          avg_buy_price_native: avgPrice,
         })
         .eq("id", existing.id);
     } else {
@@ -187,7 +200,7 @@ export async function persistTradeRepublicTransactions(
         user_id: user.id,
         account_id: accountId,
         security_id: securityId,
-        shares,
+        shares: totalShares,
         amount_invested_eur: totalInvested,
         avg_buy_price_native: avgPrice,
       });
