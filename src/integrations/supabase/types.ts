@@ -133,6 +133,36 @@ export type Database = {
           },
         ]
       }
+      broker_connections: {
+        Row: {
+          broker: string
+          created_at: string | null
+          credentials: Json
+          id: string
+          last_synced_at: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          broker: string
+          created_at?: string | null
+          credentials: Json
+          id?: string
+          last_synced_at?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          broker?: string
+          created_at?: string | null
+          credentials?: Json
+          id?: string
+          last_synced_at?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       dca_plans: {
         Row: {
           account_id: string

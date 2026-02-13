@@ -1,5 +1,6 @@
 import { TradeRepublicImport } from "@/components/import/TradeRepublicImport";
 import { BourseDirectReconciliation } from "@/components/import/BourseDirectReconciliation";
+import { CoinbaseSync } from "@/components/import/CoinbaseSync";
 
 export default function Import() {
   return (
@@ -10,6 +11,7 @@ export default function Import() {
       </div>
       <TradeRepublicImport />
       <BourseDirectReconciliation />
+      <CoinbaseSync />
     </div>
   );
 }

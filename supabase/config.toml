@@ -1,5 +1,8 @@
 project_id = "ahnxmwixvbfgevujxhgi"
 
+[functions.sync-coinbase]
+verify_jwt = false
+
 [functions.refresh-prices]
 verify_jwt = false
 
