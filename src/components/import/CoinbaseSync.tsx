@@ -15,7 +15,7 @@ export function CoinbaseSync() {
   const [state, setState] = useState<SyncState>("loading");
   const [lastSynced, setLastSynced] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const [parsedKey, setParsedKey] = useState<{ name: string; privateKey: string } | null>(null);
+  const [parsedKey, setParsedKey] = useState<{ keyId: string; privateKey: string } | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [dropStatus, setDropStatus] = useState<"idle" | "parsing" | "success" | "error">("idle");
   const [dropError, setDropError] = useState<string>();
@@ -50,10 +50,13 @@ export function CoinbaseSync() {
     try {
       const text = await file.text();
       const json = JSON.parse(text);
-      if (!json.name || !json.privateKey) {
-        throw new Error("Le fichier doit contenir les champs 'name' et 'privateKey'.");
+      const keyId = json.id || json.name;
+      const privateKey = json.privateKey;
+      if (!keyId || !privateKey) {
+        throw new Error('Le fichier doit contenir les champs "id" (ou "name") et "privateKey".');
       }
-      setParsedKey({ name: json.name, privateKey: json.privateKey });
+      console.log('[Coinbase] Key parsed, id:', keyId);
+      setParsedKey({ keyId, privateKey });
       setDropStatus("success");
     } catch (e: any) {
       setDropStatus("error");
@@ -164,7 +167,7 @@ export function CoinbaseSync() {
             {parsedKey && (
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground">
-                  Clé détectée : <code className="text-xs bg-muted px-1 py-0.5 rounded">{parsedKey.name.slice(0, 40)}…</code>
+                  Clé détectée : <code className="text-xs bg-muted px-1 py-0.5 rounded">{parsedKey.keyId.slice(0, 40)}…</code>
                 </p>
                 <Button onClick={handleConnect} disabled={connecting}>
                   {connecting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
