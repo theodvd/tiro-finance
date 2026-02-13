@@ -6,43 +6,45 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-async function generateCoinbaseJWT(keyName: string, privateKeyPem: string): Promise<string> {
-  const pemBody = privateKeyPem
-    .replace(/-----BEGIN EC PRIVATE KEY-----/, '')
-    .replace(/-----END EC PRIVATE KEY-----/, '')
-    .replace(/\s/g, '');
-  const binaryKey = Uint8Array.from(atob(pemBody), c => c.charCodeAt(0));
+async function generateCoinbaseJWT(keyId: string, privateKeyB64: string): Promise<string> {
+  // Decode the base64 private key (Ed25519: 32 bytes seed + 32 bytes public)
+  const rawBytes = Uint8Array.from(atob(privateKeyB64), c => c.charCodeAt(0));
+  const seed = rawBytes.slice(0, 32);
+
+  // Ed25519 PKCS8 prefix for a 32-byte seed
+  const pkcs8Prefix = new Uint8Array([
+    0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06,
+    0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20,
+  ]);
+  const pkcs8Key = new Uint8Array([...pkcs8Prefix, ...seed]);
 
   const key = await crypto.subtle.importKey(
     'pkcs8',
-    binaryKey,
-    { name: 'ECDSA', namedCurve: 'P-256' },
+    pkcs8Key,
+    { name: 'Ed25519' },
     false,
     ['sign']
   );
 
-  const header = { alg: 'ES256', kid: keyName, nonce: crypto.randomUUID(), typ: 'JWT' };
+  const header = { alg: 'EdDSA', kid: keyId, nonce: crypto.randomUUID(), typ: 'JWT' };
   const now = Math.floor(Date.now() / 1000);
+  const uri = 'GET api.coinbase.com/v2/accounts';
   const payload = {
-    sub: keyName,
+    sub: keyId,
     iss: 'cdp',
     aud: ['cdp_service'],
     nbf: now,
     exp: now + 120,
+    uri,
   };
 
-  const encode = (obj: unknown) =>
+  const b64url = (obj: unknown) =>
     btoa(JSON.stringify(obj)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-  const headerB64 = encode(header);
-  const payloadB64 = encode(payload);
+  const headerB64 = b64url(header);
+  const payloadB64 = b64url(payload);
   const message = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
 
-  const signature = await crypto.subtle.sign(
-    { name: 'ECDSA', hash: 'SHA-256' },
-    key,
-    message
-  );
-
+  const signature = await crypto.subtle.sign('Ed25519', key, message);
   const sigB64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
     .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 
@@ -77,11 +79,11 @@ Deno.serve(async (req) => {
 
     if (connError || !connection) throw new Error('No Coinbase connection found.');
 
-    const creds = connection.credentials as { name: string; privateKey: string };
-    if (!creds?.name || !creds?.privateKey) throw new Error('Invalid Coinbase credentials');
+    const creds = connection.credentials as { keyId: string; privateKey: string };
+    if (!creds?.keyId || !creds?.privateKey) throw new Error('Invalid Coinbase credentials');
 
     // 2. Generate JWT and call Coinbase API
-    const jwt = await generateCoinbaseJWT(creds.name, creds.privateKey);
+    const jwt = await generateCoinbaseJWT(creds.keyId, creds.privateKey);
     console.log('[sync-coinbase] JWT generated, calling Coinbase API...');
 
     const accountsRes = await fetch('https://api.coinbase.com/v2/accounts?limit=100', {
