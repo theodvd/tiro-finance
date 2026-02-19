@@ -133,7 +133,7 @@ async function coinbaseFetch(
   return res.json();
 }
 
-async function fetchAllFills(
+async function fetchAllFillsForProduct(
   key: CryptoKey,
   alg: string,
   keyId: string,
@@ -146,23 +146,48 @@ async function fetchAllFills(
   while (page < 10) { // max 10 pages safety
     let path = `/api/v3/brokerage/orders/historical/fills?product_id=${productId}&limit=${limit}`;
     if (cursor) path += `&cursor=${cursor}`;
-    try {
-      const data = await coinbaseFetch(key, alg, keyId, 'GET', path);
-      if (data.fills) all.push(...data.fills);
-      if (!data.cursor || data.fills?.length < limit) break;
-      cursor = data.cursor;
-      page++;
-    } catch (e) {
-      console.warn(`[sync-coinbase] Could not fetch fills for ${productId}:`, e);
-      break;
-    }
+    const data = await coinbaseFetch(key, alg, keyId, 'GET', path);
+    if (data.fills) all.push(...data.fills);
+    if (!data.cursor || data.fills?.length < limit) break;
+    cursor = data.cursor;
+    page++;
   }
   return all;
 }
 
-function computeCostBasisFromFills(fills: any[]): number {
+// Try multiple quote currencies to find all fills regardless of how the asset was purchased
+async function fetchAllFills(
+  key: CryptoKey,
+  alg: string,
+  keyId: string,
+  symbol: string
+): Promise<any[]> {
+  const quoteCurrencies = ['EUR', 'USD', 'USDC', 'USDT'];
+  const allFills: any[] = [];
+  for (const quote of quoteCurrencies) {
+    const productId = `${symbol}-${quote}`;
+    try {
+      const fills = await fetchAllFillsForProduct(key, alg, keyId, productId);
+      if (fills.length > 0) {
+        console.log(`[sync-coinbase] Found ${fills.length} fills for ${productId}`);
+        allFills.push(...fills);
+      }
+    } catch (_) {
+      // Pair doesn't exist or no fills — skip silently
+    }
+  }
+  return allFills;
+}
+
+function computeCostBasisFromFills(fills: any[], targetCurrency = 'EUR'): number {
+  // Separate fills by quote currency
+  const eurFills = fills.filter(f => (f.product_id || '').endsWith('-EUR'));
+  const otherFills = fills.filter(f => !(f.product_id || '').endsWith('-EUR'));
+
   let totalCost = 0;
-  for (const fill of fills) {
+
+  // EUR fills: use price directly
+  for (const fill of eurFills) {
     if (fill.side === 'BUY') {
       const price = parseFloat(fill.price || '0');
       const size = parseFloat(fill.size || '0');
@@ -170,6 +195,21 @@ function computeCostBasisFromFills(fills: any[]): number {
       totalCost += price * size + commission;
     }
   }
+
+  // Non-EUR fills (USD, USDC, USDT): approximate EUR using a fixed 1:1 rate for stablecoins
+  // For USD we use a rough 0.92 EUR/USD rate — this is an approximation
+  for (const fill of otherFills) {
+    if (fill.side === 'BUY') {
+      const price = parseFloat(fill.price || '0');
+      const size = parseFloat(fill.size || '0');
+      const commission = parseFloat(fill.commission || '0');
+      const quote = (fill.product_id || '').split('-').pop() || '';
+      // Stablecoins pegged to USD: treat as 1 USD = 0.92 EUR (conservative estimate)
+      const fxRate = (quote === 'USDC' || quote === 'USDT') ? 0.92 : (quote === 'USD' ? 0.92 : 1);
+      totalCost += (price * size + commission) * fxRate;
+    }
+  }
+
   return totalCost;
 }
 
@@ -213,17 +253,17 @@ Deno.serve(async (req) => {
     const accounts = accountsData.accounts || [];
     console.log('[sync-coinbase] Coinbase returned', accounts.length, 'accounts');
 
-    // 4. Filter accounts with non-zero balance
+    // 4. Filter accounts with non-zero balance (use total balance, not just available)
     const positions = accounts
       .filter((acc: any) => {
-        const bal = parseFloat(acc.available_balance?.value || '0');
+        const bal = parseFloat(acc.balance?.value || acc.available_balance?.value || '0');
         return bal > 0 && acc.type === 'ACCOUNT_TYPE_CRYPTO';
       })
       .map((acc: any) => ({
         uuid: acc.uuid,
         symbol: (acc.currency || '').toUpperCase(),
         name: acc.name || acc.currency,
-        quantity: parseFloat(acc.available_balance?.value || '0'),
+        quantity: parseFloat(acc.balance?.value || acc.available_balance?.value || '0'),
       }));
 
     console.log('[sync-coinbase] Positions with balance:', positions.length);
@@ -248,15 +288,21 @@ Deno.serve(async (req) => {
     }
 
     let synced = 0;
+    const syncedSecurityIds: string[] = [];
 
     for (const pos of positions) {
-      // 6. Fetch trade fills to compute cost basis
+      // 6. Fetch trade fills across all pairs to compute cost basis
       let costBasis = 0;
+      let fillsFound = false;
       try {
-        const productId = `${pos.symbol}-EUR`;
-        const fills = await fetchAllFills(key, alg, creds.keyId, productId);
-        costBasis = computeCostBasisFromFills(fills);
-        console.log(`[sync-coinbase] ${pos.symbol}: ${fills.length} fills, cost basis = ${costBasis.toFixed(2)} EUR`);
+        const fills = await fetchAllFills(key, alg, creds.keyId, pos.symbol);
+        if (fills.length > 0) {
+          costBasis = computeCostBasisFromFills(fills);
+          fillsFound = true;
+          console.log(`[sync-coinbase] ${pos.symbol}: ${fills.length} fills total, cost basis = ${costBasis.toFixed(2)} EUR`);
+        } else {
+          console.warn(`[sync-coinbase] ${pos.symbol}: no fills found across all pairs`);
+        }
       } catch (e) {
         console.warn(`[sync-coinbase] Could not compute cost basis for ${pos.symbol}:`, e);
       }
@@ -290,25 +336,31 @@ Deno.serve(async (req) => {
         security = newSec;
       }
 
+      syncedSecurityIds.push(security!.id);
+
       // Find or update holding
       let { data: holding } = await supabase
         .from('holdings')
-        .select('id')
+        .select('id, amount_invested_eur')
         .eq('user_id', user.id)
         .eq('account_id', cbAccount!.id)
         .eq('security_id', security!.id)
         .maybeSingle();
 
+      // Only update cost basis if we actually found fills; otherwise preserve existing value
+      const existingCostBasis = holding ? Number((holding as any).amount_invested_eur || 0) : 0;
+      const finalCostBasis = fillsFound ? costBasis : existingCostBasis;
+
       const holdingData = {
         shares: pos.quantity,
-        amount_invested_eur: costBasis,
+        amount_invested_eur: finalCostBasis,
       };
 
       if (holding) {
         const { error: updErr } = await supabase
           .from('holdings')
           .update(holdingData)
-          .eq('id', holding.id);
+          .eq('id', (holding as any).id);
         if (updErr) {
           console.error('[sync-coinbase] Holding update error:', updErr);
           continue;
@@ -329,6 +381,19 @@ Deno.serve(async (req) => {
       }
 
       synced++;
+    }
+
+    // 7b. Remove stale holdings for positions that no longer exist on Coinbase
+    if (syncedSecurityIds.length > 0) {
+      const { error: delErr } = await supabase
+        .from('holdings')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('account_id', cbAccount!.id)
+        .not('security_id', 'in', `(${syncedSecurityIds.join(',')})`);
+      if (delErr) {
+        console.warn('[sync-coinbase] Could not clean stale holdings:', delErr);
+      }
     }
 
     // 7. Update last_synced_at
