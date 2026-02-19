@@ -17,33 +17,111 @@ async function importEdKey(privateKeyB64: string): Promise<CryptoKey> {
   return crypto.subtle.importKey('pkcs8', pkcs8Key, { name: 'Ed25519' }, false, ['sign']);
 }
 
-async function generateJWT(keyId: string, key: CryptoKey, method: string, path: string): Promise<string> {
+async function importEcKey(privateKeyB64: string): Promise<CryptoKey> {
+  const rawBytes = Uint8Array.from(atob(privateKeyB64), c => c.charCodeAt(0));
+  // Try PKCS8 import directly (the base64 might be a full PKCS8 DER)
+  return crypto.subtle.importKey(
+    'pkcs8',
+    rawBytes,
+    { name: 'ECDSA', namedCurve: 'P-256' },
+    false,
+    ['sign']
+  );
+}
+
+async function generateJWT(
+  keyId: string,
+  key: CryptoKey,
+  alg: string,
+  method: string,
+  path: string
+): Promise<string> {
   const b64url = (obj: unknown) =>
     btoa(JSON.stringify(obj)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 
-  const header = { alg: 'EdDSA', kid: keyId, nonce: crypto.randomUUID(), typ: 'JWT' };
+  const header = { alg, kid: keyId, nonce: crypto.randomUUID(), typ: 'JWT' };
   const now = Math.floor(Date.now() / 1000);
+  // Strip query params from URI
+  const cleanPath = path.split('?')[0];
   const payload = {
     sub: keyId,
     iss: 'cdp',
     aud: ['cdp_service'],
     nbf: now,
     exp: now + 120,
-    uri: `${method} api.coinbase.com${path}`,
+    uri: `${method} api.coinbase.com${cleanPath}`,
   };
 
   const headerB64 = b64url(header);
   const payloadB64 = b64url(payload);
   const message = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
-  const signature = await crypto.subtle.sign('Ed25519', key, message);
-  const sigB64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
+
+  const signAlgo = alg === 'EdDSA' ? 'Ed25519' : { name: 'ECDSA', hash: 'SHA-256' };
+  const signature = await crypto.subtle.sign(signAlgo, key, message);
+
+  let sigBytes = new Uint8Array(signature);
+  // For ECDSA, convert DER to raw r||s (64 bytes) if needed
+  if (alg === 'ES256' && sigBytes.length !== 64) {
+    sigBytes = derToRaw(sigBytes);
+  }
+
+  const sigB64 = btoa(String.fromCharCode(...sigBytes))
     .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 
   return `${headerB64}.${payloadB64}.${sigB64}`;
 }
 
-async function coinbaseFetch(key: CryptoKey, keyId: string, method: string, path: string): Promise<any> {
-  const jwt = await generateJWT(keyId, key, method, path);
+function derToRaw(der: Uint8Array): Uint8Array {
+  // Parse DER SEQUENCE { INTEGER r, INTEGER s }
+  const raw = new Uint8Array(64);
+  let offset = 2; // skip SEQUENCE tag + length
+  // r
+  const rLen = der[offset + 1];
+  offset += 2;
+  const rStart = rLen > 32 ? offset + (rLen - 32) : offset;
+  const rDest = rLen < 32 ? 32 - rLen : 0;
+  raw.set(der.slice(rStart, offset + rLen), rDest);
+  offset += rLen;
+  // s
+  const sLen = der[offset + 1];
+  offset += 2;
+  const sStart = sLen > 32 ? offset + (sLen - 32) : offset;
+  const sDest = sLen < 32 ? 64 - sLen : 32;
+  raw.set(der.slice(sStart, offset + sLen), sDest);
+  return raw;
+}
+
+interface KeyInfo {
+  key: CryptoKey;
+  alg: string;
+}
+
+async function detectAndImportKey(privateKeyB64: string): Promise<KeyInfo> {
+  // Try Ed25519 first (most common for CDP keys)
+  try {
+    const key = await importEdKey(privateKeyB64);
+    return { key, alg: 'EdDSA' };
+  } catch (_) {
+    // Ignore
+  }
+  // Try ECDSA P-256
+  try {
+    const key = await importEcKey(privateKeyB64);
+    return { key, alg: 'ES256' };
+  } catch (_) {
+    // Ignore
+  }
+  throw new Error('Could not import private key as Ed25519 or ES256');
+}
+
+async function coinbaseFetch(
+  key: CryptoKey,
+  alg: string,
+  keyId: string,
+  method: string,
+  path: string
+): Promise<any> {
+  const jwt = await generateJWT(keyId, key, alg, method, path);
   const res = await fetch(`https://api.coinbase.com${path}`, {
     headers: { 'Authorization': `Bearer ${jwt}`, 'Content-Type': 'application/json' },
   });
@@ -55,30 +133,44 @@ async function coinbaseFetch(key: CryptoKey, keyId: string, method: string, path
   return res.json();
 }
 
-async function fetchAllTransactions(key: CryptoKey, keyId: string, accountId: string): Promise<any[]> {
+async function fetchAllFills(
+  key: CryptoKey,
+  alg: string,
+  keyId: string,
+  productId: string
+): Promise<any[]> {
   const all: any[] = [];
-  let path = `/v2/accounts/${accountId}/transactions?limit=100`;
-  while (path) {
-    const data = await coinbaseFetch(key, keyId, 'GET', path);
-    if (data.data) all.push(...data.data);
-    path = data.pagination?.next_uri || null;
+  let cursor = '';
+  const limit = 100;
+  let page = 0;
+  while (page < 10) { // max 10 pages safety
+    let path = `/api/v3/brokerage/orders/historical/fills?product_id=${productId}&limit=${limit}`;
+    if (cursor) path += `&cursor=${cursor}`;
+    try {
+      const data = await coinbaseFetch(key, alg, keyId, 'GET', path);
+      if (data.fills) all.push(...data.fills);
+      if (!data.cursor || data.fills?.length < limit) break;
+      cursor = data.cursor;
+      page++;
+    } catch (e) {
+      console.warn(`[sync-coinbase] Could not fetch fills for ${productId}:`, e);
+      break;
+    }
   }
   return all;
 }
 
-function computeCostBasis(transactions: any[]): number {
-  const buyTypes = new Set(['buy', 'advanced_trade_fill', 'trade', 'fiat_deposit']);
-  let total = 0;
-  for (const tx of transactions) {
-    if (buyTypes.has(tx.type)) {
-      const amt = parseFloat(tx.native_amount?.amount || '0');
-      // Buy transactions have negative native_amount (money spent), take absolute value
-      if (amt < 0) total += Math.abs(amt);
-      // Some formats have positive amounts for buys
-      else if (tx.type === 'buy' || tx.type === 'advanced_trade_fill') total += amt;
+function computeCostBasisFromFills(fills: any[]): number {
+  let totalCost = 0;
+  for (const fill of fills) {
+    if (fill.side === 'BUY') {
+      const price = parseFloat(fill.price || '0');
+      const size = parseFloat(fill.size || '0');
+      const commission = parseFloat(fill.commission || '0');
+      totalCost += price * size + commission;
     }
   }
-  return total;
+  return totalCost;
 }
 
 Deno.serve(async (req) => {
@@ -112,29 +204,31 @@ Deno.serve(async (req) => {
     const creds = connection.credentials as { keyId: string; privateKey: string };
     if (!creds?.keyId || !creds?.privateKey) throw new Error('Invalid Coinbase credentials');
 
-    // 2. Import key once, reuse for all requests
-    const key = await importEdKey(creds.privateKey);
-    console.log('[sync-coinbase] Key imported, fetching accounts...');
+    // 2. Auto-detect key type and import
+    const { key, alg } = await detectAndImportKey(creds.privateKey);
+    console.log(`[sync-coinbase] Key imported (${alg}), fetching accounts...`);
 
-    const accountsData = await coinbaseFetch(key, creds.keyId, 'GET', '/v2/accounts?limit=100');
-    const accounts = accountsData.data || [];
+    // 3. Use Advanced Trade API (supports both EdDSA and ES256)
+    const accountsData = await coinbaseFetch(key, alg, creds.keyId, 'GET', '/api/v3/brokerage/accounts?limit=250');
+    const accounts = accountsData.accounts || [];
     console.log('[sync-coinbase] Coinbase returned', accounts.length, 'accounts');
 
-    // 3. Filter accounts with non-zero balance
+    // 4. Filter accounts with non-zero balance
     const positions = accounts
-      .filter((acc: any) => parseFloat(acc.balance?.amount || '0') > 0)
+      .filter((acc: any) => {
+        const bal = parseFloat(acc.available_balance?.value || '0');
+        return bal > 0 && acc.type === 'ACCOUNT_TYPE_CRYPTO';
+      })
       .map((acc: any) => ({
-        coinbaseId: acc.id,
-        symbol: (acc.balance?.currency || acc.currency?.code || '').toUpperCase(),
-        name: acc.currency?.name || acc.name,
-        quantity: parseFloat(acc.balance?.amount || '0'),
-        nativeValue: parseFloat(acc.native_balance?.amount || '0'),
-        nativeCurrency: acc.native_balance?.currency || 'EUR',
+        uuid: acc.uuid,
+        symbol: (acc.currency || '').toUpperCase(),
+        name: acc.name || acc.currency,
+        quantity: parseFloat(acc.available_balance?.value || '0'),
       }));
 
     console.log('[sync-coinbase] Positions with balance:', positions.length);
 
-    // 4. Find or create the CRYPTO account named "Coinbase"
+    // 5. Find or create the CRYPTO account named "Coinbase"
     let { data: cbAccount } = await supabase
       .from('accounts')
       .select('id')
@@ -156,15 +250,15 @@ Deno.serve(async (req) => {
     let synced = 0;
 
     for (const pos of positions) {
-      // 5. Fetch transaction history to compute cost basis
+      // 6. Fetch trade fills to compute cost basis
       let costBasis = 0;
       try {
-        const transactions = await fetchAllTransactions(key, creds.keyId, pos.coinbaseId);
-        costBasis = computeCostBasis(transactions);
-        console.log(`[sync-coinbase] ${pos.symbol}: ${transactions.length} txs, cost basis = ${costBasis}`);
+        const productId = `${pos.symbol}-EUR`;
+        const fills = await fetchAllFills(key, alg, creds.keyId, productId);
+        costBasis = computeCostBasisFromFills(fills);
+        console.log(`[sync-coinbase] ${pos.symbol}: ${fills.length} fills, cost basis = ${costBasis.toFixed(2)} EUR`);
       } catch (e) {
-        console.warn(`[sync-coinbase] Could not fetch txs for ${pos.symbol}, using native_balance:`, e);
-        costBasis = pos.nativeValue;
+        console.warn(`[sync-coinbase] Could not compute cost basis for ${pos.symbol}:`, e);
       }
 
       // Find or create security
@@ -237,7 +331,7 @@ Deno.serve(async (req) => {
       synced++;
     }
 
-    // 6. Update last_synced_at
+    // 7. Update last_synced_at
     await supabase
       .from('broker_connections')
       .update({ last_synced_at: new Date().toISOString(), updated_at: new Date().toISOString() })
