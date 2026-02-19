@@ -6,27 +6,39 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-async function importEdKey(privateKeyB64: string): Promise<CryptoKey> {
-  const rawBytes = Uint8Array.from(atob(privateKeyB64), c => c.charCodeAt(0));
-  const seed = rawBytes.slice(0, 32);
-  const pkcs8Prefix = new Uint8Array([
-    0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06,
-    0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20,
-  ]);
-  const pkcs8Key = new Uint8Array([...pkcs8Prefix, ...seed]);
-  return crypto.subtle.importKey('pkcs8', pkcs8Key, { name: 'Ed25519' }, false, ['sign']);
+// Parse a PEM string and return its DER bytes + header type
+function parsePem(pem: string): { type: string; der: Uint8Array } {
+  const match = pem.match(/-----BEGIN ([^-]+)-----/);
+  const type = match?.[1]?.trim() || '';
+  const b64 = pem
+    .replace(/-----BEGIN [^-]+-----/, '')
+    .replace(/-----END [^-]+-----/, '')
+    .replace(/\s+/g, '');
+  const der = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  return { type, der };
 }
 
-async function importEcKey(privateKeyB64: string): Promise<CryptoKey> {
-  const rawBytes = Uint8Array.from(atob(privateKeyB64), c => c.charCodeAt(0));
-  // Try PKCS8 import directly (the base64 might be a full PKCS8 DER)
-  return crypto.subtle.importKey(
-    'pkcs8',
-    rawBytes,
-    { name: 'ECDSA', namedCurve: 'P-256' },
-    false,
-    ['sign']
-  );
+// DER variable-length encoding
+function derLength(len: number): Uint8Array {
+  if (len < 128) return new Uint8Array([len]);
+  if (len < 256) return new Uint8Array([0x81, len]);
+  return new Uint8Array([0x82, (len >> 8) & 0xff, len & 0xff]);
+}
+
+// Wrap a SEC1 EC private key (BEGIN EC PRIVATE KEY) into PKCS#8 for P-256
+function sec1ToPkcs8(sec1: Uint8Array): Uint8Array {
+  // Algorithm SEQUENCE: ecPublicKey OID + prime256v1 OID
+  const alg = new Uint8Array([
+    0x30, 0x13,
+    0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01, // OID id-ecPublicKey
+    0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07, // OID prime256v1
+  ]);
+  const version = new Uint8Array([0x02, 0x01, 0x00]); // INTEGER 0
+  const octetLen = derLength(sec1.length);
+  const inner = new Uint8Array([0x04, ...octetLen, ...sec1]);
+  const content = new Uint8Array([...version, ...alg, ...inner]);
+  const seqLen = derLength(content.length);
+  return new Uint8Array([0x30, ...seqLen, ...content]);
 }
 
 async function generateJWT(
@@ -96,22 +108,41 @@ interface KeyInfo {
   alg: string;
 }
 
-async function detectAndImportKey(privateKeyB64: string): Promise<KeyInfo> {
-  // Try Ed25519 first (most common for CDP keys)
-  try {
-    const key = await importEdKey(privateKeyB64);
-    return { key, alg: 'EdDSA' };
-  } catch (_) {
-    // Ignore
+async function detectAndImportKey(privateKeyPem: string): Promise<KeyInfo> {
+  // privateKeyPem is a PEM string (e.g. "-----BEGIN EC PRIVATE KEY-----\n...\n-----END EC PRIVATE KEY-----\n")
+  const { type, der } = parsePem(privateKeyPem);
+  console.log(`[sync-coinbase] PEM type: "${type}", DER length: ${der.length}`);
+
+  if (type === 'PRIVATE KEY') {
+    // Already PKCS#8 — try Ed25519 first, then P-256
+    try {
+      const key = await crypto.subtle.importKey('pkcs8', der, { name: 'Ed25519' }, false, ['sign']);
+      return { key, alg: 'EdDSA' };
+    } catch (_) { /* not Ed25519 */ }
+    try {
+      const key = await crypto.subtle.importKey('pkcs8', der, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+      return { key, alg: 'ES256' };
+    } catch (_) { /* not P-256 */ }
+  } else if (type === 'EC PRIVATE KEY') {
+    // SEC1 format — wrap in PKCS#8 then import as P-256
+    try {
+      const pkcs8 = sec1ToPkcs8(der);
+      const key = await crypto.subtle.importKey('pkcs8', pkcs8, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+      return { key, alg: 'ES256' };
+    } catch (_) { /* conversion failed */ }
+  } else {
+    // Fallback: try raw PKCS#8 parse in case headers were stripped
+    try {
+      const key = await crypto.subtle.importKey('pkcs8', der, { name: 'Ed25519' }, false, ['sign']);
+      return { key, alg: 'EdDSA' };
+    } catch (_) {}
+    try {
+      const key = await crypto.subtle.importKey('pkcs8', der, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+      return { key, alg: 'ES256' };
+    } catch (_) {}
   }
-  // Try ECDSA P-256
-  try {
-    const key = await importEcKey(privateKeyB64);
-    return { key, alg: 'ES256' };
-  } catch (_) {
-    // Ignore
-  }
-  throw new Error('Could not import private key as Ed25519 or ES256');
+
+  throw new Error(`Impossible d'importer la clé privée (type PEM: "${type}"). Vérifiez que le fichier JSON Coinbase CDP est valide.`);
 }
 
 async function coinbaseFetch(
