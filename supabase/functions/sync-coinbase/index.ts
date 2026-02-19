@@ -6,49 +6,79 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-async function generateCoinbaseJWT(keyId: string, privateKeyB64: string): Promise<string> {
-  // Decode the base64 private key (Ed25519: 32 bytes seed + 32 bytes public)
+async function importEdKey(privateKeyB64: string): Promise<CryptoKey> {
   const rawBytes = Uint8Array.from(atob(privateKeyB64), c => c.charCodeAt(0));
   const seed = rawBytes.slice(0, 32);
-
-  // Ed25519 PKCS8 prefix for a 32-byte seed
   const pkcs8Prefix = new Uint8Array([
     0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06,
     0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20,
   ]);
   const pkcs8Key = new Uint8Array([...pkcs8Prefix, ...seed]);
+  return crypto.subtle.importKey('pkcs8', pkcs8Key, { name: 'Ed25519' }, false, ['sign']);
+}
 
-  const key = await crypto.subtle.importKey(
-    'pkcs8',
-    pkcs8Key,
-    { name: 'Ed25519' },
-    false,
-    ['sign']
-  );
+async function generateJWT(keyId: string, key: CryptoKey, method: string, path: string): Promise<string> {
+  const b64url = (obj: unknown) =>
+    btoa(JSON.stringify(obj)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 
   const header = { alg: 'EdDSA', kid: keyId, nonce: crypto.randomUUID(), typ: 'JWT' };
   const now = Math.floor(Date.now() / 1000);
-  const uri = 'GET api.coinbase.com/v2/accounts';
   const payload = {
     sub: keyId,
     iss: 'cdp',
     aud: ['cdp_service'],
     nbf: now,
     exp: now + 120,
-    uri,
+    uri: `${method} api.coinbase.com${path}`,
   };
 
-  const b64url = (obj: unknown) =>
-    btoa(JSON.stringify(obj)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
   const headerB64 = b64url(header);
   const payloadB64 = b64url(payload);
   const message = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
-
   const signature = await crypto.subtle.sign('Ed25519', key, message);
   const sigB64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
     .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 
   return `${headerB64}.${payloadB64}.${sigB64}`;
+}
+
+async function coinbaseFetch(key: CryptoKey, keyId: string, method: string, path: string): Promise<any> {
+  const jwt = await generateJWT(keyId, key, method, path);
+  const res = await fetch(`https://api.coinbase.com${path}`, {
+    headers: { 'Authorization': `Bearer ${jwt}`, 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    console.error(`[sync-coinbase] API error ${res.status} on ${path}:`, body);
+    throw new Error(`Coinbase API error: ${res.status}`);
+  }
+  return res.json();
+}
+
+async function fetchAllTransactions(key: CryptoKey, keyId: string, accountId: string): Promise<any[]> {
+  const all: any[] = [];
+  let path = `/v2/accounts/${accountId}/transactions?limit=100`;
+  while (path) {
+    const data = await coinbaseFetch(key, keyId, 'GET', path);
+    if (data.data) all.push(...data.data);
+    path = data.pagination?.next_uri || null;
+  }
+  return all;
+}
+
+function computeCostBasis(transactions: any[]): number {
+  const buyTypes = new Set(['buy', 'advanced_trade_fill', 'trade', 'fiat_deposit']);
+  let total = 0;
+  for (const tx of transactions) {
+    if (buyTypes.has(tx.type)) {
+      const amt = parseFloat(tx.native_amount?.amount || '0');
+      // Buy transactions have negative native_amount (money spent), take absolute value
+      if (amt < 0) total += Math.abs(amt);
+      // Some formats have positive amounts for buys
+      else if (tx.type === 'buy' || tx.type === 'advanced_trade_fill') total += amt;
+    }
+  }
+  return total;
 }
 
 Deno.serve(async (req) => {
@@ -82,24 +112,11 @@ Deno.serve(async (req) => {
     const creds = connection.credentials as { keyId: string; privateKey: string };
     if (!creds?.keyId || !creds?.privateKey) throw new Error('Invalid Coinbase credentials');
 
-    // 2. Generate JWT and call Coinbase API
-    const jwt = await generateCoinbaseJWT(creds.keyId, creds.privateKey);
-    console.log('[sync-coinbase] JWT generated, calling Coinbase API...');
+    // 2. Import key once, reuse for all requests
+    const key = await importEdKey(creds.privateKey);
+    console.log('[sync-coinbase] Key imported, fetching accounts...');
 
-    const accountsRes = await fetch('https://api.coinbase.com/v2/accounts?limit=100', {
-      headers: {
-        'Authorization': `Bearer ${jwt}`,
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!accountsRes.ok) {
-      const errBody = await accountsRes.text();
-      console.error('[sync-coinbase] Coinbase API error:', accountsRes.status, errBody);
-      throw new Error(`Coinbase API error: ${accountsRes.status}`);
-    }
-
-    const accountsData = await accountsRes.json();
+    const accountsData = await coinbaseFetch(key, creds.keyId, 'GET', '/v2/accounts?limit=100');
     const accounts = accountsData.data || [];
     console.log('[sync-coinbase] Coinbase returned', accounts.length, 'accounts');
 
@@ -107,6 +124,7 @@ Deno.serve(async (req) => {
     const positions = accounts
       .filter((acc: any) => parseFloat(acc.balance?.amount || '0') > 0)
       .map((acc: any) => ({
+        coinbaseId: acc.id,
         symbol: (acc.balance?.currency || acc.currency?.code || '').toUpperCase(),
         name: acc.currency?.name || acc.name,
         quantity: parseFloat(acc.balance?.amount || '0'),
@@ -138,6 +156,17 @@ Deno.serve(async (req) => {
     let synced = 0;
 
     for (const pos of positions) {
+      // 5. Fetch transaction history to compute cost basis
+      let costBasis = 0;
+      try {
+        const transactions = await fetchAllTransactions(key, creds.keyId, pos.coinbaseId);
+        costBasis = computeCostBasis(transactions);
+        console.log(`[sync-coinbase] ${pos.symbol}: ${transactions.length} txs, cost basis = ${costBasis}`);
+      } catch (e) {
+        console.warn(`[sync-coinbase] Could not fetch txs for ${pos.symbol}, using native_balance:`, e);
+        costBasis = pos.nativeValue;
+      }
+
       // Find or create security
       let { data: security } = await supabase
         .from('securities')
@@ -176,13 +205,15 @@ Deno.serve(async (req) => {
         .eq('security_id', security!.id)
         .maybeSingle();
 
+      const holdingData = {
+        shares: pos.quantity,
+        amount_invested_eur: costBasis,
+      };
+
       if (holding) {
         const { error: updErr } = await supabase
           .from('holdings')
-          .update({
-            shares: pos.quantity,
-            amount_invested_eur: pos.nativeValue,
-          })
+          .update(holdingData)
           .eq('id', holding.id);
         if (updErr) {
           console.error('[sync-coinbase] Holding update error:', updErr);
@@ -195,8 +226,7 @@ Deno.serve(async (req) => {
             user_id: user.id,
             account_id: cbAccount!.id,
             security_id: security!.id,
-            shares: pos.quantity,
-            amount_invested_eur: pos.nativeValue,
+            ...holdingData,
           });
         if (insErr) {
           console.error('[sync-coinbase] Holding insert error:', insErr);
@@ -207,7 +237,7 @@ Deno.serve(async (req) => {
       synced++;
     }
 
-    // 5. Update last_synced_at
+    // 6. Update last_synced_at
     await supabase
       .from('broker_connections')
       .update({ last_synced_at: new Date().toISOString(), updated_at: new Date().toISOString() })
