@@ -164,66 +164,47 @@ async function coinbaseFetch(
   return res.json();
 }
 
-async function fetchAllFillsForProduct(
+// Fetch ALL fills across ALL products in one paginated call.
+// product_id is optional on this endpoint — omitting it returns the full history.
+async function fetchAllFillsGlobal(
   key: CryptoKey,
   alg: string,
-  keyId: string,
-  productId: string
+  keyId: string
 ): Promise<any[]> {
   const all: any[] = [];
   let cursor = '';
-  const limit = 100;
+  const limit = 250; // max per page
   let page = 0;
-  while (page < 10) { // max 10 pages safety
-    let path = `/api/v3/brokerage/orders/historical/fills?product_id=${productId}&limit=${limit}`;
+  while (page < 40) { // up to 10 000 fills
+    let path = `/api/v3/brokerage/orders/historical/fills?limit=${limit}`;
     if (cursor) path += `&cursor=${cursor}`;
     const data = await coinbaseFetch(key, alg, keyId, 'GET', path);
-    if (data.fills) all.push(...data.fills);
-    if (!data.cursor || data.fills?.length < limit) break;
+    if (data.fills && data.fills.length > 0) all.push(...data.fills);
+    if (!data.cursor || !data.fills || data.fills.length < limit) break;
     cursor = data.cursor;
     page++;
   }
   return all;
 }
 
-// Try multiple quote currencies to find all fills regardless of how the asset was purchased
-async function fetchAllFills(
-  key: CryptoKey,
-  alg: string,
-  keyId: string,
-  symbol: string
-): Promise<any[]> {
-  const quoteCurrencies = ['EUR', 'USD', 'USDC', 'USDT'];
-  const allFills: any[] = [];
-  for (const quote of quoteCurrencies) {
-    const productId = `${symbol}-${quote}`;
-    try {
-      const fills = await fetchAllFillsForProduct(key, alg, keyId, productId);
-      if (fills.length > 0) {
-        console.log(`[sync-coinbase] Found ${fills.length} fills for ${productId}`);
-        allFills.push(...fills);
-      }
-    } catch (_) {
-      // Pair doesn't exist or no fills — skip silently
-    }
-  }
-  return allFills;
-}
-
-function computeCostBasisFromFills(fills: any[], usdToEur = 0.92): number {
-  let totalCost = 0;
+// Group fills by base symbol and compute cost basis in EUR for each
+function computeCostBasisPerSymbol(fills: any[], usdToEur: number): Map<string, number> {
+  const costMap = new Map<string, number>();
   for (const fill of fills) {
     if (fill.side !== 'BUY') continue;
+    const parts = (fill.product_id || '').split('-');
+    if (parts.length < 2) continue;
+    const symbol = parts[0].toUpperCase();
+    const quote = parts[parts.length - 1].toUpperCase();
+
     const price = parseFloat(fill.price || '0');
     const size = parseFloat(fill.size || '0');
     const commission = parseFloat(fill.commission || '0');
     const fillCostNative = price * size + commission;
-    const quote = (fill.product_id || '').split('-').pop() || '';
-    // EUR fills: no conversion; USD/USDC/USDT: apply live USD→EUR rate
-    const fxRate = quote === 'EUR' ? 1 : usdToEur;
-    totalCost += fillCostNative * fxRate;
+    const fxRate = quote === 'EUR' ? 1 : usdToEur; // USD / USDC / USDT → EUR
+    costMap.set(symbol, (costMap.get(symbol) ?? 0) + fillCostNative * fxRate);
   }
-  return totalCost;
+  return costMap;
 }
 
 // Fetch live USD → EUR rate (falls back to 0.92 if unavailable)
@@ -263,14 +244,26 @@ async function fetchPortfolioCostBasis(
         for (const pos of positions) {
           if (pos.is_cash) continue;
           const symbol = (pos.asset as string || '').toUpperCase();
-          const rawValue = parseFloat(pos.cost_basis?.value || '0');
-          if (!symbol || rawValue <= 0) continue;
+          if (!symbol) continue;
 
-          const currency = (pos.cost_basis?.currency as string || 'USD').toUpperCase();
+          // Try cost_basis first, then fall back to average_entry_price × balance
+          let rawValue = parseFloat(pos.cost_basis?.value || '0');
+          let currency = (pos.cost_basis?.currency as string || 'USD').toUpperCase();
+
+          if (rawValue <= 0) {
+            const avgPrice = parseFloat(pos.average_entry_price || '0');
+            const balance = parseFloat(pos.total_balance_crypto || '0');
+            if (avgPrice > 0 && balance > 0) {
+              rawValue = avgPrice * balance;
+              currency = 'USD'; // average_entry_price is in fiat (usually USD)
+              console.log(`[sync-coinbase] ${symbol}: using avg_entry_price fallback: ${avgPrice} × ${balance}`);
+            }
+          }
+
+          if (rawValue <= 0) continue;
           const valueEur = currency === 'EUR' ? rawValue : rawValue * usdToEur;
-
           costMap.set(symbol, (costMap.get(symbol) ?? 0) + valueEur);
-          console.log(`[sync-coinbase] Portfolio cost basis: ${symbol} = ${rawValue} ${currency} → ${valueEur.toFixed(2)} EUR`);
+          console.log(`[sync-coinbase] Portfolio: ${symbol} = ${rawValue} ${currency} → ${valueEur.toFixed(2)} EUR`);
         }
       } catch (e) {
         console.warn(`[sync-coinbase] Portfolio breakdown error (${portfolio.uuid}):`, e);
@@ -337,10 +330,23 @@ Deno.serve(async (req) => {
 
     console.log('[sync-coinbase] Positions with balance:', positions.length);
 
-    // 5. Fetch cost basis from Coinbase portfolio breakdown (most reliable source)
+    // 5. Fetch cost basis — two independent sources, merged by priority
     const usdToEur = await fetchUsdToEurRate();
     console.log(`[sync-coinbase] USD/EUR rate: ${usdToEur}`);
+
+    // Source A: Coinbase portfolio breakdown (cost_basis / average_entry_price per asset)
     const portfolioCostBasis = await fetchPortfolioCostBasis(key, alg, creds.keyId, usdToEur);
+    console.log(`[sync-coinbase] Portfolio cost basis: ${portfolioCostBasis.size} symbol(s)`);
+
+    // Source B: All fills in one global call (product_id is optional → returns full history)
+    let fillsCostBasis = new Map<string, number>();
+    try {
+      const allFills = await fetchAllFillsGlobal(key, alg, creds.keyId);
+      fillsCostBasis = computeCostBasisPerSymbol(allFills, usdToEur);
+      console.log(`[sync-coinbase] Fills: ${allFills.length} total, cost basis for ${fillsCostBasis.size} symbol(s)`);
+    } catch (e) {
+      console.warn('[sync-coinbase] Global fills fetch failed:', e);
+    }
 
     // 6. Find or create the CRYPTO account named "Coinbase"
     let { data: cbAccount } = await supabase
@@ -363,35 +369,27 @@ Deno.serve(async (req) => {
 
     let synced = 0;
     const syncedSecurityIds: string[] = [];
+    const debugCostBasis: Record<string, { source: string; eur: number }> = {};
 
     for (const pos of positions) {
-      // 7. Determine cost basis with 3-level priority:
-      //    1st: Coinbase portfolio breakdown (native cost_basis field, most reliable)
-      //    2nd: fills-based computation (for accounts without portfolio breakdown access)
-      //    3rd: existing value in DB (preserve manual entry or previous sync)
+      // 7. Determine cost basis — 3-level priority:
+      //    1. Coinbase portfolio breakdown (most authoritative)
+      //    2. Global fills computation (covers all pairs at once)
+      //    3. Existing DB value (preserve manual entry or previous sync)
       let costBasis = 0;
       let costBasisSource = 'none';
 
       const portfolioCost = portfolioCostBasis.get(pos.symbol);
+      const fillsCost = fillsCostBasis.get(pos.symbol);
+
       if (portfolioCost !== undefined && portfolioCost > 0) {
         costBasis = portfolioCost;
         costBasisSource = 'portfolio';
-        console.log(`[sync-coinbase] ${pos.symbol}: cost from portfolio = ${costBasis.toFixed(2)} EUR`);
-      } else {
-        // Fall back to fills
-        try {
-          const fills = await fetchAllFills(key, alg, creds.keyId, pos.symbol);
-          if (fills.length > 0) {
-            costBasis = computeCostBasisFromFills(fills, usdToEur);
-            costBasisSource = 'fills';
-            console.log(`[sync-coinbase] ${pos.symbol}: cost from fills (${fills.length}) = ${costBasis.toFixed(2)} EUR`);
-          } else {
-            console.warn(`[sync-coinbase] ${pos.symbol}: no portfolio cost basis, no fills found`);
-          }
-        } catch (e) {
-          console.warn(`[sync-coinbase] ${pos.symbol}: fills fetch error:`, e);
-        }
+      } else if (fillsCost !== undefined && fillsCost > 0) {
+        costBasis = fillsCost;
+        costBasisSource = 'fills';
       }
+      console.log(`[sync-coinbase] ${pos.symbol}: source=${costBasisSource} cost=${costBasis.toFixed(2)} EUR`);
 
       // Find or create security
       let { data: security } = await supabase
@@ -433,10 +431,11 @@ Deno.serve(async (req) => {
         .eq('security_id', security!.id)
         .maybeSingle();
 
-      // Use computed cost basis when found; otherwise preserve existing DB value (e.g. manual entry)
+      // Preserve existing DB value if no source found (e.g. manual entry)
       const existingCostBasis = holding ? Number((holding as any).amount_invested_eur || 0) : 0;
       const finalCostBasis = costBasisSource !== 'none' ? costBasis : existingCostBasis;
-      console.log(`[sync-coinbase] ${pos.symbol}: final cost basis = ${finalCostBasis.toFixed(2)} EUR (source: ${costBasisSource || 'preserved'})`);
+      const finalSource = costBasisSource !== 'none' ? costBasisSource : 'preserved';
+      debugCostBasis[pos.symbol] = { source: finalSource, eur: Math.round(finalCostBasis * 100) / 100 };
 
 
       const holdingData = {
@@ -491,11 +490,22 @@ Deno.serve(async (req) => {
       .eq('user_id', user.id)
       .eq('broker', 'coinbase');
 
+    const sourceCounts = Object.values(debugCostBasis).reduce((acc, { source }) => {
+      acc[source] = (acc[source] ?? 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    const hasCostBasis = Object.values(debugCostBasis).some(v => v.eur > 0);
+    const diagnose = hasCostBasis
+      ? `Coût de revient calculé (${Object.entries(sourceCounts).map(([s, n]) => `${n}×${s}`).join(', ')})`
+      : `⚠️ Aucun coût de revient trouvé — sources testées : portfolio (${portfolioCostBasis.size} résultat(s)), fills (${fillsCostBasis.size} résultat(s))`;
+
     return new Response(JSON.stringify({
       success: true,
       positions: positions.length,
       synced,
-      message: `${positions.length} position(s) crypto synchronisée(s) depuis Coinbase.`,
+      message: `${positions.length} position(s) synchronisée(s). ${diagnose}`,
+      debug: { costBasis: debugCostBasis, usdToEur },
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
