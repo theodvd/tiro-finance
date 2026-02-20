@@ -207,6 +207,65 @@ function computeCostBasisPerSymbol(fills: any[], usdToEur: number): Map<string, 
   return costMap;
 }
 
+// --- v2 Transactions API ---
+// Builds a map of crypto symbol → v2 account ID from GET /v2/accounts
+async function fetchV2AccountMap(
+  key: CryptoKey,
+  alg: string,
+  keyId: string
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  let nextUri: string | null = '/v2/accounts?limit=100';
+  while (nextUri) {
+    try {
+      const data = await coinbaseFetch(key, alg, keyId, 'GET', nextUri);
+      for (const acc of (data.data || [])) {
+        const symbol = ((acc.currency?.code ?? acc.currency) as string || '').toUpperCase();
+        if (symbol && acc.id) map.set(symbol, acc.id);
+      }
+      nextUri = data.pagination?.next_uri ?? null;
+    } catch (e) {
+      console.warn('[sync-coinbase] v2/accounts error:', e);
+      break;
+    }
+  }
+  return map;
+}
+
+// Fetches all completed buy transactions for a v2 account and returns the EUR cost basis
+async function fetchV2CostBasis(
+  key: CryptoKey,
+  alg: string,
+  keyId: string,
+  accountId: string,
+  usdToEur: number
+): Promise<number> {
+  let total = 0;
+  let nextUri: string | null = `/v2/accounts/${accountId}/transactions?limit=100&order=desc`;
+  let pages = 0;
+  while (nextUri && pages < 20) {
+    try {
+      const data = await coinbaseFetch(key, alg, keyId, 'GET', nextUri);
+      for (const txn of (data.data || [])) {
+        if (txn.status !== 'completed') continue;
+        // Include standard buys and Advanced Trade fills
+        if (!['buy', 'advanced_trade_fill'].includes(txn.type)) continue;
+        // native_amount is negative for debits (the EUR/USD spent)
+        const abs = Math.abs(parseFloat(txn.native_amount?.amount || '0'));
+        if (abs <= 0) continue;
+        const cur = ((txn.native_amount?.currency as string) || 'USD').toUpperCase();
+        total += cur === 'EUR' ? abs : abs * usdToEur;
+      }
+      nextUri = data.pagination?.next_uri ?? null;
+      pages++;
+    } catch (e) {
+      console.warn(`[sync-coinbase] v2/transactions error for ${accountId}:`, e);
+      break;
+    }
+  }
+  return total;
+}
+
 // Fetch live USD → EUR rate (falls back to 0.92 if unavailable)
 async function fetchUsdToEurRate(): Promise<number> {
   try {
@@ -348,6 +407,10 @@ Deno.serve(async (req) => {
       console.warn('[sync-coinbase] Global fills fetch failed:', e);
     }
 
+    // Source C: v2 App Transactions API — fetch account map once; query per symbol lazily
+    const v2AccountMap = await fetchV2AccountMap(key, alg, creds.keyId);
+    console.log(`[sync-coinbase] v2 accounts: ${v2AccountMap.size} crypto account(s) found`);
+
     // 6. Find or create the CRYPTO account named "Coinbase"
     let { data: cbAccount } = await supabase
       .from('accounts')
@@ -388,6 +451,20 @@ Deno.serve(async (req) => {
       } else if (fillsCost !== undefined && fillsCost > 0) {
         costBasis = fillsCost;
         costBasisSource = 'fills';
+      } else {
+        // Source C: v2 App Transactions (buy history per account)
+        const v2AccountId = v2AccountMap.get(pos.symbol);
+        if (v2AccountId) {
+          try {
+            const v2Cost = await fetchV2CostBasis(key, alg, creds.keyId, v2AccountId, usdToEur);
+            if (v2Cost > 0) {
+              costBasis = v2Cost;
+              costBasisSource = 'v2_transactions';
+            }
+          } catch (e) {
+            console.warn(`[sync-coinbase] v2 cost basis error for ${pos.symbol}:`, e);
+          }
+        }
       }
       console.log(`[sync-coinbase] ${pos.symbol}: source=${costBasisSource} cost=${costBasis.toFixed(2)} EUR`);
 
