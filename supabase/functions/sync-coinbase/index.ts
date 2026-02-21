@@ -108,41 +108,80 @@ interface KeyInfo {
   alg: string;
 }
 
+// Wrap a 32-byte Ed25519 seed into PKCS#8 DER
+function ed25519SeedToPkcs8(seed: Uint8Array): Uint8Array {
+  // SEQUENCE { INTEGER 0, SEQUENCE { OID 1.3.101.112 }, OCTET STRING { OCTET STRING { seed } } }
+  const oid = new Uint8Array([0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70]); // Ed25519 OID
+  const version = new Uint8Array([0x02, 0x01, 0x00]);
+  const innerOctet = new Uint8Array([0x04, 0x20, ...seed]); // OCTET STRING wrapping seed
+  const outerOctet = new Uint8Array([0x04, innerOctet.length + 2, ...innerOctet]);
+  // Wait, PKCS#8 wraps: OCTET STRING { raw key bytes }
+  // For Ed25519 the raw key is itself an OCTET STRING of 32 bytes
+  const keyOctet = new Uint8Array([0x04, 0x22, 0x04, 0x20, ...seed]);
+  const content = new Uint8Array([...version, ...oid, ...keyOctet]);
+  const seqLen = derLength(content.length);
+  return new Uint8Array([0x30, ...seqLen, ...content]);
+}
+
 async function detectAndImportKey(privateKeyPem: string): Promise<KeyInfo> {
-  // privateKeyPem is a PEM string (e.g. "-----BEGIN EC PRIVATE KEY-----\n...\n-----END EC PRIVATE KEY-----\n")
   const { type, der } = parsePem(privateKeyPem);
   console.log(`[sync-coinbase] PEM type: "${type}", DER length: ${der.length}`);
 
+  // --- Standard PEM formats ---
   if (type === 'PRIVATE KEY') {
-    // Already PKCS#8 — try Ed25519 first, then P-256
     try {
       const key = await crypto.subtle.importKey('pkcs8', der, { name: 'Ed25519' }, false, ['sign']);
       return { key, alg: 'EdDSA' };
-    } catch (_) { /* not Ed25519 */ }
+    } catch (_) {}
     try {
       const key = await crypto.subtle.importKey('pkcs8', der, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
       return { key, alg: 'ES256' };
-    } catch (_) { /* not P-256 */ }
+    } catch (_) {}
   } else if (type === 'EC PRIVATE KEY') {
-    // SEC1 format — wrap in PKCS#8 then import as P-256
     try {
       const pkcs8 = sec1ToPkcs8(der);
       const key = await crypto.subtle.importKey('pkcs8', pkcs8, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
       return { key, alg: 'ES256' };
-    } catch (_) { /* conversion failed */ }
-  } else {
-    // Fallback: try raw PKCS#8 parse in case headers were stripped
-    try {
-      const key = await crypto.subtle.importKey('pkcs8', der, { name: 'Ed25519' }, false, ['sign']);
-      return { key, alg: 'EdDSA' };
-    } catch (_) {}
-    try {
-      const key = await crypto.subtle.importKey('pkcs8', der, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
-      return { key, alg: 'ES256' };
     } catch (_) {}
   }
 
-  throw new Error(`Impossible d'importer la clé privée (type PEM: "${type}"). Vérifiez que le fichier JSON Coinbase CDP est valide.`);
+  // --- Raw key (no PEM headers) ---
+  // der here is the base64-decoded bytes of the raw privateKey string
+  // Try PKCS#8 import first (in case it's headerless PKCS#8)
+  try {
+    const key = await crypto.subtle.importKey('pkcs8', der, { name: 'Ed25519' }, false, ['sign']);
+    console.log('[sync-coinbase] Imported as headerless PKCS#8 Ed25519');
+    return { key, alg: 'EdDSA' };
+  } catch (_) {}
+  try {
+    const key = await crypto.subtle.importKey('pkcs8', der, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+    console.log('[sync-coinbase] Imported as headerless PKCS#8 ES256');
+    return { key, alg: 'ES256' };
+  } catch (_) {}
+
+  // Try as raw Ed25519 seed (32 bytes) or seed+pubkey (64 bytes)
+  if (der.length === 32 || der.length === 64) {
+    const seed = der.length === 64 ? der.slice(0, 32) : der;
+    try {
+      const pkcs8 = ed25519SeedToPkcs8(seed);
+      const key = await crypto.subtle.importKey('pkcs8', pkcs8, { name: 'Ed25519' }, false, ['sign']);
+      console.log(`[sync-coinbase] Imported raw Ed25519 seed (${der.length} bytes → 32-byte seed)`);
+      return { key, alg: 'EdDSA' };
+    } catch (e) {
+      console.warn('[sync-coinbase] Raw Ed25519 seed import failed:', e);
+    }
+  }
+
+  // Try raw import via Web Crypto 'raw' format for Ed25519
+  if (der.length === 32) {
+    try {
+      const key = await crypto.subtle.importKey('raw', der, { name: 'Ed25519' }, false, ['sign']);
+      console.log('[sync-coinbase] Imported via raw Ed25519 (32 bytes)');
+      return { key, alg: 'EdDSA' };
+    } catch (_) {}
+  }
+
+  throw new Error(`Impossible d'importer la clé privée (type PEM: "${type}", ${der.length} bytes). Formats supportés: PEM PKCS#8, PEM EC, ou clé Ed25519 brute.`);
 }
 
 async function coinbaseFetch(
