@@ -159,7 +159,7 @@ async function coinbaseFetch(
   if (!res.ok) {
     const body = await res.text();
     console.error(`[sync-coinbase] API error ${res.status} on ${path}:`, body);
-    throw new Error(`Coinbase API error: ${res.status}`);
+    throw new Error(`Coinbase API ${res.status} on ${path.split('?')[0]}: ${body.slice(0, 300)}`);
   }
   return res.json();
 }
@@ -278,58 +278,52 @@ async function fetchUsdToEurRate(): Promise<number> {
   }
 }
 
-// Fetch cost basis per asset from Coinbase portfolio breakdown.
-// Returns a map of symbol → { valueEur: number } using Coinbase's own accounting.
-// The cost_basis field may be in USD or EUR depending on account settings; we convert as needed.
+// Fetch cost basis from portfolio breakdowns using portfolio IDs extracted directly
+// from the accounts response (retail_portfolio_id field) — bypasses the portfolios list.
 async function fetchPortfolioCostBasis(
   key: CryptoKey,
   alg: string,
   keyId: string,
+  portfolioIds: string[],
   usdToEur: number
 ): Promise<Map<string, number>> {
   const costMap = new Map<string, number>();
-  try {
-    const portfoliosData = await coinbaseFetch(key, alg, keyId, 'GET', '/api/v3/brokerage/portfolios');
-    const portfolios: any[] = portfoliosData.portfolios || [];
-    console.log(`[sync-coinbase] ${portfolios.length} portfolio(s) found`);
+  if (portfolioIds.length === 0) return costMap;
 
-    for (const portfolio of portfolios) {
-      try {
-        const bd = await coinbaseFetch(
-          key, alg, keyId, 'GET',
-          `/api/v3/brokerage/portfolios/${portfolio.uuid}/breakdown`
-        );
-        const positions: any[] = bd.breakdown?.spot_positions || [];
-        for (const pos of positions) {
-          if (pos.is_cash) continue;
-          const symbol = (pos.asset as string || '').toUpperCase();
-          if (!symbol) continue;
+  for (const pid of portfolioIds) {
+    try {
+      const bd = await coinbaseFetch(key, alg, keyId, 'GET',
+        `/api/v3/brokerage/portfolios/${pid}/breakdown`);
+      const positions: any[] = bd.breakdown?.spot_positions || [];
+      console.log(`[sync-coinbase] Portfolio ${pid}: ${positions.length} position(s)`);
 
-          // Try cost_basis first, then fall back to average_entry_price × balance
-          let rawValue = parseFloat(pos.cost_basis?.value || '0');
-          let currency = (pos.cost_basis?.currency as string || 'USD').toUpperCase();
+      for (const pos of positions) {
+        if (pos.is_cash) continue;
+        const symbol = ((pos.asset as string) || '').toUpperCase();
+        if (!symbol) continue;
 
-          if (rawValue <= 0) {
-            const avgPrice = parseFloat(pos.average_entry_price || '0');
-            const balance = parseFloat(pos.total_balance_crypto || '0');
-            if (avgPrice > 0 && balance > 0) {
-              rawValue = avgPrice * balance;
-              currency = 'USD'; // average_entry_price is in fiat (usually USD)
-              console.log(`[sync-coinbase] ${symbol}: using avg_entry_price fallback: ${avgPrice} × ${balance}`);
-            }
+        // cost_basis first, then average_entry_price × balance as fallback
+        let rawValue = parseFloat(pos.cost_basis?.value || '0');
+        let currency = ((pos.cost_basis?.currency as string) || 'USD').toUpperCase();
+
+        if (rawValue <= 0) {
+          const avgPrice = parseFloat(pos.average_entry_price || '0');
+          const balance = parseFloat(pos.total_balance_crypto || '0');
+          if (avgPrice > 0 && balance > 0) {
+            rawValue = avgPrice * balance;
+            currency = 'USD';
+            console.log(`[sync-coinbase] ${symbol}: avg_entry_price fallback ${avgPrice} × ${balance}`);
           }
-
-          if (rawValue <= 0) continue;
-          const valueEur = currency === 'EUR' ? rawValue : rawValue * usdToEur;
-          costMap.set(symbol, (costMap.get(symbol) ?? 0) + valueEur);
-          console.log(`[sync-coinbase] Portfolio: ${symbol} = ${rawValue} ${currency} → ${valueEur.toFixed(2)} EUR`);
         }
-      } catch (e) {
-        console.warn(`[sync-coinbase] Portfolio breakdown error (${portfolio.uuid}):`, e);
+        if (rawValue <= 0) continue;
+
+        const valueEur = currency === 'EUR' ? rawValue : rawValue * usdToEur;
+        costMap.set(symbol, (costMap.get(symbol) ?? 0) + valueEur);
+        console.log(`[sync-coinbase] Portfolio: ${symbol} = ${rawValue} ${currency} → ${valueEur.toFixed(2)} EUR`);
       }
+    } catch (e) {
+      console.warn(`[sync-coinbase] Portfolio breakdown error for ${pid}:`, e);
     }
-  } catch (e) {
-    console.warn('[sync-coinbase] Could not fetch portfolios (will fall back to fills):', e);
   }
   return costMap;
 }
@@ -374,7 +368,16 @@ Deno.serve(async (req) => {
     const accounts = accountsData.accounts || [];
     console.log('[sync-coinbase] Coinbase returned', accounts.length, 'accounts');
 
-    // 4. Filter accounts with non-zero balance (use total balance, not just available)
+    // 4. Extract portfolio IDs directly from accounts (retail_portfolio_id field)
+    //    — bypass the /portfolios list which often returns empty
+    const portfolioIds = [...new Set(
+      accounts
+        .map((acc: any) => acc.retail_portfolio_id as string | undefined)
+        .filter(Boolean) as string[]
+    )];
+    console.log(`[sync-coinbase] Portfolio IDs from accounts: ${portfolioIds.join(', ') || 'none'}`);
+
+    // 4b. Filter accounts with non-zero balance
     const positions = accounts
       .filter((acc: any) => {
         const bal = parseFloat(acc.balance?.value || acc.available_balance?.value || '0');
@@ -389,12 +392,12 @@ Deno.serve(async (req) => {
 
     console.log('[sync-coinbase] Positions with balance:', positions.length);
 
-    // 5. Fetch cost basis — two independent sources, merged by priority
+    // 5. Fetch cost basis — three independent sources, merged by priority
     const usdToEur = await fetchUsdToEurRate();
     console.log(`[sync-coinbase] USD/EUR rate: ${usdToEur}`);
 
-    // Source A: Coinbase portfolio breakdown (cost_basis / average_entry_price per asset)
-    const portfolioCostBasis = await fetchPortfolioCostBasis(key, alg, creds.keyId, usdToEur);
+    // Source A: portfolio breakdown — IDs come from accounts, no separate list call needed
+    const portfolioCostBasis = await fetchPortfolioCostBasis(key, alg, creds.keyId, portfolioIds, usdToEur);
     console.log(`[sync-coinbase] Portfolio cost basis: ${portfolioCostBasis.size} symbol(s)`);
 
     // Source B: All fills in one global call (product_id is optional → returns full history)
