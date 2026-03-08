@@ -278,29 +278,59 @@ async function fetchV2Accounts(
   return accounts;
 }
 
-// Fetches all completed buy transactions for a v2 account and returns the EUR cost basis
+// Acquisition transaction types that represent crypto entering the wallet
+const ACQUISITION_TYPES = new Set([
+  'buy',                    // standard one-time purchase
+  'advanced_trade_fill',    // Advanced Trade order fill
+  'trade',                  // crypto-to-crypto swap/conversion
+  'send',                   // incoming transfer (only if positive amount)
+  'staking_reward',         // staking income
+  'learning_reward',        // Coinbase Earn rewards
+  'interest',               // interest earned
+  'inflation_reward',       // inflation rewards
+  'fiat_deposit',           // fiat deposited then used to buy
+]);
+
+// Fetches all transactions for a v2 account and computes EUR cost basis
+// by summing acquisition-type transactions
 async function fetchV2CostBasis(
   key: CryptoKey,
   alg: string,
   keyId: string,
   accountId: string,
   usdToEur: number
-): Promise<number> {
+): Promise<{ total: number; types: Record<string, number> }> {
   let total = 0;
+  const typeCounts: Record<string, number> = {};
+  const allTypes = new Set<string>();
   let nextUri: string | null = `/v2/accounts/${accountId}/transactions?limit=100&order=desc`;
   let pages = 0;
   while (nextUri && pages < 20) {
     try {
       const data = await coinbaseFetch(key, alg, keyId, 'GET', nextUri);
       for (const txn of (data.data || [])) {
+        allTypes.add(txn.type);
         if (txn.status !== 'completed') continue;
-        // Include standard buys and Advanced Trade fills
-        if (!['buy', 'advanced_trade_fill'].includes(txn.type)) continue;
-        // native_amount is negative for debits (the EUR/USD spent)
-        const abs = Math.abs(parseFloat(txn.native_amount?.amount || '0'));
+
+        const txnType = txn.type as string;
+        
+        // Skip non-acquisition types
+        if (!ACQUISITION_TYPES.has(txnType)) continue;
+        
+        // For 'send' type, only count incoming (positive crypto amount)
+        if (txnType === 'send') {
+          const cryptoAmount = parseFloat(txn.amount?.amount || '0');
+          if (cryptoAmount <= 0) continue; // outgoing send, skip
+        }
+
+        // native_amount represents the fiat value of the transaction
+        const nativeAmount = parseFloat(txn.native_amount?.amount || '0');
+        const abs = Math.abs(nativeAmount);
         if (abs <= 0) continue;
+        
         const cur = ((txn.native_amount?.currency as string) || 'USD').toUpperCase();
         total += cur === 'EUR' ? abs : abs * usdToEur;
+        typeCounts[txnType] = (typeCounts[txnType] ?? 0) + 1;
       }
       nextUri = data.pagination?.next_uri ?? null;
       pages++;
@@ -309,7 +339,8 @@ async function fetchV2CostBasis(
       break;
     }
   }
-  return total;
+  console.log(`[sync-coinbase] v2 transactions for ${accountId}: types found=[${[...allTypes].join(',')}], acquisitions=${JSON.stringify(typeCounts)}, total=${total.toFixed(2)} EUR`);
+  return { total, types: typeCounts };
 }
 
 // Fetch live USD → EUR rate (falls back to 0.92 if unavailable)
