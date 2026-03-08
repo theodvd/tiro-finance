@@ -25,7 +25,9 @@ export async function parseCoinbaseCSV(
   const text = await file.text();
 
   const lines = text.split('\n');
-  const headerIndex = lines.findIndex(line => line.startsWith('Timestamp'));
+  const headerIndex = lines.findIndex(line =>
+    line.includes('Timestamp') && line.includes('Transaction Type')
+  );
   if (headerIndex === -1) {
     throw new Error('Format CSV Coinbase non reconnu. Cherche la ligne "Timestamp" comme en-tête.');
   }
@@ -44,9 +46,16 @@ export async function parseCoinbaseCSV(
   for (const row of parsed.data as any[]) {
     const txType = (row['Transaction Type'] || '').trim();
     const asset = (row['Asset'] || '').trim();
-    const quantity = parseFloat((row['Quantity Transacted'] || '0').replace(',', '.')) || 0;
+    const quantity = Math.abs(parseFloat(
+      (row['Quantity Transacted'] || '0').toString().replace(',', '.')
+    )) || 0;
     const total = parseFloat(
-      (row['Total'] || '0').toString().replace('€', '').replace(',', '.').replace(/\s/g, '')
+      (row['Total (inclusive of fees and/or spread)'] || row['Total'] || '0')
+        .toString()
+        .replace('-€', '-')
+        .replace('€', '')
+        .replace(',', '.')
+        .replace(/\s/g, '')
     ) || 0;
 
     if (['EUR', 'USD', 'GBP', 'EURC', 'USDC'].includes(asset)) continue;
