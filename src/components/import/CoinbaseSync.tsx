@@ -176,7 +176,7 @@ export function CoinbaseSync() {
       setState("disconnected");
       setLastSynced(null);
       setCoinbaseHoldings([]);
-      setInvestedAmounts({});
+      
     } catch (e: any) {
       toast({ title: "Erreur", description: e.message, variant: "destructive" });
     }
