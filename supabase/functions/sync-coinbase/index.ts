@@ -278,24 +278,23 @@ async function fetchV2Accounts(
   return accounts;
 }
 
-// Acquisition transaction types that represent crypto entering the wallet
+// Acquisition transaction types on the CRYPTO account itself
 const ACQUISITION_TYPES = new Set([
-  'buy',                    // standard one-time purchase
-  'advanced_trade_fill',    // Advanced Trade order fill
-  'trade',                  // crypto-to-crypto swap/conversion
-  'send',                   // incoming transfer (only if positive amount)
-  'staking_reward',         // staking income
-  'learning_reward',        // Coinbase Earn rewards
-  'interest',               // interest earned
-  'inflation_reward',       // inflation rewards
-  'fiat_deposit',           // fiat deposited then used to buy
-  'subscription',           // recurring buys
-  'earn_payout',            // earn payouts
-  'receive',                // received crypto
+  'buy',
+  'advanced_trade_fill',
+  'trade',
+  'send',
+  'staking_reward',
+  'learning_reward',
+  'interest',
+  'inflation_reward',
+  'fiat_deposit',
+  'subscription',
+  'earn_payout',
+  'receive',
 ]);
 
 // Fetches all transactions for a v2 account and computes EUR cost basis
-// by summing acquisition-type transactions
 async function fetchV2CostBasis(
   key: CryptoKey,
   alg: string,
@@ -316,17 +315,13 @@ async function fetchV2CostBasis(
         if (txn.status !== 'completed') continue;
 
         const txnType = txn.type as string;
-        
-        // Skip non-acquisition types
         if (!ACQUISITION_TYPES.has(txnType)) continue;
         
-        // For 'send' type, only count incoming (positive crypto amount)
         if (txnType === 'send') {
           const cryptoAmount = parseFloat(txn.amount?.amount || '0');
-          if (cryptoAmount <= 0) continue; // outgoing send, skip
+          if (cryptoAmount <= 0) continue;
         }
 
-        // native_amount represents the fiat value of the transaction
         const nativeAmount = parseFloat(txn.native_amount?.amount || '0');
         const abs = Math.abs(nativeAmount);
         if (abs <= 0) continue;
@@ -346,48 +341,105 @@ async function fetchV2CostBasis(
   return { total, types: typeCounts };
 }
 
-// NEW: Fetch dedicated /v2/accounts/:id/buys endpoint (paginated)
-// Returns the total fiat spent on completed buys for this account
-async function fetchV2Buys(
+// NEW: Scan ALL fiat wallet transactions to find crypto purchases
+// Coinbase App sometimes only records the purchase on the fiat (EUR) wallet,
+// not on the crypto account itself. We scan fiat wallets for outgoing buy/subscription
+// transactions and map them to the target crypto symbol.
+async function fetchFiatWalletCostBasis(
   key: CryptoKey,
   alg: string,
   keyId: string,
-  accountId: string,
+  v2Accounts: Array<{ symbol: string; accountId: string; balance: number; name: string; currencyType: string }>,
   usdToEur: number
-): Promise<{ total: number; count: number }> {
-  let total = 0;
-  let count = 0;
-  let nextUri: string | null = `/v2/accounts/${accountId}/buys?limit=100`;
-  let pages = 0;
-
-  while (nextUri && pages < 20) {
-    try {
-      const data = await coinbaseFetch(key, alg, keyId, 'GET', nextUri);
-      const buys = data.data || [];
-      
-      for (const buy of buys) {
-        if (buy.status !== 'completed') continue;
-        
-        // total = fiat spent including fees
-        const totalAmount = parseFloat(buy.total?.amount || '0');
-        if (totalAmount <= 0) continue;
-        
-        const currency = ((buy.total?.currency as string) || 'USD').toUpperCase();
-        total += currency === 'EUR' ? totalAmount : totalAmount * usdToEur;
-        count++;
+): Promise<Map<string, { total: number; count: number }>> {
+  const costMap = new Map<string, { total: number; count: number }>();
+  
+  // Find fiat wallets (EUR, USD, GBP, etc.)
+  const fiatAccounts = v2Accounts.filter(a => a.currencyType === 'fiat');
+  console.log(`[sync-coinbase] Fiat wallets found: ${fiatAccounts.map(a => `${a.symbol}(${a.accountId})`).join(', ')}`);
+  
+  for (const fiatAcc of fiatAccounts) {
+    let nextUri: string | null = `/v2/accounts/${fiatAcc.accountId}/transactions?limit=100&order=desc`;
+    let pages = 0;
+    const allTypes = new Set<string>();
+    
+    while (nextUri && pages < 30) {
+      try {
+        const data = await coinbaseFetch(key, alg, keyId, 'GET', nextUri);
+        for (const txn of (data.data || [])) {
+          allTypes.add(txn.type);
+          if (txn.status !== 'completed') continue;
+          
+          const txnType = txn.type as string;
+          // We look for outgoing fiat = crypto purchase
+          // These show as negative native_amount on fiat wallet
+          if (!['buy', 'subscription', 'advanced_trade_fill', 'trade'].includes(txnType)) continue;
+          
+          // The fiat amount is negative (money leaving fiat wallet)
+          const nativeAmount = parseFloat(txn.native_amount?.amount || '0');
+          if (nativeAmount >= 0) continue; // Only count outgoing (negative = fiat spent on crypto)
+          
+          // Try to determine which crypto was purchased
+          // The `buy` sub-object or `trade` sub-object may reference the target
+          let targetSymbol: string | null = null;
+          
+          // Method 1: buy/subscription transactions have a buy.amount.currency
+          if (txn.buy?.amount?.currency) {
+            targetSymbol = (txn.buy.amount.currency as string).toUpperCase();
+          }
+          // Method 2: trade transactions reference network.crypto_hash or have details
+          if (!targetSymbol && txn.trade?.amount?.currency) {
+            targetSymbol = (txn.trade.amount.currency as string).toUpperCase();
+          }
+          // Method 3: For advanced_trade_fill, check the details 
+          if (!targetSymbol && txn.advanced_trade_fill?.product_id) {
+            const parts = (txn.advanced_trade_fill.product_id as string).split('-');
+            targetSymbol = parts[0]?.toUpperCase() || null;
+          }
+          // Method 4: description often contains the crypto name
+          if (!targetSymbol && txn.details?.title) {
+            const title = txn.details.title as string;
+            // Match patterns like "Bought 0.001 BTC" or "Achat de Bitcoin"
+            const match = title.match(/(?:Bought|Achat de?)\s+[\d.,]+\s+(\w+)/i);
+            if (match) targetSymbol = match[1].toUpperCase();
+          }
+          // Method 5: Check description field
+          if (!targetSymbol && txn.details?.subtitle) {
+            const sub = txn.details.subtitle as string;
+            // "Using EUR Wallet" doesn't help, but "0.05 ETH" does
+            const match = sub.match(/[\d.,]+\s+([A-Z]{2,10})/);
+            if (match && match[1] !== fiatAcc.symbol) targetSymbol = match[1];
+          }
+          
+          if (!targetSymbol) {
+            console.log(`[sync-coinbase] Fiat txn without target symbol: type=${txnType}, details=${JSON.stringify(txn.details?.title || txn.details?.subtitle || 'none')}`);
+            continue;
+          }
+          
+          const absAmount = Math.abs(nativeAmount);
+          const cur = ((txn.native_amount?.currency as string) || 'USD').toUpperCase();
+          const eurAmount = cur === 'EUR' ? absAmount : absAmount * usdToEur;
+          
+          const existing = costMap.get(targetSymbol) || { total: 0, count: 0 };
+          existing.total += eurAmount;
+          existing.count++;
+          costMap.set(targetSymbol, existing);
+        }
+        nextUri = data.pagination?.next_uri ?? null;
+        pages++;
+      } catch (e) {
+        console.warn(`[sync-coinbase] Fiat wallet transactions error for ${fiatAcc.symbol}:`, e);
+        break;
       }
-
-      nextUri = data.pagination?.next_uri ?? null;
-      pages++;
-    } catch (e) {
-      // 404 or other errors = endpoint not available for this account
-      console.warn(`[sync-coinbase] v2/buys error for ${accountId}:`, e);
-      break;
     }
+    console.log(`[sync-coinbase] Fiat wallet ${fiatAcc.symbol}: types found=[${[...allTypes].join(',')}]`);
   }
   
-  console.log(`[sync-coinbase] v2 buys for ${accountId}: ${count} completed buy(s), total=${total.toFixed(2)} EUR`);
-  return { total, count };
+  for (const [symbol, data] of costMap) {
+    console.log(`[sync-coinbase] Fiat wallet cost basis: ${symbol} = ${data.total.toFixed(2)} EUR (${data.count} txn(s))`);
+  }
+  
+  return costMap;
 }
 
 // Fetch live USD → EUR rate (falls back to 0.92 if unavailable)
@@ -492,7 +544,7 @@ Deno.serve(async (req) => {
     const accounts = accountsData.accounts || [];
     console.log('[sync-coinbase] Coinbase returned', accounts.length, 'accounts');
 
-    // 4. Extract portfolio IDs directly from accounts (retail_portfolio_id field)
+    // 4. Extract portfolio IDs
     const portfolioIds = [...new Set(
       accounts
         .map((acc: any) => acc.retail_portfolio_id as string | undefined)
@@ -500,7 +552,7 @@ Deno.serve(async (req) => {
     )];
     console.log(`[sync-coinbase] Portfolio IDs from accounts: ${portfolioIds.join(', ') || 'none'}`);
 
-    // 4b. Build positions from v2 accounts (more reliable for Coinbase App balances incl. ETH/SOL)
+    // 4b. Build positions from v2 accounts
     const v2Accounts = await fetchV2Accounts(key, alg, creds.keyId);
     const v2AccountMap = new Map<string, string>();
     for (const acc of v2Accounts) {
@@ -520,7 +572,7 @@ Deno.serve(async (req) => {
 
     console.log('[sync-coinbase] Positions from v2 balances:', positions.length);
 
-    // 5. Fetch cost basis — multiple independent sources, merged by priority
+    // 5. Fetch cost basis — multiple independent sources
     const usdToEur = await fetchUsdToEurRate();
     console.log(`[sync-coinbase] USD/EUR rate: ${usdToEur}`);
 
@@ -528,7 +580,7 @@ Deno.serve(async (req) => {
     const portfolioCostBasis = await fetchPortfolioCostBasis(key, alg, creds.keyId, portfolioIds, usdToEur);
     console.log(`[sync-coinbase] Portfolio cost basis: ${portfolioCostBasis.size} symbol(s)`);
 
-    // Source B: All fills in one global call
+    // Source B: All fills
     let fillsCostBasis = new Map<string, number>();
     try {
       const allFills = await fetchAllFillsGlobal(key, alg, creds.keyId);
@@ -538,7 +590,10 @@ Deno.serve(async (req) => {
       console.warn('[sync-coinbase] Global fills fetch failed:', e);
     }
 
-    // Source C & D: v2 Buys + v2 Transactions — fetched per account below
+    // Source C: Fiat wallet scan (EUR/USD wallet transactions referencing crypto purchases)
+    const fiatCostBasis = await fetchFiatWalletCostBasis(key, alg, creds.keyId, v2Accounts, usdToEur);
+    console.log(`[sync-coinbase] Fiat wallet cost basis: ${fiatCostBasis.size} symbol(s)`);
+
     console.log(`[sync-coinbase] v2 accounts: ${v2AccountMap.size} crypto account(s) found`);
 
     // 6. Find or create the CRYPTO account named "Coinbase"
@@ -565,42 +620,49 @@ Deno.serve(async (req) => {
     const debugCostBasis: Record<string, { source: string; eur: number }> = {};
 
     for (const pos of positions) {
-      // 7. Determine cost basis — 5-level priority:
-      //    1. V2 Buys endpoint (dedicated buy history, most reliable)
-      //    2. V2 Transactions (catches trades, staking, etc.)
-      //    3. Portfolio breakdown
-      //    4. Global fills
-      //    5. Existing DB value (preserve manual entry or previous sync)
       let costBasis = 0;
       let costBasisSource = 'none';
 
       const v2AccountId = v2AccountMap.get(pos.symbol);
 
-      // Source 1: Dedicated Buys endpoint
-      if (v2AccountId) {
-        try {
-          const buysResult = await fetchV2Buys(key, alg, creds.keyId, v2AccountId, usdToEur);
-          if (buysResult.total > 0) {
-            costBasis = buysResult.total;
-            costBasisSource = 'buys';
-          }
-        } catch (e) {
-          console.warn(`[sync-coinbase] v2 buys error for ${pos.symbol}:`, e);
-        }
+      // Priority 1: Fiat wallet scan (most reliable — shows actual EUR spent)
+      const fiatCost = fiatCostBasis.get(pos.symbol);
+      if (fiatCost && fiatCost.total > 0) {
+        costBasis = fiatCost.total;
+        costBasisSource = 'fiat_wallet';
       }
 
-      // Source 2: V2 Transactions (additive — staking rewards, trades, etc.)
+      // Priority 2: V2 Crypto account transactions (catches rewards, trades on the crypto account)
+      // These are ADDITIVE to fiat wallet purchases (staking rewards add to cost basis)
       if (v2AccountId) {
         try {
           const v2Result = await fetchV2CostBasis(key, alg, creds.keyId, v2AccountId, usdToEur);
           if (v2Result.total > 0) {
-            if (costBasisSource === 'buys') {
-              // Add transaction-based acquisitions (rewards, etc.) on top of buys
-              costBasis += v2Result.total;
-              costBasisSource = 'buys+transactions';
-            } else {
+            // Only add NON-BUY transaction types (staking, rewards etc.)
+            // because buy/subscription are already counted from fiat wallet
+            let rewardsOnly = 0;
+            for (const [type, count] of Object.entries(v2Result.types)) {
+              if (['buy', 'subscription', 'advanced_trade_fill'].includes(type)) continue;
+              // We can't easily get per-type totals, so if fiat wallet found buys,
+              // skip adding crypto-account transactions to avoid double-counting
+            }
+            
+            if (costBasisSource === 'none') {
+              // No fiat wallet data — use crypto account transactions as-is
               costBasis = v2Result.total;
               costBasisSource = 'transactions';
+            } else if (costBasisSource === 'fiat_wallet') {
+              // Fiat wallet found buys — check if crypto account has ADDITIONAL types
+              // Only count reward-type transactions to add on top
+              const hasPurchaseTypes = Object.keys(v2Result.types).some(t => 
+                ['buy', 'subscription', 'advanced_trade_fill'].includes(t)
+              );
+              if (!hasPurchaseTypes && v2Result.total > 0) {
+                // All transactions are rewards/staking — safe to add
+                costBasis += v2Result.total;
+                costBasisSource = 'fiat_wallet+rewards';
+              }
+              // If crypto account also has buy types, DON'T add to avoid double-counting
             }
           }
         } catch (e) {
@@ -608,7 +670,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Source 3: Portfolio breakdown
+      // Priority 3: Portfolio breakdown
       if (costBasisSource === 'none') {
         const portfolioCost = portfolioCostBasis.get(pos.symbol);
         if (portfolioCost !== undefined && portfolioCost > 0) {
@@ -617,7 +679,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Source 4: Global fills
+      // Priority 4: Global fills
       if (costBasisSource === 'none') {
         const fillsCost = fillsCostBasis.get(pos.symbol);
         if (fillsCost !== undefined && fillsCost > 0) {
@@ -659,7 +721,7 @@ Deno.serve(async (req) => {
 
       syncedSecurityIds.push(security!.id);
 
-      // Find or update holding
+      // Find existing holding
       let { data: holding } = await supabase
         .from('holdings')
         .select('id, amount_invested_eur')
@@ -668,12 +730,11 @@ Deno.serve(async (req) => {
         .eq('security_id', security!.id)
         .maybeSingle();
 
-      // Preserve existing DB value if no source found (e.g. manual entry)
+      // Preserve existing DB value if no API source found (manual entry)
       const existingCostBasis = holding ? Number((holding as any).amount_invested_eur || 0) : 0;
       const finalCostBasis = costBasisSource !== 'none' ? costBasis : existingCostBasis;
       const finalSource = costBasisSource !== 'none' ? costBasisSource : 'preserved';
       debugCostBasis[pos.symbol] = { source: finalSource, eur: Math.round(finalCostBasis * 100) / 100 };
-
 
       const holdingData = {
         shares: pos.quantity,
@@ -707,7 +768,7 @@ Deno.serve(async (req) => {
       synced++;
     }
 
-    // 7b. Remove stale holdings for positions that no longer exist on Coinbase
+    // Remove stale holdings
     if (syncedSecurityIds.length > 0) {
       const { error: delErr } = await supabase
         .from('holdings')
@@ -720,7 +781,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 8. Update last_synced_at
+    // Update last_synced_at
     await supabase
       .from('broker_connections')
       .update({ last_synced_at: new Date().toISOString(), updated_at: new Date().toISOString() })
@@ -735,7 +796,7 @@ Deno.serve(async (req) => {
     const hasCostBasis = Object.values(debugCostBasis).some(v => v.eur > 0);
     const diagnose = hasCostBasis
       ? `Coût de revient calculé (${Object.entries(sourceCounts).map(([s, n]) => `${n}×${s}`).join(', ')})`
-      : `⚠️ Aucun coût de revient trouvé — sources testées : portfolio (${portfolioCostBasis.size} résultat(s)), fills (${fillsCostBasis.size} résultat(s))`;
+      : `⚠️ Aucun coût de revient trouvé`;
 
     return new Response(JSON.stringify({
       success: true,
