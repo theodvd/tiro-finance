@@ -1,61 +1,73 @@
 
 
-# Fix Coinbase Cost Basis: Full Automation
+# Fix Coinbase Sync: Purchase Price and PNL
 
-## Diagnostic
+## Problem
 
-From the edge function logs, the current situation is clear:
+The Coinbase sync currently stores `amount_invested_eur: 0.00` for all crypto holdings, resulting in a `+0.00%` PNL display. Two root causes:
+
+1. The `native_balance` from the Coinbase `/v2/accounts` endpoint represents the **current market value**, not the cost basis (amount originally invested).
+2. Even the current value appears to be stored as 0, suggesting a parsing issue with the API response.
+
+## Solution
+
+Enhance the `sync-coinbase` edge function to also fetch **transaction history** for each account with a non-zero balance. By summing up `buy` and `sell` transactions, we can compute the actual cost basis (total amount spent on purchases).
+
+### Changes
+
+#### 1. Edge Function (`supabase/functions/sync-coinbase/index.ts`)
+
+After fetching accounts and filtering for non-zero balances:
+
+- For each account with a balance, call `GET /v2/accounts/:account_id/transactions` (paginated)
+- Filter transactions by type `buy`, `fiat_deposit` -> `buy`, `trade` (crypto purchases)
+- Sum up the `native_amount` of buy-type transactions to compute cost basis
+- Generate a separate JWT with the correct `uri` for the transactions endpoint (Coinbase requires the `uri` claim to match the request)
+- Store the computed cost basis as `amount_invested_eur` in the holdings table
+
+Key logic:
+- For each Coinbase account with balance > 0:
+  - Fetch all transactions via pagination
+  - Filter for `type === 'buy'` or `type === 'advanced_trade_fill'` or `type === 'trade'` with positive amounts
+  - Sum `native_amount.amount` (absolute value of debits for buys) as the cost basis
+- Fall back to `native_balance` if no transaction history is available
+
+#### 2. JWT Generation Update
+
+The current JWT has a hardcoded `uri: 'GET api.coinbase.com/v2/accounts'`. Since we also need to call the transactions endpoint, the function needs to either:
+- Generate a new JWT per request (with the matching `uri`), OR
+- Remove the `uri` claim if Coinbase allows it for CDP keys with `view` scope
+
+We will generate one JWT without the `uri` claim or with a wildcard approach, or generate per-endpoint JWTs.
+
+### Technical Details
 
 ```text
-BTC:  source=v2_transactions  cost=1912.00 EUR  ✅
-ETH:  source=none              cost=0.00 EUR    ❌
-SOL:  source=none              cost=0.00 EUR    ❌
-EURC: source=none              cost=0.00 EUR    ❌
+For each position:
+  1. GET /v2/accounts/:id/transactions?limit=100
+  2. Paginate through all pages
+  3. Filter: type in ['buy', 'advanced_trade_fill', 'trade', 'send' (incoming)]
+  4. Cost basis = SUM of abs(native_amount) for buy transactions
+  5. Store in holdings.amount_invested_eur
 ```
 
-**Source A** (Portfolio Breakdown): 404 error — this endpoint doesn't work for standard Coinbase App accounts, only for Advanced Trade portfolios.
+#### 3. No UI Changes Required
 
-**Source B** (Fills): Returns 0 fills — the user buys through the Coinbase App, not Advanced Trade. Fills only exist for Advanced Trade orders.
+The existing PNL calculation in `Investments.tsx` already computes:
+```
+pnl = marketValue - amount_invested_eur
+pnlPct = (pnl / amount_invested_eur) * 100
+```
 
-**Source C** (V2 Transactions): Works for BTC but returns 0 for ETH/SOL. The current filter only accepts `type === 'buy'` or `type === 'advanced_trade_fill'`. Coinbase App purchases made via recurring buys, conversions, or other methods use different transaction types (e.g. `trade`, `send`, `exchange_deposit`).
-
-## Root Cause
-
-The `fetchV2CostBasis` function is too restrictive in its transaction type filter. Coinbase uses many transaction types for acquisitions:
-- `buy` — standard one-time purchase
-- `trade` — crypto-to-crypto swap or conversion
-- `advanced_trade_fill` — Advanced Trade order fill
-- `send` — received crypto (incoming transfers, rewards)
-- `staking_reward` — staking income
-- `learning_reward` — earn rewards
-
-For cost basis, we need to count all "acquisition" types where crypto enters the wallet.
-
-## Plan
-
-### 1. Edge Function: Expand transaction type coverage and add debug logging
-
-**File: `supabase/functions/sync-coinbase/index.ts`**
-
-- In `fetchV2CostBasis`, expand the accepted transaction types to include: `buy`, `trade`, `advanced_trade_fill`, `send` (only incoming/positive amounts), `fiat_deposit`
-- Add debug logging to print all unique transaction types found per account, so we can see exactly what Coinbase returns
-- For `trade` type transactions: the `native_amount` is negative when spending fiat/crypto, positive when receiving — use absolute value for cost tracking
-- For `send` type: only count if `amount` is positive (incoming transfer), treat as zero-cost acquisition unless `native_amount` shows a value
-
-### 2. UI: Remove manual cost basis section
-
-**File: `src/components/import/CoinbaseSync.tsx`**
-
-- Remove the "Coût de revient par position" manual input section since the goal is full automation
-- Replace with a read-only summary showing detected positions and their auto-calculated cost basis + source
-- Keep showing PNL status per position so user can verify the data is correct
-
-### 3. Improved fallback chain
-
-If v2 transactions still return 0 for some assets, use the `native_balance` (current market value) as a last-resort fallback labeled as "market_value_fallback" — this at least gives a rough reference point rather than showing 0%.
+Once `amount_invested_eur` contains the real cost basis, PNL will display correctly.
 
 ### Files to Modify
 
-- `supabase/functions/sync-coinbase/index.ts` — expand transaction types, add logging
-- `src/components/import/CoinbaseSync.tsx` — replace manual inputs with auto-summary
+- `supabase/functions/sync-coinbase/index.ts` -- add transaction fetching and cost basis calculation
+
+### Risks and Edge Cases
+
+- Rate limiting on Coinbase API (multiple calls per account) -- mitigated by the 100-item limit per page
+- Users who received crypto as gifts/transfers won't have buy transactions -- fallback to 0 cost basis
+- The JWT `uri` claim must match each endpoint called -- will generate per-endpoint JWTs
 

@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { FileDropzone } from "@/components/import/FileDropzone";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Unlink, RefreshCw, CheckCircle2, Save } from "lucide-react";
+import { Loader2, Unlink, RefreshCw, CheckCircle2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 
@@ -30,8 +29,7 @@ export function CoinbaseSync() {
   const [dropError, setDropError] = useState<string>();
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [coinbaseHoldings, setCoinbaseHoldings] = useState<CoinbaseHolding[]>([]);
-  const [investedAmounts, setInvestedAmounts] = useState<Record<string, string>>({});
-  const [savingAmounts, setSavingAmounts] = useState(false);
+
 
   const fetchCoinbaseHoldings = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -67,16 +65,6 @@ export function CoinbaseSync() {
     }));
 
     setCoinbaseHoldings(mapped);
-
-    setInvestedAmounts((prev) => {
-      const next: Record<string, string> = { ...prev };
-      for (const h of mapped) {
-        if (!(h.id in next)) {
-          next[h.id] = h.amountInvested > 0 ? String(h.amountInvested) : "";
-        }
-      }
-      return next;
-    });
   }, []);
 
   const fetchConnection = useCallback(async () => {
@@ -170,27 +158,7 @@ export function CoinbaseSync() {
     }
   };
 
-  const handleSaveAmounts = async () => {
-    setSavingAmounts(true);
-    try {
-      const updates = Object.entries(investedAmounts)
-        .filter(([_, val]) => val !== "" && !isNaN(Number(val)))
-        .map(([id, val]) =>
-          supabase
-            .from("holdings" as any)
-            .update({ amount_invested_eur: Number(val) })
-            .eq("id", id)
-        );
 
-      await Promise.all(updates);
-      await fetchCoinbaseHoldings();
-      toast({ title: "Montants sauvegardés", description: "Les coûts de revient ont été mis à jour." });
-    } catch (e: any) {
-      toast({ title: "Erreur", description: e.message, variant: "destructive" });
-    } finally {
-      setSavingAmounts(false);
-    }
-  };
 
   const handleDisconnect = async () => {
     try {
@@ -208,7 +176,7 @@ export function CoinbaseSync() {
       setState("disconnected");
       setLastSynced(null);
       setCoinbaseHoldings([]);
-      setInvestedAmounts({});
+      
     } catch (e: any) {
       toast({ title: "Erreur", description: e.message, variant: "destructive" });
     }
@@ -304,9 +272,9 @@ export function CoinbaseSync() {
             {coinbaseHoldings.length > 0 && (
               <div className="border rounded-lg p-4 space-y-3">
                 <div>
-                  <p className="text-sm font-medium">Coût de revient par position</p>
+                  <p className="text-sm font-medium">Positions détectées</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Saisis le montant total investi en € pour chaque crypto. Ce montant sert à calculer le PnL.
+                    Le coût de revient est calculé automatiquement à partir de l'historique Coinbase.
                   </p>
                 </div>
 
@@ -315,34 +283,23 @@ export function CoinbaseSync() {
                     <div key={h.id} className="flex items-center gap-3">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium">{h.symbol}</p>
-                        <p className="text-xs text-muted-foreground">{h.shares.toLocaleString("fr-FR", { maximumFractionDigits: 6 })} unités</p>
+                        <p className="text-xs text-muted-foreground">
+                          {h.shares.toLocaleString("fr-FR", { maximumFractionDigits: 6 })} unités
+                        </p>
                       </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder="0.00"
-                          className="w-32 text-right h-8 text-sm"
-                          value={investedAmounts[h.id] ?? ""}
-                          onChange={(e) =>
-                            setInvestedAmounts((prev) => ({ ...prev, [h.id]: e.target.value }))
-                          }
-                        />
-                        <span className="text-sm text-muted-foreground w-3">€</span>
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-medium">
+                          {h.amountInvested > 0
+                            ? `${h.amountInvested.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`
+                            : "—"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {h.amountInvested > 0 ? "coût calculé" : "non disponible"}
+                        </p>
                       </div>
                     </div>
                   ))}
                 </div>
-
-                <Button size="sm" onClick={handleSaveAmounts} disabled={savingAmounts}>
-                  {savingAmounts ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                  ) : (
-                    <Save className="h-3.5 w-3.5 mr-1.5" />
-                  )}
-                  Sauvegarder les montants
-                </Button>
               </div>
             )}
           </>
