@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { FileDropzone } from "@/components/import/FileDropzone";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Unlink, RefreshCw, CheckCircle2 } from "lucide-react";
+import { Loader2, Unlink, RefreshCw, CheckCircle2, Pencil, Save, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 
@@ -36,7 +37,9 @@ export function CoinbaseSync() {
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [coinbaseHoldings, setCoinbaseHoldings] = useState<CoinbaseHolding[]>([]);
   const [lastSyncDebug, setLastSyncDebug] = useState<SyncDebugData | null>(null);
-
+  const [editingCosts, setEditingCosts] = useState<Record<string, string>>({});
+  const [isEditing, setIsEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const fetchCoinbaseHoldings = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -154,7 +157,6 @@ export function CoinbaseSync() {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
-      // Store debug data for source badges
       if (data?.debug) {
         setLastSyncDebug(data.debug);
       }
@@ -171,7 +173,45 @@ export function CoinbaseSync() {
     }
   };
 
+  const handleStartEditing = () => {
+    const costs: Record<string, string> = {};
+    for (const h of coinbaseHoldings) {
+      costs[h.id] = h.amountInvested.toFixed(2);
+    }
+    setEditingCosts(costs);
+    setIsEditing(true);
+  };
 
+  const handleCancelEditing = () => {
+    setIsEditing(false);
+    setEditingCosts({});
+  };
+
+  const handleSaveCosts = async () => {
+    setSaving(true);
+    try {
+      for (const h of coinbaseHoldings) {
+        const newValue = parseFloat(editingCosts[h.id] || "0");
+        if (isNaN(newValue) || newValue === h.amountInvested) continue;
+
+        const { error } = await supabase
+          .from("holdings" as any)
+          .update({ amount_invested_eur: newValue } as any)
+          .eq("id", h.id);
+
+        if (error) throw error;
+      }
+
+      toast({ title: "Coûts mis à jour", description: "Les coûts de revient ont été enregistrés." });
+      setIsEditing(false);
+      setEditingCosts({});
+      await fetchCoinbaseHoldings();
+    } catch (e: any) {
+      toast({ title: "Erreur", description: e.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleDisconnect = async () => {
     try {
@@ -190,7 +230,6 @@ export function CoinbaseSync() {
       setLastSynced(null);
       setCoinbaseHoldings([]);
       setLastSyncDebug(null);
-      
     } catch (e: any) {
       toast({ title: "Erreur", description: e.message, variant: "destructive" });
     }
@@ -285,11 +324,32 @@ export function CoinbaseSync() {
 
             {coinbaseHoldings.length > 0 && (
               <div className="border rounded-lg p-4 space-y-3">
-                <div>
-                  <p className="text-sm font-medium">Positions détectées</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Le coût de revient est calculé automatiquement à partir de l'historique Coinbase.
-                  </p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">Positions détectées</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {isEditing 
+                        ? "Modifie les coûts de revient puis enregistre."
+                        : "Coût de revient auto-calculé. Clique sur le crayon pour corriger manuellement."}
+                    </p>
+                  </div>
+                  {!isEditing ? (
+                    <Button variant="ghost" size="sm" onClick={handleStartEditing}>
+                      <Pencil className="h-3.5 w-3.5 mr-1" />
+                      Modifier
+                    </Button>
+                  ) : (
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" onClick={handleCancelEditing} disabled={saving}>
+                        <X className="h-3.5 w-3.5 mr-1" />
+                        Annuler
+                      </Button>
+                      <Button size="sm" onClick={handleSaveCosts} disabled={saving}>
+                        {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}
+                        Enregistrer
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -305,14 +365,30 @@ export function CoinbaseSync() {
                         </p>
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="text-sm font-medium">
-                          {h.amountInvested > 0
-                            ? `${h.amountInvested.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`
-                            : "—"}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {h.amountInvested > 0 ? "coût calculé" : "non disponible"}
-                        </p>
+                        {isEditing ? (
+                          <div className="flex items-center gap-1">
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              className="w-24 h-7 text-sm text-right"
+                              value={editingCosts[h.id] || "0"}
+                              onChange={(e) => setEditingCosts(prev => ({ ...prev, [h.id]: e.target.value }))}
+                            />
+                            <span className="text-xs text-muted-foreground">€</span>
+                          </div>
+                        ) : (
+                          <>
+                            <p className="text-sm font-medium">
+                              {h.amountInvested > 0
+                                ? `${h.amountInvested.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`
+                                : "—"}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {h.amountInvested > 0 ? "coût calculé" : "non disponible"}
+                            </p>
+                          </>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -327,19 +403,21 @@ export function CoinbaseSync() {
 }
 
 function SourceBadge({ source }: { source: string }) {
-  const isReliable = ['buys', 'buys+transactions', 'transactions', 'portfolio', 'fills'].includes(source);
+  const isReliable = ['fiat_wallet', 'fiat_wallet+rewards', 'buys', 'buys+transactions', 'transactions', 'portfolio', 'fills'].includes(source);
   
   if (source === 'unknown') return null;
 
-  const label = {
+  const label: Record<string, string> = {
+    'fiat_wallet': 'wallet EUR',
+    'fiat_wallet+rewards': 'wallet+rewards',
     'buys': 'achats',
     'buys+transactions': 'achats+rewards',
     'transactions': 'transactions',
     'portfolio': 'portfolio',
     'fills': 'trades',
-    'preserved': 'conservé',
+    'preserved': 'manuel',
     'none': 'aucune source',
-  }[source] || source;
+  };
 
   return (
     <Badge
@@ -350,7 +428,7 @@ function SourceBadge({ source }: { source: string }) {
           : "bg-orange-500/15 text-orange-700 border-orange-500/30 hover:bg-orange-500/20"
       }`}
     >
-      {label}
+      {label[source] || source}
     </Badge>
   );
 }
