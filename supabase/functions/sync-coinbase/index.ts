@@ -245,20 +245,28 @@ function computeCostBasisPerSymbol(fills: any[], usdToEur: number): Map<string, 
 }
 
 // --- v2 Transactions API ---
-// Builds a map of crypto symbol → v2 account ID from GET /v2/accounts
-async function fetchV2AccountMap(
+// Returns all v2 accounts with normalized balance metadata
+async function fetchV2Accounts(
   key: CryptoKey,
   alg: string,
   keyId: string
-): Promise<Map<string, string>> {
-  const map = new Map<string, string>();
+): Promise<Array<{ symbol: string; accountId: string; balance: number; name: string; currencyType: string }>> {
+  const accounts: Array<{ symbol: string; accountId: string; balance: number; name: string; currencyType: string }> = [];
   let nextUri: string | null = '/v2/accounts?limit=100';
+
   while (nextUri) {
     try {
       const data = await coinbaseFetch(key, alg, keyId, 'GET', nextUri);
       for (const acc of (data.data || [])) {
         const symbol = ((acc.currency?.code ?? acc.currency) as string || '').toUpperCase();
-        if (symbol && acc.id) map.set(symbol, acc.id);
+        const accountId = (acc.id as string) || '';
+        if (!symbol || !accountId) continue;
+
+        const balance = parseFloat(acc.balance?.amount || '0');
+        const currencyType = ((acc.currency?.type as string) || '').toLowerCase();
+        const name = (acc.currency?.name as string) || (acc.name as string) || symbol;
+
+        accounts.push({ symbol, accountId, balance, name, currencyType });
       }
       nextUri = data.pagination?.next_uri ?? null;
     } catch (e) {
@@ -266,7 +274,8 @@ async function fetchV2AccountMap(
       break;
     }
   }
-  return map;
+
+  return accounts;
 }
 
 // Fetches all completed buy transactions for a v2 account and returns the EUR cost basis
