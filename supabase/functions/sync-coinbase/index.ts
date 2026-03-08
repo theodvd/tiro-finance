@@ -540,9 +540,9 @@ Deno.serve(async (req) => {
         const v2AccountId = v2AccountMap.get(pos.symbol);
         if (v2AccountId) {
           try {
-            const v2Cost = await fetchV2CostBasis(key, alg, creds.keyId, v2AccountId, usdToEur);
-            if (v2Cost > 0) {
-              costBasis = v2Cost;
+            const v2Result = await fetchV2CostBasis(key, alg, creds.keyId, v2AccountId, usdToEur);
+            if (v2Result.total > 0) {
+              costBasis = v2Result.total;
               costBasisSource = 'v2_transactions';
             }
           } catch (e) {
