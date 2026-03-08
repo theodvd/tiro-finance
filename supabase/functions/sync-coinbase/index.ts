@@ -289,6 +289,9 @@ const ACQUISITION_TYPES = new Set([
   'interest',               // interest earned
   'inflation_reward',       // inflation rewards
   'fiat_deposit',           // fiat deposited then used to buy
+  'subscription',           // recurring buys
+  'earn_payout',            // earn payouts
+  'receive',                // received crypto
 ]);
 
 // Fetches all transactions for a v2 account and computes EUR cost basis
@@ -341,6 +344,50 @@ async function fetchV2CostBasis(
   }
   console.log(`[sync-coinbase] v2 transactions for ${accountId}: types found=[${[...allTypes].join(',')}], acquisitions=${JSON.stringify(typeCounts)}, total=${total.toFixed(2)} EUR`);
   return { total, types: typeCounts };
+}
+
+// NEW: Fetch dedicated /v2/accounts/:id/buys endpoint (paginated)
+// Returns the total fiat spent on completed buys for this account
+async function fetchV2Buys(
+  key: CryptoKey,
+  alg: string,
+  keyId: string,
+  accountId: string,
+  usdToEur: number
+): Promise<{ total: number; count: number }> {
+  let total = 0;
+  let count = 0;
+  let nextUri: string | null = `/v2/accounts/${accountId}/buys?limit=100`;
+  let pages = 0;
+
+  while (nextUri && pages < 20) {
+    try {
+      const data = await coinbaseFetch(key, alg, keyId, 'GET', nextUri);
+      const buys = data.data || [];
+      
+      for (const buy of buys) {
+        if (buy.status !== 'completed') continue;
+        
+        // total = fiat spent including fees
+        const totalAmount = parseFloat(buy.total?.amount || '0');
+        if (totalAmount <= 0) continue;
+        
+        const currency = ((buy.total?.currency as string) || 'USD').toUpperCase();
+        total += currency === 'EUR' ? totalAmount : totalAmount * usdToEur;
+        count++;
+      }
+
+      nextUri = data.pagination?.next_uri ?? null;
+      pages++;
+    } catch (e) {
+      // 404 or other errors = endpoint not available for this account
+      console.warn(`[sync-coinbase] v2/buys error for ${accountId}:`, e);
+      break;
+    }
+  }
+  
+  console.log(`[sync-coinbase] v2 buys for ${accountId}: ${count} completed buy(s), total=${total.toFixed(2)} EUR`);
+  return { total, count };
 }
 
 // Fetch live USD → EUR rate (falls back to 0.92 if unavailable)
@@ -446,7 +493,6 @@ Deno.serve(async (req) => {
     console.log('[sync-coinbase] Coinbase returned', accounts.length, 'accounts');
 
     // 4. Extract portfolio IDs directly from accounts (retail_portfolio_id field)
-    //    — bypass the /portfolios list which often returns empty
     const portfolioIds = [...new Set(
       accounts
         .map((acc: any) => acc.retail_portfolio_id as string | undefined)
@@ -474,15 +520,15 @@ Deno.serve(async (req) => {
 
     console.log('[sync-coinbase] Positions from v2 balances:', positions.length);
 
-    // 5. Fetch cost basis — three independent sources, merged by priority
+    // 5. Fetch cost basis — multiple independent sources, merged by priority
     const usdToEur = await fetchUsdToEurRate();
     console.log(`[sync-coinbase] USD/EUR rate: ${usdToEur}`);
 
-    // Source A: portfolio breakdown — IDs come from accounts, no separate list call needed
+    // Source A: portfolio breakdown
     const portfolioCostBasis = await fetchPortfolioCostBasis(key, alg, creds.keyId, portfolioIds, usdToEur);
     console.log(`[sync-coinbase] Portfolio cost basis: ${portfolioCostBasis.size} symbol(s)`);
 
-    // Source B: All fills in one global call (product_id is optional → returns full history)
+    // Source B: All fills in one global call
     let fillsCostBasis = new Map<string, number>();
     try {
       const allFills = await fetchAllFillsGlobal(key, alg, creds.keyId);
@@ -492,7 +538,7 @@ Deno.serve(async (req) => {
       console.warn('[sync-coinbase] Global fills fetch failed:', e);
     }
 
-    // Source C: v2 App Transactions API — query per symbol lazily
+    // Source C & D: v2 Buys + v2 Transactions — fetched per account below
     console.log(`[sync-coinbase] v2 accounts: ${v2AccountMap.size} crypto account(s) found`);
 
     // 6. Find or create the CRYPTO account named "Coinbase"
@@ -519,37 +565,67 @@ Deno.serve(async (req) => {
     const debugCostBasis: Record<string, { source: string; eur: number }> = {};
 
     for (const pos of positions) {
-      // 7. Determine cost basis — 3-level priority:
-      //    1. Coinbase portfolio breakdown (most authoritative)
-      //    2. Global fills computation (covers all pairs at once)
-      //    3. Existing DB value (preserve manual entry or previous sync)
+      // 7. Determine cost basis — 5-level priority:
+      //    1. V2 Buys endpoint (dedicated buy history, most reliable)
+      //    2. V2 Transactions (catches trades, staking, etc.)
+      //    3. Portfolio breakdown
+      //    4. Global fills
+      //    5. Existing DB value (preserve manual entry or previous sync)
       let costBasis = 0;
       let costBasisSource = 'none';
 
-      const portfolioCost = portfolioCostBasis.get(pos.symbol);
-      const fillsCost = fillsCostBasis.get(pos.symbol);
+      const v2AccountId = v2AccountMap.get(pos.symbol);
 
-      if (portfolioCost !== undefined && portfolioCost > 0) {
-        costBasis = portfolioCost;
-        costBasisSource = 'portfolio';
-      } else if (fillsCost !== undefined && fillsCost > 0) {
-        costBasis = fillsCost;
-        costBasisSource = 'fills';
-      } else {
-        // Source C: v2 App Transactions (buy history per account)
-        const v2AccountId = v2AccountMap.get(pos.symbol);
-        if (v2AccountId) {
-          try {
-            const v2Result = await fetchV2CostBasis(key, alg, creds.keyId, v2AccountId, usdToEur);
-            if (v2Result.total > 0) {
-              costBasis = v2Result.total;
-              costBasisSource = 'v2_transactions';
-            }
-          } catch (e) {
-            console.warn(`[sync-coinbase] v2 cost basis error for ${pos.symbol}:`, e);
+      // Source 1: Dedicated Buys endpoint
+      if (v2AccountId) {
+        try {
+          const buysResult = await fetchV2Buys(key, alg, creds.keyId, v2AccountId, usdToEur);
+          if (buysResult.total > 0) {
+            costBasis = buysResult.total;
+            costBasisSource = 'buys';
           }
+        } catch (e) {
+          console.warn(`[sync-coinbase] v2 buys error for ${pos.symbol}:`, e);
         }
       }
+
+      // Source 2: V2 Transactions (additive — staking rewards, trades, etc.)
+      if (v2AccountId) {
+        try {
+          const v2Result = await fetchV2CostBasis(key, alg, creds.keyId, v2AccountId, usdToEur);
+          if (v2Result.total > 0) {
+            if (costBasisSource === 'buys') {
+              // Add transaction-based acquisitions (rewards, etc.) on top of buys
+              costBasis += v2Result.total;
+              costBasisSource = 'buys+transactions';
+            } else {
+              costBasis = v2Result.total;
+              costBasisSource = 'transactions';
+            }
+          }
+        } catch (e) {
+          console.warn(`[sync-coinbase] v2 cost basis error for ${pos.symbol}:`, e);
+        }
+      }
+
+      // Source 3: Portfolio breakdown
+      if (costBasisSource === 'none') {
+        const portfolioCost = portfolioCostBasis.get(pos.symbol);
+        if (portfolioCost !== undefined && portfolioCost > 0) {
+          costBasis = portfolioCost;
+          costBasisSource = 'portfolio';
+        }
+      }
+
+      // Source 4: Global fills
+      if (costBasisSource === 'none') {
+        const fillsCost = fillsCostBasis.get(pos.symbol);
+        if (fillsCost !== undefined && fillsCost > 0) {
+          costBasis = fillsCost;
+          costBasisSource = 'fills';
+        }
+      }
+
       console.log(`[sync-coinbase] ${pos.symbol}: source=${costBasisSource} cost=${costBasis.toFixed(2)} EUR`);
 
       // Find or create security
@@ -644,7 +720,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 7. Update last_synced_at
+    // 8. Update last_synced_at
     await supabase
       .from('broker_connections')
       .update({ last_synced_at: new Date().toISOString(), updated_at: new Date().toISOString() })

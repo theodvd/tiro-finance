@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { FileDropzone } from "@/components/import/FileDropzone";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -16,6 +17,11 @@ interface CoinbaseHolding {
   name: string;
   shares: number;
   amountInvested: number;
+  source: string;
+}
+
+interface SyncDebugData {
+  costBasis: Record<string, { source: string; eur: number }>;
 }
 
 export function CoinbaseSync() {
@@ -29,6 +35,7 @@ export function CoinbaseSync() {
   const [dropError, setDropError] = useState<string>();
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [coinbaseHoldings, setCoinbaseHoldings] = useState<CoinbaseHolding[]>([]);
+  const [lastSyncDebug, setLastSyncDebug] = useState<SyncDebugData | null>(null);
 
 
   const fetchCoinbaseHoldings = useCallback(async () => {
@@ -62,10 +69,11 @@ export function CoinbaseSync() {
       name: h.securities?.name || "",
       shares: Number(h.shares || 0),
       amountInvested: Number(h.amount_invested_eur || 0),
+      source: lastSyncDebug?.costBasis?.[h.securities?.symbol || ""]?.source || "unknown",
     }));
 
     setCoinbaseHoldings(mapped);
-  }, []);
+  }, [lastSyncDebug]);
 
   const fetchConnection = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -146,6 +154,11 @@ export function CoinbaseSync() {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
+      // Store debug data for source badges
+      if (data?.debug) {
+        setLastSyncDebug(data.debug);
+      }
+
       toast({
         title: "Synchronisation réussie",
         description: data?.message || `${data?.synced} position(s) synchronisée(s).`,
@@ -176,6 +189,7 @@ export function CoinbaseSync() {
       setState("disconnected");
       setLastSynced(null);
       setCoinbaseHoldings([]);
+      setLastSyncDebug(null);
       
     } catch (e: any) {
       toast({ title: "Erreur", description: e.message, variant: "destructive" });
@@ -282,7 +296,10 @@ export function CoinbaseSync() {
                   {coinbaseHoldings.map((h) => (
                     <div key={h.id} className="flex items-center gap-3">
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">{h.symbol}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium">{h.symbol}</p>
+                          <SourceBadge source={h.source} />
+                        </div>
                         <p className="text-xs text-muted-foreground">
                           {h.shares.toLocaleString("fr-FR", { maximumFractionDigits: 6 })} unités
                         </p>
@@ -306,5 +323,34 @@ export function CoinbaseSync() {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function SourceBadge({ source }: { source: string }) {
+  const isReliable = ['buys', 'buys+transactions', 'transactions', 'portfolio', 'fills'].includes(source);
+  
+  if (source === 'unknown') return null;
+
+  const label = {
+    'buys': 'achats',
+    'buys+transactions': 'achats+rewards',
+    'transactions': 'transactions',
+    'portfolio': 'portfolio',
+    'fills': 'trades',
+    'preserved': 'conservé',
+    'none': 'aucune source',
+  }[source] || source;
+
+  return (
+    <Badge
+      variant={isReliable ? "default" : "outline"}
+      className={`text-[10px] px-1.5 py-0 h-4 ${
+        isReliable 
+          ? "bg-green-500/15 text-green-700 border-green-500/30 hover:bg-green-500/20" 
+          : "bg-orange-500/15 text-orange-700 border-orange-500/30 hover:bg-orange-500/20"
+      }`}
+    >
+      {label}
+    </Badge>
   );
 }
