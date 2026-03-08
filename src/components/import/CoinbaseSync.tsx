@@ -65,16 +65,6 @@ export function CoinbaseSync() {
     }));
 
     setCoinbaseHoldings(mapped);
-
-    setInvestedAmounts((prev) => {
-      const next: Record<string, string> = { ...prev };
-      for (const h of mapped) {
-        if (!(h.id in next)) {
-          next[h.id] = h.amountInvested > 0 ? String(h.amountInvested) : "";
-        }
-      }
-      return next;
-    });
   }, []);
 
   const fetchConnection = useCallback(async () => {
