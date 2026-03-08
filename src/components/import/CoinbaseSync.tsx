@@ -158,27 +158,7 @@ export function CoinbaseSync() {
     }
   };
 
-  const handleSaveAmounts = async () => {
-    setSavingAmounts(true);
-    try {
-      const updates = Object.entries(investedAmounts)
-        .filter(([_, val]) => val !== "" && !isNaN(Number(val)))
-        .map(([id, val]) =>
-          supabase
-            .from("holdings" as any)
-            .update({ amount_invested_eur: Number(val) })
-            .eq("id", id)
-        );
 
-      await Promise.all(updates);
-      await fetchCoinbaseHoldings();
-      toast({ title: "Montants sauvegardés", description: "Les coûts de revient ont été mis à jour." });
-    } catch (e: any) {
-      toast({ title: "Erreur", description: e.message, variant: "destructive" });
-    } finally {
-      setSavingAmounts(false);
-    }
-  };
 
   const handleDisconnect = async () => {
     try {
