@@ -1,6 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
@@ -247,20 +245,28 @@ function computeCostBasisPerSymbol(fills: any[], usdToEur: number): Map<string, 
 }
 
 // --- v2 Transactions API ---
-// Builds a map of crypto symbol → v2 account ID from GET /v2/accounts
-async function fetchV2AccountMap(
+// Returns all v2 accounts with normalized balance metadata
+async function fetchV2Accounts(
   key: CryptoKey,
   alg: string,
   keyId: string
-): Promise<Map<string, string>> {
-  const map = new Map<string, string>();
+): Promise<Array<{ symbol: string; accountId: string; balance: number; name: string; currencyType: string }>> {
+  const accounts: Array<{ symbol: string; accountId: string; balance: number; name: string; currencyType: string }> = [];
   let nextUri: string | null = '/v2/accounts?limit=100';
+
   while (nextUri) {
     try {
       const data = await coinbaseFetch(key, alg, keyId, 'GET', nextUri);
       for (const acc of (data.data || [])) {
         const symbol = ((acc.currency?.code ?? acc.currency) as string || '').toUpperCase();
-        if (symbol && acc.id) map.set(symbol, acc.id);
+        const accountId = (acc.id as string) || '';
+        if (!symbol || !accountId) continue;
+
+        const balance = parseFloat(acc.balance?.amount || '0');
+        const currencyType = ((acc.currency?.type as string) || '').toLowerCase();
+        const name = (acc.currency?.name as string) || (acc.name as string) || symbol;
+
+        accounts.push({ symbol, accountId, balance, name, currencyType });
       }
       nextUri = data.pagination?.next_uri ?? null;
     } catch (e) {
@@ -268,7 +274,8 @@ async function fetchV2AccountMap(
       break;
     }
   }
-  return map;
+
+  return accounts;
 }
 
 // Fetches all completed buy transactions for a v2 account and returns the EUR cost basis
@@ -402,7 +409,7 @@ Deno.serve(async (req) => {
     const { key, alg } = await detectAndImportKey(creds.privateKey);
     console.log(`[sync-coinbase] Key imported (${alg}), fetching accounts...`);
 
-    // 3. Use Advanced Trade API (supports both EdDSA and ES256)
+    // 3. Use Advanced Trade API (for account metadata + optional portfolio IDs)
     const accountsData = await coinbaseFetch(key, alg, creds.keyId, 'GET', '/api/v3/brokerage/accounts?limit=250');
     const accounts = accountsData.accounts || [];
     console.log('[sync-coinbase] Coinbase returned', accounts.length, 'accounts');
@@ -416,20 +423,25 @@ Deno.serve(async (req) => {
     )];
     console.log(`[sync-coinbase] Portfolio IDs from accounts: ${portfolioIds.join(', ') || 'none'}`);
 
-    // 4b. Filter accounts with non-zero balance
-    const positions = accounts
-      .filter((acc: any) => {
-        const bal = parseFloat(acc.balance?.value || acc.available_balance?.value || '0');
-        return bal > 0 && acc.type === 'ACCOUNT_TYPE_CRYPTO';
-      })
-      .map((acc: any) => ({
-        uuid: acc.uuid,
-        symbol: (acc.currency || '').toUpperCase(),
-        name: acc.name || acc.currency,
-        quantity: parseFloat(acc.balance?.value || acc.available_balance?.value || '0'),
+    // 4b. Build positions from v2 accounts (more reliable for Coinbase App balances incl. ETH/SOL)
+    const v2Accounts = await fetchV2Accounts(key, alg, creds.keyId);
+    const v2AccountMap = new Map<string, string>();
+    for (const acc of v2Accounts) {
+      if (!v2AccountMap.has(acc.symbol)) {
+        v2AccountMap.set(acc.symbol, acc.accountId);
+      }
+    }
+
+    const positions = v2Accounts
+      .filter((acc) => acc.currencyType === 'crypto' && acc.balance > 0)
+      .map((acc) => ({
+        uuid: acc.accountId,
+        symbol: acc.symbol,
+        name: acc.name,
+        quantity: acc.balance,
       }));
 
-    console.log('[sync-coinbase] Positions with balance:', positions.length);
+    console.log('[sync-coinbase] Positions from v2 balances:', positions.length);
 
     // 5. Fetch cost basis — three independent sources, merged by priority
     const usdToEur = await fetchUsdToEurRate();
@@ -449,8 +461,7 @@ Deno.serve(async (req) => {
       console.warn('[sync-coinbase] Global fills fetch failed:', e);
     }
 
-    // Source C: v2 App Transactions API — fetch account map once; query per symbol lazily
-    const v2AccountMap = await fetchV2AccountMap(key, alg, creds.keyId);
+    // Source C: v2 App Transactions API — query per symbol lazily
     console.log(`[sync-coinbase] v2 accounts: ${v2AccountMap.size} crypto account(s) found`);
 
     // 6. Find or create the CRYPTO account named "Coinbase"
