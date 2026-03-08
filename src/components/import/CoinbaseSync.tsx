@@ -29,8 +29,7 @@ export function CoinbaseSync() {
   const [dropError, setDropError] = useState<string>();
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [coinbaseHoldings, setCoinbaseHoldings] = useState<CoinbaseHolding[]>([]);
-  const [investedAmounts, setInvestedAmounts] = useState<Record<string, string>>({});
-  const [savingAmounts, setSavingAmounts] = useState(false);
+
 
   const fetchCoinbaseHoldings = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
