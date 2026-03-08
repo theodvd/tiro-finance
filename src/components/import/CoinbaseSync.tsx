@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { FileDropzone } from "@/components/import/FileDropzone";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Unlink, RefreshCw, CheckCircle2, Save } from "lucide-react";
+import { Loader2, Unlink, RefreshCw, CheckCircle2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 
