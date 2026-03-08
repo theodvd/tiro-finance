@@ -1,76 +1,73 @@
 
 
-# Fix Coinbase Cost Basis: Use Dedicated Buys Endpoint + Missing Transaction Types
+# Fix Coinbase Sync: Purchase Price and PNL
 
-## Diagnostic
+## Problem
 
-From the edge function logs, the problem is clear:
+The Coinbase sync currently stores `amount_invested_eur: 0.00` for all crypto holdings, resulting in a `+0.00%` PNL display. Two root causes:
+
+1. The `native_balance` from the Coinbase `/v2/accounts` endpoint represents the **current market value**, not the cost basis (amount originally invested).
+2. Even the current value appears to be stored as 0, suggesting a parsing issue with the API response.
+
+## Solution
+
+Enhance the `sync-coinbase` edge function to also fetch **transaction history** for each account with a non-zero balance. By summing up `buy` and `sell` transactions, we can compute the actual cost basis (total amount spent on purchases).
+
+### Changes
+
+#### 1. Edge Function (`supabase/functions/sync-coinbase/index.ts`)
+
+After fetching accounts and filtering for non-zero balances:
+
+- For each account with a balance, call `GET /v2/accounts/:account_id/transactions` (paginated)
+- Filter transactions by type `buy`, `fiat_deposit` -> `buy`, `trade` (crypto purchases)
+- Sum up the `native_amount` of buy-type transactions to compute cost basis
+- Generate a separate JWT with the correct `uri` for the transactions endpoint (Coinbase requires the `uri` claim to match the request)
+- Store the computed cost basis as `amount_invested_eur` in the holdings table
+
+Key logic:
+- For each Coinbase account with balance > 0:
+  - Fetch all transactions via pagination
+  - Filter for `type === 'buy'` or `type === 'advanced_trade_fill'` or `type === 'trade'` with positive amounts
+  - Sum `native_amount.amount` (absolute value of debits for buys) as the cost basis
+- Fall back to `native_balance` if no transaction history is available
+
+#### 2. JWT Generation Update
+
+The current JWT has a hardcoded `uri: 'GET api.coinbase.com/v2/accounts'`. Since we also need to call the transactions endpoint, the function needs to either:
+- Generate a new JWT per request (with the matching `uri`), OR
+- Remove the `uri` claim if Coinbase allows it for CDP keys with `view` scope
+
+We will generate one JWT without the `uri` claim or with a wildcard approach, or generate per-endpoint JWTs.
+
+### Technical Details
 
 ```text
-BTC account: types=[buy, subscription, incentives_rewards_payout] → 19 buys → 1912€ ✅
-ETH account: types=[staking_transfer, staking_reward]            → 0 buys  → 1.39€ ❌
-SOL account: types=[staking_reward, staking_transfer]            → 0 buys  → 0.92€ ❌
-EURC account: types=[retail_simple_price_improvement]            → 0 buys  → 0.00€ ❌
+For each position:
+  1. GET /v2/accounts/:id/transactions?limit=100
+  2. Paginate through all pages
+  3. Filter: type in ['buy', 'advanced_trade_fill', 'trade', 'send' (incoming)]
+  4. Cost basis = SUM of abs(native_amount) for buy transactions
+  5. Store in holdings.amount_invested_eur
 ```
 
-ETH and SOL have real holdings worth ~297€ and ~90€ respectively, but cost basis only captures staking rewards (1.39€ and 0.92€). The actual purchase transactions are **not appearing** in the v2 transactions endpoint for those accounts.
+#### 3. No UI Changes Required
 
-Note: The International Exchange API docs you linked are for Coinbase derivatives/futures trading, not the retail Coinbase App. That API is not applicable here.
+The existing PNL calculation in `Investments.tsx` already computes:
+```
+pnl = marketValue - amount_invested_eur
+pnlPct = (pnl / amount_invested_eur) * 100
+```
 
-## Root Causes
-
-1. **Missing dedicated Buys endpoint**: Coinbase has a separate `/v2/accounts/:id/buys` endpoint that returns the actual purchase history with fiat amounts. This is different from the generic transactions endpoint and specifically designed for buy history. The current code only uses `/v2/accounts/:id/transactions`.
-
-2. **Missing `subscription` type**: BTC account shows `subscription` type (recurring buys) but this isn't in `ACQUISITION_TYPES`. While BTC still works because it also has `buy` type entries, other accounts might rely on `subscription` type only.
-
-3. **Possible Advanced Trade routing**: Newer recurring buys may go through Advanced Trade internally. The v3 fills endpoint returned 0 results, but we should also try the `/v2/accounts/:id/buys` endpoint which should aggregate all purchase methods.
-
-## Plan
-
-### 1. Edge Function: Add Buys endpoint as primary cost basis source
-
-**File: `supabase/functions/sync-coinbase/index.ts`**
-
-Add a new `fetchV2Buys` function that calls `GET /v2/accounts/:id/buys` (paginated). Each buy object contains:
-- `total.amount` / `total.currency` (total fiat spent including fees)
-- `amount.amount` / `amount.currency` (crypto received)
-- `status` (only count `completed`)
-
-This becomes the **highest priority** cost basis source for per-position accuracy, above v2 transactions.
-
-Priority chain becomes:
-1. V2 Buys endpoint (most reliable for actual purchases)
-2. V2 Transactions (catches trades, staking rewards, etc.)
-3. V3 Fills (Advanced Trade)
-4. Portfolio breakdown (fallback)
-5. Preserved DB value
-
-### 2. Edge Function: Add missing transaction types
-
-Add `subscription`, `earn_payout`, `receive` to `ACQUISITION_TYPES`.
-
-### 3. Edge Function: Combine buys + transactions for total cost basis
-
-For each position, sum:
-- All completed buys from `/v2/accounts/:id/buys` (fiat spent)
-- Plus acquisition-type transactions (staking rewards, trade conversions, etc.)
-
-This gives the complete picture: cash invested + crypto received via other means.
-
-### 4. UI: Add reliability indicator per position
-
-**File: `src/components/import/CoinbaseSync.tsx`**
-
-Store the cost basis source alongside each holding in the component state. Display a badge:
-- "buys" or "transactions" = reliable (green)
-- "preserved" or "none" = needs attention (orange)
-
-### 5. Edge Function: Enhanced debug logging
-
-Log the raw response from the buys endpoint to verify what Coinbase returns for each account, enabling faster debugging if issues persist.
+Once `amount_invested_eur` contains the real cost basis, PNL will display correctly.
 
 ### Files to Modify
 
-- `supabase/functions/sync-coinbase/index.ts` -- add buys endpoint, fix types, merge sources
-- `src/components/import/CoinbaseSync.tsx` -- add reliability indicator
+- `supabase/functions/sync-coinbase/index.ts` -- add transaction fetching and cost basis calculation
+
+### Risks and Edge Cases
+
+- Rate limiting on Coinbase API (multiple calls per account) -- mitigated by the 100-item limit per page
+- Users who received crypto as gifts/transfers won't have buy transactions -- fallback to 0 cost basis
+- The JWT `uri` claim must match each endpoint called -- will generate per-endpoint JWTs
 
