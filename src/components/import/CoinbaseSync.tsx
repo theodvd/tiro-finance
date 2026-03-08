@@ -272,9 +272,9 @@ export function CoinbaseSync() {
             {coinbaseHoldings.length > 0 && (
               <div className="border rounded-lg p-4 space-y-3">
                 <div>
-                  <p className="text-sm font-medium">Coût de revient par position</p>
+                  <p className="text-sm font-medium">Positions détectées</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Saisis le montant total investi en € pour chaque crypto. Ce montant sert à calculer le PnL.
+                    Le coût de revient est calculé automatiquement à partir de l'historique Coinbase.
                   </p>
                 </div>
 
@@ -283,34 +283,23 @@ export function CoinbaseSync() {
                     <div key={h.id} className="flex items-center gap-3">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium">{h.symbol}</p>
-                        <p className="text-xs text-muted-foreground">{h.shares.toLocaleString("fr-FR", { maximumFractionDigits: 6 })} unités</p>
+                        <p className="text-xs text-muted-foreground">
+                          {h.shares.toLocaleString("fr-FR", { maximumFractionDigits: 6 })} unités
+                        </p>
                       </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder="0.00"
-                          className="w-32 text-right h-8 text-sm"
-                          value={investedAmounts[h.id] ?? ""}
-                          onChange={(e) =>
-                            setInvestedAmounts((prev) => ({ ...prev, [h.id]: e.target.value }))
-                          }
-                        />
-                        <span className="text-sm text-muted-foreground w-3">€</span>
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-medium">
+                          {h.amountInvested > 0
+                            ? `${h.amountInvested.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`
+                            : "—"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {h.amountInvested > 0 ? "coût calculé" : "non disponible"}
+                        </p>
                       </div>
                     </div>
                   ))}
                 </div>
-
-                <Button size="sm" onClick={handleSaveAmounts} disabled={savingAmounts}>
-                  {savingAmounts ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                  ) : (
-                    <Save className="h-3.5 w-3.5 mr-1.5" />
-                  )}
-                  Sauvegarder les montants
-                </Button>
               </div>
             )}
           </>
