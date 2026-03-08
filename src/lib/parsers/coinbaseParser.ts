@@ -25,7 +25,9 @@ export async function parseCoinbaseCSV(
   const text = await file.text();
 
   const lines = text.split('\n');
-  const headerIndex = lines.findIndex(line => line.startsWith('Timestamp'));
+  const headerIndex = lines.findIndex(line =>
+    line.includes('Timestamp') && line.includes('Transaction Type')
+  );
   if (headerIndex === -1) {
     throw new Error('Format CSV Coinbase non reconnu. Cherche la ligne "Timestamp" comme en-tête.');
   }
