@@ -11,7 +11,9 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, RefreshCw, TrendingUp } from "lucide-react";
 import { z } from "zod";
 import { ASSET_CLASSES, PRICING_SOURCES, ASSET_CLASS_LABEL, AssetClass, PricingSource } from "@/constants";
-import { HoldingsSection } from "@/components/investments/HoldingsSection";
+import { PortfolioHero } from "@/components/investments/PortfolioHero";
+import { BrokerCards } from "@/components/investments/BrokerCards";
+import { PositionsTable } from "@/components/investments/PositionsTable";
 import { DcaSection } from "@/components/investments/DcaSection";
 import type { Account, Security, Holding, DcaPlan, BridgeAccount, EnrichedHolding } from "@/components/investments/types";
 
@@ -31,8 +33,12 @@ export default function Investments() {
   const [dcaPlans, setDcaPlans] = useState<DcaPlan[]>([]);
   const [bridgeAccounts, setBridgeAccounts] = useState<BridgeAccount[]>([]);
   const [priceMap, setPriceMap] = useState<Record<string, number>>({});
+  const [priceUpdatedMap, setPriceUpdatedMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedBroker, setSelectedBroker] = useState<string | null>(null);
+  const [snapshots, setSnapshots] = useState<{ d: string; total_value_eur: number }[]>([]);
+  const [lastUpdated, setLastUpdated] = useState<string | undefined>();
 
   // Quick Add Investment form state
   const [quickAddOpen, setQuickAddOpen] = useState(false);
@@ -106,20 +112,37 @@ export default function Investments() {
         .filter((id: string | undefined): id is string => Boolean(id));
 
       if (secIds.length > 0) {
-        const { data: mdRows, error: mdError } = await supabase
+        const { data: mdRows } = await supabase
           .from('market_data')
           .select('security_id, last_px_eur, updated_at')
           .in('security_id', secIds);
 
-        if (!mdError) {
+        if (mdRows) {
           const map: Record<string, number> = {};
-          (mdRows || []).forEach((r: any) => {
-            if (r.security_id != null) map[r.security_id] = Number(r.last_px_eur);
-          });
+          const updMap: Record<string, string> = {};
+          let latest = '';
+          for (const r of mdRows) {
+            if (r.security_id != null) {
+              map[r.security_id] = Number(r.last_px_eur);
+              updMap[r.security_id] = r.updated_at;
+              if (r.updated_at > latest) latest = r.updated_at;
+            }
+          }
           setPriceMap(map);
+          setPriceUpdatedMap(updMap);
+          if (latest) setLastUpdated(latest);
         }
       }
     }
+
+    // Fetch snapshots for sparkline
+    const { data: snapData } = await supabase
+      .from('v_snapshot_totals')
+      .select('d, total_value_eur')
+      .eq('user_id', user!.id)
+      .order('d', { ascending: true })
+      .limit(30);
+    setSnapshots((snapData || []).map(s => ({ d: s.d || '', total_value_eur: Number(s.total_value_eur) || 0 })));
 
     const { data: accountsData } = await supabase
       .from('accounts')
@@ -180,6 +203,19 @@ export default function Investments() {
       .sort((a, b) => b.weight - a.weight);
   }, [holdings, priceMap]);
 
+  const totalValue = useMemo(() => enrichedHoldings.reduce((s, h) => s + h.marketValue, 0), [enrichedHoldings]);
+  const totalInvested = useMemo(() => enrichedHoldings.reduce((s, h) => s + (h.amount_invested_eur ?? 0), 0), [enrichedHoldings]);
+  const pnl = totalValue - totalInvested;
+  const pnlPct = totalInvested > 0 ? (pnl / totalInvested) * 100 : 0;
+
+  const brokerNameMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const h of enrichedHoldings) {
+      map[h.account.id] = h.account.name;
+    }
+    return map;
+  }, [enrichedHoldings]);
+
   const handleRefreshPrices = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) {
@@ -211,12 +247,10 @@ export default function Investments() {
 
   const handleQuickAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!quickAddData.account_id || !quickAddData.ticker || !quickAddData.quantity) {
       toast({ title: "Erreur", description: "Remplis tous les champs obligatoires", variant: "destructive" });
       return;
     }
-
     try {
       const { data: existingSec } = await supabase
         .from('securities')
@@ -240,7 +274,6 @@ export default function Investments() {
           })
           .select('id')
           .single();
-
         if (createSecError) throw createSecError;
         securityId = newSec.id;
       }
@@ -267,16 +300,7 @@ export default function Investments() {
 
       toast({ title: "Succès", description: "Investissement ajouté" });
       setQuickAddOpen(false);
-      setQuickAddData({
-        account_id: "",
-        ticker: "",
-        quantity: "",
-        purchase_price: "",
-        name: "",
-        asset_class: "STOCK",
-        currency: "EUR",
-        pricing_source: "YFINANCE",
-      });
+      setQuickAddData({ account_id: "", ticker: "", quantity: "", purchase_price: "", name: "", asset_class: "STOCK", currency: "EUR", pricing_source: "YFINANCE" });
       fetchData();
     } catch (error: any) {
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
@@ -297,12 +321,10 @@ export default function Investments() {
 
   const handleHoldingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!holdingFormData.account_id || !holdingFormData.security_id || !holdingFormData.shares) {
       toast({ title: "Erreur", description: "Remplis tous les champs obligatoires", variant: "destructive" });
       return;
     }
-
     const payload = {
       user_id: user!.id,
       account_id: holdingFormData.account_id,
@@ -310,20 +332,14 @@ export default function Investments() {
       shares: parseFloat(holdingFormData.shares),
       amount_invested_eur: holdingFormData.amount_invested_eur ? parseFloat(holdingFormData.amount_invested_eur) : null,
     };
-
     const validationResult = holdingSchema.safeParse(payload);
     if (!validationResult.success) {
       const errors = validationResult.error.errors.map(e => e.message).join(", ");
       toast({ title: "Erreur de validation", description: errors, variant: "destructive" });
       return;
     }
-
     if (editingHolding) {
-      const { error } = await supabase
-        .from('holdings')
-        .update(payload)
-        .eq('id', editingHolding.id);
-
+      const { error } = await supabase.from('holdings').update(payload).eq('id', editingHolding.id);
       if (error) {
         toast({ title: "Erreur", description: error.message, variant: "destructive" });
       } else {
@@ -338,9 +354,7 @@ export default function Investments() {
 
   const handleDeleteHolding = async (id: string) => {
     if (!confirm("Es-tu sûr de vouloir supprimer cette position ?")) return;
-
     const { error } = await supabase.from('holdings').delete().eq('id', id);
-
     if (error) {
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
     } else {
@@ -350,23 +364,16 @@ export default function Investments() {
   };
 
   const resetHoldingForm = () => {
-    setHoldingFormData({
-      account_id: "",
-      security_id: "",
-      shares: "",
-      amount_invested_eur: "",
-    });
+    setHoldingFormData({ account_id: "", security_id: "", shares: "", amount_invested_eur: "" });
   };
 
   // DCA CRUD
   const handleDcaSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!dcaFormData.account_id || !dcaFormData.security_id || !dcaFormData.amount) {
       toast({ title: "Erreur", description: "Remplis tous les champs obligatoires", variant: "destructive" });
       return;
     }
-
     const payload: any = {
       user_id: user!.id,
       account_id: dcaFormData.account_id,
@@ -381,14 +388,9 @@ export default function Investments() {
       weekday: dcaFormData.frequency === 'weekly' ? parseInt(dcaFormData.weekday) : null,
       monthday: dcaFormData.frequency === 'monthly' ? parseInt(dcaFormData.monthday) : null,
     };
-
     try {
       if (editingDca) {
-        const { error } = await supabase
-          .from('dca_plans')
-          .update(payload)
-          .eq('id', editingDca.id);
-
+        const { error } = await supabase.from('dca_plans').update(payload).eq('id', editingDca.id);
         if (error) throw error;
         toast({ title: "Succès", description: "DCA mis à jour" });
       } else {
@@ -396,7 +398,6 @@ export default function Investments() {
         if (error) throw error;
         toast({ title: "Succès", description: "DCA créé" });
       }
-
       setDcaDialogOpen(false);
       setEditingDca(null);
       resetDcaForm();
@@ -426,9 +427,7 @@ export default function Investments() {
 
   const handleDeleteDca = async (id: string) => {
     if (!confirm("Es-tu sûr de vouloir supprimer ce DCA ?")) return;
-
     const { error } = await supabase.from('dca_plans').delete().eq('id', id);
-
     if (error) {
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
     } else {
@@ -438,11 +437,7 @@ export default function Investments() {
   };
 
   const handleToggleDca = async (id: string, active: boolean) => {
-    const { error } = await supabase
-      .from('dca_plans')
-      .update({ active })
-      .eq('id', id);
-
+    const { error } = await supabase.from('dca_plans').update({ active }).eq('id', id);
     if (error) {
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
     } else {
@@ -452,26 +447,11 @@ export default function Investments() {
   };
 
   const resetDcaForm = () => {
-    setDcaFormData({
-      account_id: "",
-      security_id: "",
-      source_account_id: "",
-      amount: "",
-      investment_mode: "amount",
-      frequency: "monthly",
-      interval_days: "",
-      weekday: "1",
-      monthday: "1",
-      start_date: new Date().toISOString().split('T')[0],
-      active: true,
-    });
+    setDcaFormData({ account_id: "", security_id: "", source_account_id: "", amount: "", investment_mode: "amount", frequency: "monthly", interval_days: "", weekday: "1", monthday: "1", start_date: new Date().toISOString().split('T')[0], active: true });
   };
 
   const formatNextExecution = (plan: DcaPlan) => {
-    if (plan.next_execution_date) {
-      return new Date(plan.next_execution_date).toLocaleDateString('fr-FR');
-    }
-
+    if (plan.next_execution_date) return new Date(plan.next_execution_date).toLocaleDateString('fr-FR');
     switch (plan.frequency) {
       case 'weekly':
         const dayNames = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
@@ -494,114 +474,67 @@ export default function Investments() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 px-4 sm:px-6 lg:px-8 py-6">
+    <div className="max-w-7xl mx-auto space-y-6 px-4 sm:px-6 lg:px-8 py-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Investissements</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Pilote tes positions et tes investissements récurrents
-          </p>
-        </div>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Investissements</h1>
         <div className="flex flex-wrap gap-2">
           <Dialog open={quickAddOpen} onOpenChange={setQuickAddOpen}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="mr-2 h-4 w-4" />
-                <span className="hidden sm:inline">Ajouter un investissement</span>
+                <span className="hidden sm:inline">Ajouter</span>
                 <span className="sm:hidden">Investir</span>
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle>Ajouter un investissement</DialogTitle>
-                <DialogDescription>
-                  Ajoute rapidement une nouvelle position. L'actif sera créé automatiquement s'il n'existe pas.
-                </DialogDescription>
+                <DialogDescription>Ajoute rapidement une nouvelle position.</DialogDescription>
               </DialogHeader>
               <DialogBody>
                 <form id="quick-add-form" onSubmit={handleQuickAddSubmit} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="quick_account">Compte *</Label>
-                    <Select value={quickAddData.account_id} onValueChange={(value) => setQuickAddData({ ...quickAddData, account_id: value })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionne un compte..." />
-                      </SelectTrigger>
+                    <Label>Compte *</Label>
+                    <Select value={quickAddData.account_id} onValueChange={(v) => setQuickAddData({ ...quickAddData, account_id: v })}>
+                      <SelectTrigger><SelectValue placeholder="Sélectionne un compte..." /></SelectTrigger>
                       <SelectContent>
-                        {accounts.map((acc) => (
-                          <SelectItem key={acc.id} value={acc.id}>
-                            {acc.name} ({acc.type})
-                          </SelectItem>
-                        ))}
+                        {accounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.name} ({a.type})</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="quick_ticker">Ticker *</Label>
-                    <Input
-                      id="quick_ticker"
-                      placeholder="ex: CW8.PA, BTC"
-                      value={quickAddData.ticker}
-                      onChange={(e) => setQuickAddData({ ...quickAddData, ticker: e.target.value })}
-                      required
-                    />
+                    <Label>Ticker *</Label>
+                    <Input placeholder="ex: CW8.PA, BTC" value={quickAddData.ticker} onChange={(e) => setQuickAddData({ ...quickAddData, ticker: e.target.value })} required />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="quick_name">Nom (optionnel)</Label>
-                    <Input
-                      id="quick_name"
-                      placeholder="ex: MSCI World ETF"
-                      value={quickAddData.name}
-                      onChange={(e) => setQuickAddData({ ...quickAddData, name: e.target.value })}
-                    />
+                    <Label>Nom (optionnel)</Label>
+                    <Input placeholder="ex: MSCI World ETF" value={quickAddData.name} onChange={(e) => setQuickAddData({ ...quickAddData, name: e.target.value })} />
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="quick_quantity">Quantité *</Label>
-                      <Input
-                        id="quick_quantity"
-                        type="number"
-                        step="0.00000001"
-                        placeholder="10"
-                        value={quickAddData.quantity}
-                        onChange={(e) => setQuickAddData({ ...quickAddData, quantity: e.target.value })}
-                        required
-                      />
+                      <Label>Quantité *</Label>
+                      <Input type="number" step="0.00000001" placeholder="10" value={quickAddData.quantity} onChange={(e) => setQuickAddData({ ...quickAddData, quantity: e.target.value })} required />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="quick_price">Prix unitaire (optionnel)</Label>
-                      <Input
-                        id="quick_price"
-                        type="number"
-                        step="0.01"
-                        placeholder="100.00"
-                        value={quickAddData.purchase_price}
-                        onChange={(e) => setQuickAddData({ ...quickAddData, purchase_price: e.target.value })}
-                      />
+                      <Label>Prix unitaire</Label>
+                      <Input type="number" step="0.01" placeholder="100.00" value={quickAddData.purchase_price} onChange={(e) => setQuickAddData({ ...quickAddData, purchase_price: e.target.value })} />
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="quick_asset">Classe d'actif</Label>
-                      <Select value={quickAddData.asset_class} onValueChange={(value) => setQuickAddData({ ...quickAddData, asset_class: value as AssetClass })}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
+                      <Label>Classe d'actif</Label>
+                      <Select value={quickAddData.asset_class} onValueChange={(v) => setQuickAddData({ ...quickAddData, asset_class: v as AssetClass })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          {ASSET_CLASSES.map((cls) => (
-                            <SelectItem key={cls} value={cls}>
-                              {ASSET_CLASS_LABEL[cls]}
-                            </SelectItem>
-                          ))}
+                          {ASSET_CLASSES.map((cls) => <SelectItem key={cls} value={cls}>{ASSET_CLASS_LABEL[cls]}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="quick_currency">Devise</Label>
-                      <Select value={quickAddData.currency} onValueChange={(value) => setQuickAddData({ ...quickAddData, currency: value })}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
+                      <Label>Devise</Label>
+                      <Select value={quickAddData.currency} onValueChange={(v) => setQuickAddData({ ...quickAddData, currency: v })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="EUR">EUR</SelectItem>
                           <SelectItem value="USD">USD</SelectItem>
@@ -613,79 +546,52 @@ export default function Investments() {
                 </form>
               </DialogBody>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setQuickAddOpen(false)}>
-                  Annuler
-                </Button>
+                <Button type="button" variant="outline" onClick={() => setQuickAddOpen(false)}>Annuler</Button>
                 <Button type="submit" form="quick-add-form">Ajouter</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
 
-          <Dialog open={dcaDialogOpen} onOpenChange={(open) => {
-            setDcaDialogOpen(open);
-            if (!open) {
-              setEditingDca(null);
-              resetDcaForm();
-            }
-          }}>
+          <Dialog open={dcaDialogOpen} onOpenChange={(open) => { setDcaDialogOpen(open); if (!open) { setEditingDca(null); resetDcaForm(); } }}>
             <DialogTrigger asChild>
               <Button variant="secondary">
                 <TrendingUp className="mr-2 h-4 w-4" />
-                <span className="hidden sm:inline">Ajouter un DCA</span>
+                <span className="hidden sm:inline">DCA</span>
                 <span className="sm:hidden">DCA</span>
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle>{editingDca ? "Modifier le DCA" : "Nouveau DCA"}</DialogTitle>
-                <DialogDescription>
-                  Crée un plan d'investissement récurrent qui s'exécutera automatiquement
-                </DialogDescription>
+                <DialogDescription>Plan d'investissement récurrent</DialogDescription>
               </DialogHeader>
               <DialogBody>
                 <form id="dca-form" onSubmit={handleDcaSubmit} className="space-y-4">
-                  {/* Compte & Actif */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="dca_account">Compte *</Label>
-                      <Select value={dcaFormData.account_id} onValueChange={(value) => setDcaFormData({ ...dcaFormData, account_id: value })}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionne..." />
-                        </SelectTrigger>
+                      <Label>Compte *</Label>
+                      <Select value={dcaFormData.account_id} onValueChange={(v) => setDcaFormData({ ...dcaFormData, account_id: v })}>
+                        <SelectTrigger><SelectValue placeholder="Sélectionne..." /></SelectTrigger>
                         <SelectContent>
-                          {accounts.map((acc) => (
-                            <SelectItem key={acc.id} value={acc.id}>
-                              {acc.name} ({acc.type})
-                            </SelectItem>
-                          ))}
+                          {accounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.name} ({a.type})</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="dca_security">Actif *</Label>
-                      <Select value={dcaFormData.security_id} onValueChange={(value) => setDcaFormData({ ...dcaFormData, security_id: value })}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionne..." />
-                        </SelectTrigger>
+                      <Label>Actif *</Label>
+                      <Select value={dcaFormData.security_id} onValueChange={(v) => setDcaFormData({ ...dcaFormData, security_id: v })}>
+                        <SelectTrigger><SelectValue placeholder="Sélectionne..." /></SelectTrigger>
                         <SelectContent>
-                          {securities.map((sec) => (
-                            <SelectItem key={sec.id} value={sec.id}>
-                              {sec.symbol} - {sec.name}
-                            </SelectItem>
-                          ))}
+                          {securities.map((s) => <SelectItem key={s.id} value={s.id}>{s.symbol} - {s.name}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
-
-                  {/* Mode & Montant */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="dca_mode">Mode *</Label>
-                      <Select value={dcaFormData.investment_mode} onValueChange={(value: "amount" | "shares") => setDcaFormData({ ...dcaFormData, investment_mode: value })}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
+                      <Label>Mode *</Label>
+                      <Select value={dcaFormData.investment_mode} onValueChange={(v: "amount" | "shares") => setDcaFormData({ ...dcaFormData, investment_mode: v })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="amount">Montant fixe</SelectItem>
                           <SelectItem value="shares">Parts entières</SelectItem>
@@ -693,57 +599,27 @@ export default function Investments() {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="dca_amount">
-                        {dcaFormData.investment_mode === 'amount' ? "Montant (€) *" : "Budget max (€) *"}
-                      </Label>
-                      <Input
-                        id="dca_amount"
-                        type="number"
-                        step="0.01"
-                        min="1"
-                        value={dcaFormData.amount}
-                        onChange={(e) => setDcaFormData({ ...dcaFormData, amount: e.target.value })}
-                        required
-                      />
+                      <Label>{dcaFormData.investment_mode === 'amount' ? "Montant (€) *" : "Budget max (€) *"}</Label>
+                      <Input type="number" step="0.01" min="1" value={dcaFormData.amount} onChange={(e) => setDcaFormData({ ...dcaFormData, amount: e.target.value })} required />
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground -mt-2">
-                    {dcaFormData.investment_mode === 'amount'
-                      ? "Investit le montant exact, peut acheter des fractions"
-                      : "Achète des parts entières jusqu'au budget max"}
-                  </p>
-
-                  {/* Source de liquidité */}
                   {bridgeAccounts.length > 0 && (
                     <div className="space-y-2">
-                      <Label htmlFor="dca_source">Source de liquidité (optionnel)</Label>
-                      <Select
-                        value={dcaFormData.source_account_id || "none"}
-                        onValueChange={(value) => setDcaFormData({ ...dcaFormData, source_account_id: value === "none" ? "" : value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Aucune" />
-                        </SelectTrigger>
+                      <Label>Source de liquidité</Label>
+                      <Select value={dcaFormData.source_account_id || "none"} onValueChange={(v) => setDcaFormData({ ...dcaFormData, source_account_id: v === "none" ? "" : v })}>
+                        <SelectTrigger><SelectValue placeholder="Aucune" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">Aucune</SelectItem>
-                          {bridgeAccounts.map((acc) => (
-                            <SelectItem key={acc.id} value={acc.id}>
-                              {acc.name} ({acc.balance?.toFixed(2) || 0} {acc.currency})
-                            </SelectItem>
-                          ))}
+                          {bridgeAccounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.name} ({a.balance?.toFixed(2) || 0} {a.currency})</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
                   )}
-
-                  {/* Fréquence & Paramètres */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="dca_frequency">Fréquence *</Label>
-                      <Select value={dcaFormData.frequency} onValueChange={(value: any) => setDcaFormData({ ...dcaFormData, frequency: value })}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
+                      <Label>Fréquence *</Label>
+                      <Select value={dcaFormData.frequency} onValueChange={(v: any) => setDcaFormData({ ...dcaFormData, frequency: v })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="weekly">Hebdomadaire</SelectItem>
                           <SelectItem value="monthly">Mensuel</SelectItem>
@@ -751,84 +627,48 @@ export default function Investments() {
                         </SelectContent>
                       </Select>
                     </div>
-
                     {dcaFormData.frequency === 'weekly' && (
                       <div className="space-y-2">
-                        <Label htmlFor="dca_weekday">Jour *</Label>
-                        <Select value={dcaFormData.weekday} onValueChange={(value) => setDcaFormData({ ...dcaFormData, weekday: value })}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
+                        <Label>Jour *</Label>
+                        <Select value={dcaFormData.weekday} onValueChange={(v) => setDcaFormData({ ...dcaFormData, weekday: v })}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="1">Lundi</SelectItem>
                             <SelectItem value="2">Mardi</SelectItem>
                             <SelectItem value="3">Mercredi</SelectItem>
                             <SelectItem value="4">Jeudi</SelectItem>
                             <SelectItem value="5">Vendredi</SelectItem>
-                            <SelectItem value="6">Samedi</SelectItem>
-                            <SelectItem value="0">Dimanche</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                     )}
-
                     {dcaFormData.frequency === 'monthly' && (
                       <div className="space-y-2">
-                        <Label htmlFor="dca_monthday">Jour du mois *</Label>
-                        <Input
-                          id="dca_monthday"
-                          type="number"
-                          min="1"
-                          max="31"
-                          value={dcaFormData.monthday}
-                          onChange={(e) => setDcaFormData({ ...dcaFormData, monthday: e.target.value })}
-                          required
-                        />
+                        <Label>Jour du mois *</Label>
+                        <Input type="number" min="1" max="31" value={dcaFormData.monthday} onChange={(e) => setDcaFormData({ ...dcaFormData, monthday: e.target.value })} required />
                       </div>
                     )}
-
                     {dcaFormData.frequency === 'interval' && (
                       <div className="space-y-2">
-                        <Label htmlFor="dca_interval">Tous les N jours *</Label>
-                        <Input
-                          id="dca_interval"
-                          type="number"
-                          min="1"
-                          value={dcaFormData.interval_days}
-                          onChange={(e) => setDcaFormData({ ...dcaFormData, interval_days: e.target.value })}
-                          required
-                        />
+                        <Label>Tous les N jours *</Label>
+                        <Input type="number" min="1" value={dcaFormData.interval_days} onChange={(e) => setDcaFormData({ ...dcaFormData, interval_days: e.target.value })} required />
                       </div>
                     )}
                   </div>
-
-                  {/* Date de début & Actif */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+                  <div className="grid grid-cols-2 gap-4 items-end">
                     <div className="space-y-2">
-                      <Label htmlFor="dca_start">Date de début *</Label>
-                      <Input
-                        id="dca_start"
-                        type="date"
-                        value={dcaFormData.start_date}
-                        onChange={(e) => setDcaFormData({ ...dcaFormData, start_date: e.target.value })}
-                        required
-                      />
+                      <Label>Date de début *</Label>
+                      <Input type="date" value={dcaFormData.start_date} onChange={(e) => setDcaFormData({ ...dcaFormData, start_date: e.target.value })} required />
                     </div>
                     <div className="flex items-center space-x-2 pb-2">
-                      <Switch
-                        id="dca_active"
-                        checked={dcaFormData.active}
-                        onCheckedChange={(checked) => setDcaFormData({ ...dcaFormData, active: checked })}
-                      />
-                      <Label htmlFor="dca_active">Actif</Label>
+                      <Switch checked={dcaFormData.active} onCheckedChange={(c) => setDcaFormData({ ...dcaFormData, active: c })} />
+                      <Label>Actif</Label>
                     </div>
                   </div>
                 </form>
               </DialogBody>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setDcaDialogOpen(false)}>
-                  Annuler
-                </Button>
+                <Button type="button" variant="outline" onClick={() => setDcaDialogOpen(false)}>Annuler</Button>
                 <Button type="submit" form="dca-form">{editingDca ? "Mettre à jour" : "Créer"}</Button>
               </DialogFooter>
             </DialogContent>
@@ -840,12 +680,42 @@ export default function Investments() {
         </div>
       </div>
 
-      {/* Holdings Section */}
-      <HoldingsSection
-        holdings={enrichedHoldings}
-        onEdit={handleEditHolding}
-        onDelete={handleDeleteHolding}
+      {/* Section A — Hero */}
+      <PortfolioHero
+        totalValue={totalValue}
+        totalInvested={totalInvested}
+        pnl={pnl}
+        pnlPct={pnlPct}
+        lastUpdated={lastUpdated}
+        snapshots={snapshots}
       />
+
+      {/* Section B — Broker Cards */}
+      {enrichedHoldings.length > 0 && (
+        <BrokerCards
+          holdings={enrichedHoldings}
+          totalValue={totalValue}
+          selectedBroker={selectedBroker}
+          onSelectBroker={setSelectedBroker}
+        />
+      )}
+
+      {/* Section C — Positions Table */}
+      {enrichedHoldings.length > 0 ? (
+        <PositionsTable
+          holdings={enrichedHoldings}
+          selectedBroker={selectedBroker}
+          onClearBroker={() => setSelectedBroker(null)}
+          onEdit={handleEditHolding}
+          onDelete={handleDeleteHolding}
+          priceMap={priceUpdatedMap}
+          brokerNameMap={brokerNameMap}
+        />
+      ) : (
+        <div className="rounded-xl bg-card p-12 text-center">
+          <p className="text-muted-foreground">Aucune position. Ajoute ton premier investissement pour commencer.</p>
+        </div>
+      )}
 
       {/* DCA Section */}
       <DcaSection
@@ -858,80 +728,47 @@ export default function Investments() {
       />
 
       {/* Holding Edit Dialog */}
-      <Dialog open={holdingDialogOpen} onOpenChange={(open) => {
-        setHoldingDialogOpen(open);
-        if (!open) {
-          setEditingHolding(null);
-          resetHoldingForm();
-        }
-      }}>
+      <Dialog open={holdingDialogOpen} onOpenChange={(open) => { setHoldingDialogOpen(open); if (!open) { setEditingHolding(null); resetHoldingForm(); } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Modifier la position</DialogTitle>
           </DialogHeader>
           <DialogBody>
             <form id="holding-edit-form" onSubmit={handleHoldingSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="edit_account">Compte *</Label>
-                  <Select value={holdingFormData.account_id} onValueChange={(value) => setHoldingFormData({ ...holdingFormData, account_id: value })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sélectionne..." />
-                    </SelectTrigger>
+                  <Label>Compte *</Label>
+                  <Select value={holdingFormData.account_id} onValueChange={(v) => setHoldingFormData({ ...holdingFormData, account_id: v })}>
+                    <SelectTrigger><SelectValue placeholder="Sélectionne..." /></SelectTrigger>
                     <SelectContent>
-                      {accounts.map((acc) => (
-                        <SelectItem key={acc.id} value={acc.id}>
-                          {acc.name} ({acc.type})
-                        </SelectItem>
-                      ))}
+                      {accounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.name} ({a.type})</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="edit_security">Actif *</Label>
-                  <Select value={holdingFormData.security_id} onValueChange={(value) => setHoldingFormData({ ...holdingFormData, security_id: value })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sélectionne..." />
-                    </SelectTrigger>
+                  <Label>Actif *</Label>
+                  <Select value={holdingFormData.security_id} onValueChange={(v) => setHoldingFormData({ ...holdingFormData, security_id: v })}>
+                    <SelectTrigger><SelectValue placeholder="Sélectionne..." /></SelectTrigger>
                     <SelectContent>
-                      {securities.map((sec) => (
-                        <SelectItem key={sec.id} value={sec.id}>
-                          {sec.symbol} - {sec.name}
-                        </SelectItem>
-                      ))}
+                      {securities.map((s) => <SelectItem key={s.id} value={s.id}>{s.symbol} - {s.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="edit_shares">Nombre de parts *</Label>
-                  <Input
-                    id="edit_shares"
-                    type="number"
-                    step="0.00000001"
-                    value={holdingFormData.shares}
-                    onChange={(e) => setHoldingFormData({ ...holdingFormData, shares: e.target.value })}
-                    required
-                  />
+                  <Label>Nombre de parts *</Label>
+                  <Input type="number" step="0.00000001" value={holdingFormData.shares} onChange={(e) => setHoldingFormData({ ...holdingFormData, shares: e.target.value })} required />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="edit_amount">Montant investi (€)</Label>
-                  <Input
-                    id="edit_amount"
-                    type="number"
-                    step="0.01"
-                    value={holdingFormData.amount_invested_eur}
-                    onChange={(e) => setHoldingFormData({ ...holdingFormData, amount_invested_eur: e.target.value })}
-                  />
+                  <Label>Montant investi (€)</Label>
+                  <Input type="number" step="0.01" value={holdingFormData.amount_invested_eur} onChange={(e) => setHoldingFormData({ ...holdingFormData, amount_invested_eur: e.target.value })} />
                 </div>
               </div>
             </form>
           </DialogBody>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setHoldingDialogOpen(false)}>
-              Annuler
-            </Button>
+            <Button type="button" variant="outline" onClick={() => setHoldingDialogOpen(false)}>Annuler</Button>
             <Button type="submit" form="holding-edit-form">Mettre à jour</Button>
           </DialogFooter>
         </DialogContent>
