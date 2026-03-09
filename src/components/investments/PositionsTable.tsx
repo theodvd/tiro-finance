@@ -13,7 +13,7 @@ interface PositionsTableProps {
   onClearBroker: () => void;
   onEdit: (holding: EnrichedHolding) => void;
   onDelete: (id: string) => void;
-  priceMap?: Record<string, string>; // security_id -> updated_at
+  priceMap?: Record<string, string>;
   brokerNameMap?: Record<string, string>;
 }
 
@@ -69,16 +69,16 @@ export function PositionsTable({
       />
 
       {filtered.length === 0 ? (
-        <div className="rounded-xl bg-card p-12 text-center">
+        <div className="rounded-2xl bg-card p-12 text-center shadow-card">
           <p className="text-muted-foreground">Aucune position trouvée avec ces filtres.</p>
         </div>
       ) : (
         <>
           {/* Desktop Table */}
-          <div className="hidden sm:block rounded-xl bg-card overflow-hidden">
+          <div className="hidden sm:block rounded-2xl bg-card overflow-hidden shadow-card">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border">
+                <tr className="bg-background">
                   <th className="text-left p-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Actif</th>
                   <th className="text-left p-4 text-xs font-medium text-muted-foreground uppercase tracking-wider hidden lg:table-cell">Compte</th>
                   <th className="text-right p-4 text-xs font-medium text-muted-foreground uppercase tracking-wider hidden md:table-cell">Qté</th>
@@ -109,16 +109,24 @@ export function PositionsTable({
             {filtered.map((h) => {
               const isPos = h.pnl >= 0;
               const badge = h.security.asset_class;
+              const badgeMap: Record<string, { bg: string; text: string }> = {
+                CRYPTO: { bg: 'bg-amber-50', text: 'text-amber-700' },
+                ETF: { bg: 'bg-violet-50', text: 'text-violet-700' },
+                STOCK: { bg: 'bg-blue-50', text: 'text-blue-700' },
+              };
+              const b = badgeMap[badge];
               return (
-                <div key={h.id} className="rounded-xl bg-card p-4">
+                <div key={h.id} className="rounded-2xl bg-card p-4 shadow-card">
                   <div className="flex items-start justify-between">
                     <div>
                       <p className="font-semibold text-sm">{h.security.name}</p>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <span className="text-xs text-muted-foreground">{h.security.symbol}</span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-md font-medium bg-primary/15 text-primary">
-                          {badge}
-                        </span>
+                        {b && (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${b.bg} ${b.text}`}>
+                            {badge}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <DropdownMenu>
