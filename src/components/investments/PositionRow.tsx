@@ -10,12 +10,12 @@ interface PositionRowProps {
   priceUpdatedAt?: string;
 }
 
-const ASSET_BADGES: Record<string, { label: string; cls: string }> = {
-  CRYPTO: { label: 'Crypto', cls: 'bg-accent/15 text-accent' },
-  ETF: { label: 'ETF', cls: 'bg-primary/15 text-primary' },
-  STOCK: { label: 'Action', cls: 'bg-chart-3/20 text-chart-3' },
-  BOND: { label: 'Obligation', cls: 'bg-warning/15 text-warning' },
-  REIT: { label: 'REIT', cls: 'bg-chart-4/20 text-chart-4' },
+const ASSET_BADGES: Record<string, { label: string; bg: string; text: string }> = {
+  CRYPTO: { label: 'Crypto', bg: 'bg-amber-50', text: 'text-amber-700' },
+  ETF: { label: 'ETF', bg: 'bg-violet-50', text: 'text-violet-700' },
+  STOCK: { label: 'Action', bg: 'bg-blue-50', text: 'text-blue-700' },
+  BOND: { label: 'Obligation', bg: 'bg-orange-50', text: 'text-orange-700' },
+  REIT: { label: 'REIT', bg: 'bg-emerald-50', text: 'text-emerald-700' },
 };
 
 export function PositionRow({ holding, onEdit, onDelete, priceUpdatedAt }: PositionRowProps) {
@@ -31,11 +31,10 @@ export function PositionRow({ holding, onEdit, onDelete, priceUpdatedAt }: Posit
     ? Date.now() - new Date(priceUpdatedAt).getTime() > 24 * 60 * 60 * 1000
     : false;
 
-  // P&L bar width (cap at 100%)
   const barWidth = Math.min(Math.abs(pnlPct), 100);
 
   return (
-    <tr className="group transition-colors hover:bg-secondary/30">
+    <tr className="group transition-colors hover:bg-background">
       {/* Asset */}
       <td className="p-3 sm:p-4">
         <div className="flex items-center gap-2">
@@ -44,7 +43,7 @@ export function PositionRow({ holding, onEdit, onDelete, priceUpdatedAt }: Posit
             <div className="flex items-center gap-1.5 mt-0.5">
               <span className="text-xs text-muted-foreground">{security.symbol}</span>
               {badge && (
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium ${badge.cls}`}>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${badge.bg} ${badge.text}`}>
                   {badge.label}
                 </span>
               )}
@@ -53,22 +52,22 @@ export function PositionRow({ holding, onEdit, onDelete, priceUpdatedAt }: Posit
         </div>
       </td>
 
-      {/* Broker - hidden on mobile */}
+      {/* Broker */}
       <td className="p-4 hidden lg:table-cell">
         <span className="text-sm">{account.name}</span>
       </td>
 
-      {/* Quantity - hidden on mobile */}
+      {/* Quantity */}
       <td className="p-4 hidden md:table-cell text-right tabular-nums text-sm">
         {isCrypto ? shares.toFixed(6) : shares.toFixed(shares % 1 === 0 ? 0 : 2)}
       </td>
 
-      {/* PRU - hidden on mobile */}
+      {/* PRU */}
       <td className="p-4 hidden lg:table-cell text-right tabular-nums text-sm">
         {fmtEUR(pru)}
       </td>
 
-      {/* Current price - hidden on mobile */}
+      {/* Current price */}
       <td className={`p-4 hidden lg:table-cell text-right tabular-nums text-sm ${priceStale ? 'text-warning' : ''}`}>
         {fmtEUR(price)}
       </td>
@@ -82,8 +81,8 @@ export function PositionRow({ holding, onEdit, onDelete, priceUpdatedAt }: Posit
       <td className="p-3 sm:p-4 text-right">
         <div className="relative inline-flex items-center justify-end w-full">
           <div
-            className={`absolute right-0 h-6 rounded-md opacity-15 ${isPos ? 'bg-positive' : 'bg-negative'}`}
-            style={{ width: `${barWidth}%` }}
+            className={`absolute right-0 h-6 rounded-md ${isPos ? 'bg-positive' : 'bg-negative'}`}
+            style={{ width: `${barWidth}%`, opacity: 0.1 }}
           />
           <span className={`relative text-sm font-semibold tabular-nums ${isPos ? 'text-positive' : 'text-negative'}`}>
             {fmtPct(pnlPct)}
@@ -91,7 +90,7 @@ export function PositionRow({ holding, onEdit, onDelete, priceUpdatedAt }: Posit
         </div>
       </td>
 
-      {/* P&L amount - hidden on small */}
+      {/* P&L amount */}
       <td className={`p-4 hidden sm:table-cell text-right tabular-nums text-sm font-medium ${isPos ? 'text-positive' : 'text-negative'}`}>
         {isPos ? '+' : ''}{fmtEUR(pnl)}
       </td>

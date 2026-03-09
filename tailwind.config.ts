@@ -77,10 +77,15 @@ export default {
         warning: "hsl(var(--warning))",
       },
       borderRadius: {
+        "2xl": "1rem",
         xl: "0.75rem",
         lg: "0.5rem",
         md: "calc(0.5rem - 2px)",
         sm: "calc(0.5rem - 4px)",
+      },
+      boxShadow: {
+        card: "0 2px 12px rgba(0, 0, 0, 0.04)",
+        "card-hover": "0 4px 20px rgba(0, 0, 0, 0.08)",
       },
       keyframes: {
         "accordion-down": {
