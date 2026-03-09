@@ -62,11 +62,11 @@ export function BrokerCards({ holdings, totalValue, selectedBroker, onSelectBrok
           <button
             key={b.accountId}
             onClick={() => onSelectBroker(active ? null : b.accountId)}
-            className={`flex-shrink-0 min-w-[200px] rounded-xl p-4 text-left transition-all duration-200
-              ${active ? 'bg-primary/10 ring-2 ring-primary' : 'bg-card hover:bg-secondary/50'}
+            className={`flex-shrink-0 min-w-[200px] rounded-2xl p-4 text-left transition-all duration-200 border bg-card shadow-card hover:shadow-card-hover
+              ${active ? 'border-primary shadow-[0_0_0_3px_hsl(248_76%_62%/0.1)]' : 'border-border'}
             `}
           >
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-3">
               {isCrypto(b.type) ? (
                 <Wallet className="w-4 h-4 text-accent" />
               ) : (
@@ -74,8 +74,8 @@ export function BrokerCards({ holdings, totalValue, selectedBroker, onSelectBrok
               )}
               <span className="text-sm font-semibold truncate">{b.name}</span>
             </div>
-            <p className="text-lg font-bold tabular-nums">{fmtEUR(b.totalValue)}</p>
-            <p className={`text-xs font-semibold tabular-nums ${isPos ? 'text-positive' : 'text-negative'}`}>
+            <p className="text-xl font-bold tabular-nums">{fmtEUR(b.totalValue)}</p>
+            <p className={`text-sm font-semibold tabular-nums mt-0.5 ${isPos ? 'text-positive' : 'text-negative'}`}>
               {isPos ? '+' : ''}{fmtEUR(b.pnl)} ({fmtPct(b.pnlPct)})
             </p>
             <div className="mt-3 flex items-center gap-2">
