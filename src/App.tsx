@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
-import { Layout } from "./components/Layout";
+import { AppLayout } from "./components/layout/AppLayout";
 
 const Auth = lazy(() => import("./pages/Auth"));
 const Portfolio = lazy(() => import("./pages/Portfolio"));
@@ -24,13 +24,19 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 2 * 60 * 1000, // 2 minutes
-      gcTime: 10 * 60 * 1000, // 10 minutes
+      staleTime: 2 * 60 * 1000,
+      gcTime: 10 * 60 * 1000,
       refetchOnWindowFocus: false,
       retry: 1,
     },
   },
 });
+
+const ProtectedPage = ({ children }: { children: React.ReactNode }) => (
+  <ProtectedRoute>
+    <AppLayout>{children}</AppLayout>
+  </ProtectedRoute>
+);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -42,107 +48,16 @@ const App = () => (
           <Suspense fallback={null}>
             <Routes>
               <Route path="/auth" element={<Auth />} />
-              <Route
-                path="/"
-                element={
-                  <ProtectedRoute>
-                    <Layout>
-                      <Portfolio />
-                    </Layout>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/investments"
-                element={
-                  <ProtectedRoute>
-                    <Layout>
-                      <Investments />
-                    </Layout>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/insights"
-                element={
-                  <ProtectedRoute>
-                    <Layout>
-                      <Insights />
-                    </Layout>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/import"
-                element={
-                  <ProtectedRoute>
-                    <Layout>
-                      <Import />
-                    </Layout>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/diversification"
-                element={
-                  <ProtectedRoute>
-                    <Layout>
-                      <Diversification />
-                    </Layout>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/decisions"
-                element={
-                  <ProtectedRoute>
-                    <Layout>
-                      <Decisions />
-                    </Layout>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/decisions/:decisionId"
-                element={
-                  <ProtectedRoute>
-                    <Layout>
-                      <DecisionDetail />
-                    </Layout>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/monthly-review"
-                element={
-                  <ProtectedRoute>
-                    <Layout>
-                      <MonthlyReview />
-                    </Layout>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/profile"
-                element={
-                  <ProtectedRoute>
-                    <Layout>
-                      <Profile />
-                    </Layout>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/settings"
-                element={
-                  <ProtectedRoute>
-                    <Layout>
-                      <Settings />
-                    </Layout>
-                  </ProtectedRoute>
-                }
-              />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="/" element={<ProtectedPage><Portfolio /></ProtectedPage>} />
+              <Route path="/investments" element={<ProtectedPage><Investments /></ProtectedPage>} />
+              <Route path="/insights" element={<ProtectedPage><Insights /></ProtectedPage>} />
+              <Route path="/import" element={<ProtectedPage><Import /></ProtectedPage>} />
+              <Route path="/diversification" element={<ProtectedPage><Diversification /></ProtectedPage>} />
+              <Route path="/decisions" element={<ProtectedPage><Decisions /></ProtectedPage>} />
+              <Route path="/decisions/:decisionId" element={<ProtectedPage><DecisionDetail /></ProtectedPage>} />
+              <Route path="/monthly-review" element={<ProtectedPage><MonthlyReview /></ProtectedPage>} />
+              <Route path="/profile" element={<ProtectedPage><Profile /></ProtectedPage>} />
+              <Route path="/settings" element={<ProtectedPage><Settings /></ProtectedPage>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>
