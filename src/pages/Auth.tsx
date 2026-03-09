@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -23,113 +22,71 @@ export default function Auth() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (user) {
-      navigate("/");
-    }
+    if (user) navigate("/");
   }, [user, navigate]);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    
-    // Validate input data
     const validationResult = authSchema.safeParse({ email, password });
     if (!validationResult.success) {
-      const errors = validationResult.error.errors.map(e => e.message).join(", ");
-      toast.error(errors);
+      toast.error(validationResult.error.errors.map(e => e.message).join(", "));
       setLoading(false);
       return;
     }
-
     const { error } = await signUp(validationResult.data.email, validationResult.data.password);
-    
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success("Account created! You can now sign in.");
-    }
-    
+    if (error) toast.error(error.message);
+    else toast.success("Account created! You can now sign in.");
     setLoading(false);
   };
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    
-    // Validate input data
     const validationResult = authSchema.safeParse({ email, password });
     if (!validationResult.success) {
-      const errors = validationResult.error.errors.map(e => e.message).join(", ");
-      toast.error(errors);
+      toast.error(validationResult.error.errors.map(e => e.message).join(", "));
       setLoading(false);
       return;
     }
-
     const { error } = await signIn(validationResult.data.email, validationResult.data.password);
-    
-    if (error) {
-      toast.error(error.message);
-    }
-    
+    if (error) toast.error(error.message);
     setLoading(false);
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-accent/5 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md">
         <div className="flex items-center justify-center mb-8">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-primary rounded-lg">
-              <TrendingUp className="w-6 h-6 text-primary-foreground" />
-            </div>
-            <h1 className="text-2xl font-bold">Invest Dashboard</h1>
-          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Solen</h1>
         </div>
 
         <Tabs defaultValue="signin" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="signin">Sign In</TabsTrigger>
-            <TabsTrigger value="signup">Sign Up</TabsTrigger>
+            <TabsTrigger value="signin">Connexion</TabsTrigger>
+            <TabsTrigger value="signup">Inscription</TabsTrigger>
           </TabsList>
 
           <TabsContent value="signin">
-            <Card>
+            <Card className="rounded-2xl shadow-card border-border">
               <CardHeader>
-                <CardTitle>Welcome back</CardTitle>
-                <CardDescription>
-                  Sign in to your investment dashboard
-                </CardDescription>
+                <CardTitle>Bon retour !</CardTitle>
+                <CardDescription>Connectez-vous à votre tableau de bord</CardDescription>
               </CardHeader>
               <form onSubmit={handleSignIn}>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="signin-email">Email</Label>
-                    <Input
-                      id="signin-email"
-                      type="email"
-                      placeholder="you@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      disabled={loading}
-                      required
-                    />
+                    <Input id="signin-email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={loading} required />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="signin-password">Password</Label>
-                    <Input
-                      id="signin-password"
-                      type="password"
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      disabled={loading}
-                      required
-                    />
+                    <Label htmlFor="signin-password">Mot de passe</Label>
+                    <Input id="signin-password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} disabled={loading} required />
                   </div>
                 </CardContent>
                 <CardFooter>
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    {loading ? "Signing in..." : "Sign In"}
+                  <Button type="submit" className="w-full rounded-xl" disabled={loading}>
+                    {loading ? "Connexion..." : "Se connecter"}
                   </Button>
                 </CardFooter>
               </form>
@@ -137,47 +94,26 @@ export default function Auth() {
           </TabsContent>
 
           <TabsContent value="signup">
-            <Card>
+            <Card className="rounded-2xl shadow-card border-border">
               <CardHeader>
-                <CardTitle>Create account</CardTitle>
-                <CardDescription>
-                  Start tracking your investments today
-                </CardDescription>
+                <CardTitle>Créer un compte</CardTitle>
+                <CardDescription>Commencez à suivre vos investissements</CardDescription>
               </CardHeader>
               <form onSubmit={handleSignUp}>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="signup-email">Email</Label>
-                    <Input
-                      id="signup-email"
-                      type="email"
-                      placeholder="you@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      disabled={loading}
-                      required
-                    />
+                    <Input id="signup-email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={loading} required />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="signup-password">Password</Label>
-                    <Input
-                      id="signup-password"
-                      type="password"
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      disabled={loading}
-                      required
-                      minLength={6}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Minimum 6 characters
-                    </p>
+                    <Label htmlFor="signup-password">Mot de passe</Label>
+                    <Input id="signup-password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} disabled={loading} required minLength={6} />
+                    <p className="text-xs text-muted-foreground">Minimum 6 caractères</p>
                   </div>
                 </CardContent>
                 <CardFooter>
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    {loading ? "Creating account..." : "Sign Up"}
+                  <Button type="submit" className="w-full rounded-xl" disabled={loading}>
+                    {loading ? "Création..." : "S'inscrire"}
                   </Button>
                 </CardFooter>
               </form>
