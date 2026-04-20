@@ -190,5 +190,5 @@ git checkout main && git merge feat/a1-nettoyage-repo
 - [x] A3 — Navigation unifiée (toggle Pro/Perso, renommage Solen→Solvio)
 - [x] A4 — Migrations Supabase (fiscal_profiles, invoices, social_contributions, tax_provisions, pro_cashflow_entries)
 - [x] A5 — Onboarding fiscal (useFiscalProfile, FiscalProfileForm, onglet Fiscal dans Profile, bannière Dashboard)
-- [ ] A6 — Hook `useNetInvestable` (structure)
+- [x] A6 — `fiscalEngine` (calcul pur) + `useNetInvestable` (hook React, micro_bnc/bic, VL + barème estimé)
 - [ ] A7 — Smoke tests parsers
