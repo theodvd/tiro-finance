@@ -636,6 +636,60 @@ export type Database = {
         }
         Relationships: []
       }
+      social_contributions: {
+        Row: {
+          amount_due: number
+          amount_paid: number
+          contribution_rate: number
+          created_at: string
+          declared_revenue: number
+          id: string
+          notes: string | null
+          paid_at: string | null
+          period_end: string
+          period_start: string
+          source: string
+          status: string
+          updated_at: string
+          user_id: string
+          year: number
+        }
+        Insert: {
+          amount_due: number
+          amount_paid?: number
+          contribution_rate: number
+          created_at?: string
+          declared_revenue: number
+          id?: string
+          notes?: string | null
+          paid_at?: string | null
+          period_end: string
+          period_start: string
+          source?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+          year?: number
+        }
+        Update: {
+          amount_due?: number
+          amount_paid?: number
+          contribution_rate?: number
+          created_at?: string
+          declared_revenue?: number
+          id?: string
+          notes?: string | null
+          paid_at?: string | null
+          period_end?: string
+          period_start?: string
+          source?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+          year?: number
+        }
+        Relationships: []
+      }
       transactions: {
         Row: {
           account_id: string
