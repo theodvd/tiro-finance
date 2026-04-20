@@ -380,6 +380,57 @@ export type Database = {
           },
         ]
       }
+      invoices: {
+        Row: {
+          amount_ht: number
+          client_name: string
+          created_at: string
+          due_date: string | null
+          id: string
+          invoice_number: string | null
+          issue_date: string
+          notes: string | null
+          paid_at: string | null
+          status: string
+          tva_rate: number
+          updated_at: string
+          user_id: string
+          year: number
+        }
+        Insert: {
+          amount_ht: number
+          client_name: string
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          invoice_number?: string | null
+          issue_date: string
+          notes?: string | null
+          paid_at?: string | null
+          status?: string
+          tva_rate?: number
+          updated_at?: string
+          user_id: string
+          year?: number
+        }
+        Update: {
+          amount_ht?: number
+          client_name?: string
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          invoice_number?: string | null
+          issue_date?: string
+          notes?: string | null
+          paid_at?: string | null
+          status?: string
+          tva_rate?: number
+          updated_at?: string
+          user_id?: string
+          year?: number
+        }
+        Relationships: []
+      }
       market_data: {
         Row: {
           eur_fx: number
