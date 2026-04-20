@@ -154,27 +154,44 @@ export function useURSSAFDeclarations() {
       if (contribError) throw contribError;
       const contribId = contribData.id;
 
-      // 2. Insert tax_provisions (IR du mois)
-      // Upsert sur year + quarter + provision_type pour éviter les doublons
+      // 2. Insert/update tax_provisions (IR du mois)
+      // Pattern check-then-insert/update : la table n'a pas de contrainte UNIQUE
+      // sur (user_id, year, quarter, provision_type), donc on ne peut pas utiliser
+      // upsert. On vérifie manuellement l'existence avant d'insérer ou mettre à jour.
       if (result.ir > 0) {
-        const { error: taxError } = await supabase
+        const { data: existingTax } = await supabase
           .from('tax_provisions')
-          .upsert(
-            {
-              user_id: user.id,
-              year: result.year,
-              quarter,
-              provision_type: 'ir',
-              provision_amount: result.ir,
-              ir_method: result.versement_liberatoire
-                ? 'versement_liberatoire'
-                : 'bareme_progressif',
-              estimated_taxable_income: result.ca * (1 - (result.regime === 'micro_bnc' ? 0.34 : 0.5)),
-              status: 'estimated',
-              updated_at: now,
-            },
-            { onConflict: 'user_id,year,quarter,provision_type' }
-          );
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('year', result.year)
+          .eq('quarter', quarter)
+          .eq('provision_type', 'ir')
+          .maybeSingle();
+
+        const taxPayload = {
+          provision_amount: result.ir,
+          ir_method: result.versement_liberatoire
+            ? 'versement_liberatoire'
+            : 'bareme_progressif',
+          estimated_taxable_income: result.ca * (1 - (result.regime === 'micro_bnc' ? 0.34 : 0.5)),
+          status: 'estimated',
+          updated_at: now,
+        };
+
+        const { error: taxError } = existingTax
+          ? await supabase
+              .from('tax_provisions')
+              .update(taxPayload)
+              .eq('id', existingTax.id)
+          : await supabase
+              .from('tax_provisions')
+              .insert({
+                user_id: user.id,
+                year: result.year,
+                quarter,
+                provision_type: 'ir',
+                ...taxPayload,
+              });
 
         if (taxError) {
           // Rollback : supprimer la contribution créée
