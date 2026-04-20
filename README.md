@@ -55,6 +55,8 @@ npm run dev
 ├── solvio-tech/           ← SOURCE DE VÉRITÉ (projet Lovable actif)
 │   ├── src/
 │   │   ├── pages/         ← Pages React (une page = une route)
+│   │   │   ├── pro/       ← Pages section /pro (Invoices, Charges, Tax)
+│   │   │   └── (perso)    ← Pages section /perso à la racine (Portfolio, Investments, etc.)
 │   │   ├── components/    ← Composants UI
 │   │   │   ├── dashboard/ ← Widgets du dashboard patrimoine
 │   │   │   ├── investments/  ← Holdings, DCA
@@ -92,18 +94,39 @@ npm run dev
 
 ## Routes actuelles
 
+### Section professionnelle (`/pro`)
+| Route | Page | Rôle |
+|---|---|---|
+| `/pro/invoices` | pro/Invoices.tsx | Factures émises *(Phase B)* |
+| `/pro/charges` | pro/Charges.tsx | Cotisations URSSAF *(Phase B)* |
+| `/pro/tax` | pro/Tax.tsx | Provisions fiscales IR/CFE *(Phase B)* |
+
+### Section personnelle (`/perso`)
+| Route | Page | Rôle |
+|---|---|---|
+| `/perso/portfolio` | Portfolio.tsx | Dashboard patrimoine (P&L, allocation, liquidité) |
+| `/perso/investments` | Investments.tsx | Holdings, DCA, ajout de position |
+| `/perso/insights` | Insights.tsx | Analytics : performance, tendances |
+| `/perso/diversification` | Diversification.tsx | Score de diversification (HHI) |
+
+### Transversal
 | Route | Page | Rôle |
 |---|---|---|
 | `/auth` | Auth.tsx | Connexion / inscription |
-| `/` | Portfolio.tsx | Dashboard patrimoine (P&L, allocation, liquidité) |
-| `/investments` | Investments.tsx | Holdings, DCA, ajout de position |
-| `/insights` | Insights.tsx | Analytics : performance, tendances |
-| `/diversification` | Diversification.tsx | Score de diversification (HHI) |
+| `/dashboard` | Dashboard.tsx | Vue unifiée pro×perso *(widget net investissable en Phase B)* |
 | `/import` | Import.tsx | Import : Trade Republic (PDF), Bourse Direct (XLSX), Coinbase (CSV) |
 | `/decisions` | Decisions.tsx | Journal de décisions d'investissement |
 | `/monthly-review` | MonthlyReview.tsx | Revue mensuelle |
-| `/profile` | Profile.tsx | Profil investisseur MIFID II |
+| `/profile` | Profile.tsx | Profil investisseur MIFID II + fiscal *(onglet fiscal en A5)* |
 | `/settings` | Settings.tsx | Paramètres |
+
+### Redirects (anciennes URLs conservées)
+| Ancienne URL | Redirige vers |
+|---|---|
+| `/` | `/dashboard` |
+| `/investments` | `/perso/investments` |
+| `/insights` | `/perso/insights` |
+| `/diversification` | `/perso/diversification` |
 
 ---
 
@@ -163,7 +186,7 @@ git checkout main && git merge feat/a1-nettoyage-repo
 ## Roadmap Phase A (en cours)
 
 - [x] A1 — Nettoyage repo (`.env.example`, types centralisés, README)
-- [ ] A2 — Restructuration des routes (`/pro/*`, `/perso/*`)
+- [x] A2 — Restructuration des routes (`/pro/*`, `/perso/*`, redirects)
 - [ ] A3 — Sidebar unifiée (Pro / Personnel / Dashboard)
 - [ ] A4 — Migrations Supabase (tables pro)
 - [ ] A5 — Onboarding fiscal
