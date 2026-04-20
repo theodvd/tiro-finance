@@ -20,7 +20,7 @@ const currentMonthLabel = new Intl.DateTimeFormat("fr-FR", {
  */
 export default function Dashboard() {
   const { hasProfile, isLoading } = useFiscalProfile();
-  const { breakdown, usingFallbackRevenue, isReady } = useNetInvestable();
+  const { breakdown, revenueSource, paidInvoicesCount, isReady } = useNetInvestable();
 
   return (
     <div className="space-y-8">
@@ -155,10 +155,16 @@ export default function Dashboard() {
 
             {/* Notes contextuelles */}
             <div className="space-y-1.5">
-              {usingFallbackRevenue && (
+              {revenueSource === 'real' && (
+                <p className="text-xs text-green-700 flex items-center gap-1.5">
+                  <Info className="w-3 h-3 shrink-0" />
+                  Basé sur {paidInvoicesCount} facture{paidInvoicesCount > 1 ? 's' : ''} payée{paidInvoicesCount > 1 ? 's' : ''} ce mois.
+                </p>
+              )}
+              {revenueSource === 'target' && (
                 <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                   <Info className="w-3 h-3 shrink-0" />
-                  Basé sur votre CA cible annuel ÷ 12 — les factures réelles seront disponibles en Phase B.
+                  Basé sur votre CA cible annuel ÷ 12 — aucune facture encaissée ce mois.
                 </p>
               )}
               {breakdown.isEstimate && breakdown.warning && (
