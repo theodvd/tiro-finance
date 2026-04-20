@@ -218,3 +218,11 @@ git checkout main && git merge feat/a1-nettoyage-repo
 - [x] A5 — Onboarding fiscal (useFiscalProfile, FiscalProfileForm, onglet Fiscal dans Profile, bannière Dashboard)
 - [x] A6 — `fiscalEngine` (calcul pur) + `useNetInvestable` (hook React, micro_bnc/bic, VL + barème estimé)
 - [x] A7 — Smoke tests : Vitest (34 tests fiscalEngine) + documentation test manuel parsers
+
+## Roadmap Phase B (en cours)
+
+- [x] B1 — CRUD Factures
+  - [x] B1.1 — `useInvoices` (hook CRUD + `markAsPaid` → cashflow entry)
+  - [x] B1.2 — `InvoiceForm` (dialog modal Zod, TTC temps réel)
+  - [x] B1.3 — Page `/pro/invoices` (tableau, badges statut, actions)
+  - [x] B1.4 — `useProCashflow` + `useNetInvestable` branché sur CA réel
