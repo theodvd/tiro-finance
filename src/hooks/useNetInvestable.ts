@@ -46,6 +46,13 @@ export interface UseNetInvestableResult {
   revenueSource: RevenueSource;
   /** Nombre de factures payées ce mois (si revenueSource = 'real'). */
   paidInvoicesCount: number;
+  /**
+   * Provisions URSSAF déclarées ce mois (valeur absolue).
+   * 0 si aucune déclaration enregistrée ce mois.
+   */
+  urssafThisMonth: number;
+  /** true si une déclaration URSSAF a été enregistrée pour le mois courant. */
+  hasUrssafDeclaration: boolean;
   /** true si le profil fiscal est chargé et le calcul disponible. */
   isReady: boolean;
   /** true pendant le chargement du profil ou du cashflow. */
@@ -72,6 +79,8 @@ export function useNetInvestable(
         monthlyRevenueUsed: 0,
         revenueSource: 'target',
         paidInvoicesCount: 0,
+        urssafThisMonth: 0,
+        hasUrssafDeclaration: false,
         isReady: false,
       };
     }
@@ -113,6 +122,8 @@ export function useNetInvestable(
       monthlyRevenueUsed: revenueToUse,
       revenueSource,
       paidInvoicesCount,
+      urssafThisMonth: summary?.urssafThisMonth ?? 0,
+      hasUrssafDeclaration: summary?.hasUrssafDeclaration ?? false,
       isReady: true,
     };
   }, [profile, summary, manualRevenue, personalExpenses]);

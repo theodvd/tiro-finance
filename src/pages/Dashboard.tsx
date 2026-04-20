@@ -1,4 +1,4 @@
-import { ArrowRight, Briefcase, TrendingUp, AlertCircle, Info } from "lucide-react";
+import { ArrowRight, Briefcase, TrendingUp, AlertCircle, Info, CheckCircle2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,14 @@ const currentMonthLabel = new Intl.DateTimeFormat("fr-FR", {
  */
 export default function Dashboard() {
   const { hasProfile, isLoading } = useFiscalProfile();
-  const { breakdown, revenueSource, paidInvoicesCount, isReady } = useNetInvestable();
+  const {
+    breakdown,
+    revenueSource,
+    paidInvoicesCount,
+    urssafThisMonth,
+    hasUrssafDeclaration,
+    isReady,
+  } = useNetInvestable();
 
   return (
     <div className="space-y-8">
@@ -165,6 +172,18 @@ export default function Dashboard() {
                 <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                   <Info className="w-3 h-3 shrink-0" />
                   Basé sur votre CA cible annuel ÷ 12 — aucune facture encaissée ce mois.
+                </p>
+              )}
+              {hasUrssafDeclaration ? (
+                <p className="text-xs text-green-700 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3 h-3 shrink-0" />
+                  URSSAF déclarée ce mois : − {fmtEUR(urssafThisMonth)}
+                </p>
+              ) : (
+                <p className="text-xs text-amber-700 flex items-center gap-1.5">
+                  <AlertCircle className="w-3 h-3 shrink-0" />
+                  Provisions URSSAF non encore déclarées —{' '}
+                  <Link to="/pro/charges" className="underline underline-offset-2">déclarer</Link>
                 </p>
               )}
               {breakdown.isEstimate && breakdown.warning && (
