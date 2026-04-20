@@ -1,1 +1,0 @@
--- test synchro github lovable lun. 20 avr. 2026 12:58:45 CEST
