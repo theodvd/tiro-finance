@@ -5,11 +5,13 @@ import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Form } from "@/components/ui/form";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { Loader2, CheckCircle2, ArrowRight, ArrowLeft } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
+import { FiscalProfileForm } from "@/components/profile/FiscalProfileForm";
 
 import { ObjectivesSection } from "@/components/profile/ObjectivesSection";
 import { PersonalInfoSection } from "@/components/profile/PersonalInfoSection";
@@ -264,80 +266,99 @@ export default function Profile() {
     );
   }
 
-  if (profileExists && computedProfile) {
-    return (
-      <div className="container max-w-4xl mx-auto p-6 space-y-6">
-        <Card className="p-8 border-primary/20">
-          <div className="flex items-center gap-3 mb-6">
-            <CheckCircle2 className="text-green-500" size={32} />
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">Profil Complété</h1>
-              <p className="text-muted-foreground">Ton profil investisseur a été calculé</p>
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            {/* Profil calculé */}
-            <div className="p-6 bg-primary/10 rounded-lg border border-primary/20">
-              <h3 className="text-xl font-bold text-primary mb-2">
-                {PROFILE_LABELS[computedProfile.profile]}
-              </h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                {PROFILE_DESCRIPTIONS[computedProfile.profile]}
-              </p>
-              <p className="text-sm font-medium">
-                Score total: {computedProfile.scores.total}/100
-              </p>
-              
-              <div className="grid grid-cols-3 gap-3 mt-4 text-sm">
-                <div className="p-3 bg-background/50 rounded">
-                  <span className="text-muted-foreground">Capacité</span>
-                  <p className="font-bold">{computedProfile.scores.capacity.score}/35</p>
-                </div>
-                <div className="p-3 bg-background/50 rounded">
-                  <span className="text-muted-foreground">Tolérance</span>
-                  <p className="font-bold">{computedProfile.scores.tolerance.score}/35</p>
-                </div>
-                <div className="p-3 bg-background/50 rounded">
-                  <span className="text-muted-foreground">Objectifs</span>
-                  <p className="font-bold">{computedProfile.scores.objectives.score}/30</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex gap-3">
-              <Button onClick={() => setProfileExists(false)} variant="outline" className="flex-1">
-                Modifier mon profil
-              </Button>
-              
-              {returnTo && (
-                <Button onClick={handleReturnToSettings} className="flex-1">
-                  <ArrowLeft size={16} className="mr-2" />
-                  Retour à Stratégie
-                </Button>
-              )}
-              
-              {!returnTo && (
-                <Button onClick={() => navigate("/settings")} className="flex-1">
-                  Voir mes seuils
-                  <ArrowRight size={16} className="ml-2" />
-                </Button>
-              )}
-            </div>
-          </div>
-        </Card>
-      </div>
-    );
-  }
-
-  const CurrentStepComponent = STEPS[currentStep].component;
+  // Onglet actif : priorité au paramètre URL ?tab=, sinon "investisseur"
+  const defaultTab = searchParams.get("tab") === "fiscal" ? "fiscal" : "investisseur";
 
   return (
     <div className="container max-w-4xl mx-auto p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Profil</h1>
+        <p className="text-muted-foreground mt-1">
+          Profil investisseur et configuration fiscale.
+        </p>
+      </div>
+
+      <Tabs defaultValue={defaultTab}>
+        <TabsList className="mb-6">
+          <TabsTrigger value="investisseur">Investisseur</TabsTrigger>
+          <TabsTrigger value="fiscal">Fiscal</TabsTrigger>
+        </TabsList>
+
+        {/* ── Onglet Fiscal ──────────────────────────────────── */}
+        <TabsContent value="fiscal">
+          <FiscalProfileForm />
+        </TabsContent>
+
+        {/* ── Onglet Investisseur (contenu existant) ────────── */}
+        <TabsContent value="investisseur">
+
+  {/* Profil complété : résumé + actions */}
+  {profileExists && computedProfile ? (
+    <div className="space-y-6">
+      <Card className="p-8 border-primary/20">
+        <div className="flex items-center gap-3 mb-6">
+          <CheckCircle2 className="text-green-500" size={32} />
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Profil Complété</h1>
+            <p className="text-muted-foreground">Ton profil investisseur a été calculé</p>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <div className="p-6 bg-primary/10 rounded-lg border border-primary/20">
+            <h3 className="text-xl font-bold text-primary mb-2">
+              {PROFILE_LABELS[computedProfile.profile]}
+            </h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              {PROFILE_DESCRIPTIONS[computedProfile.profile]}
+            </p>
+            <p className="text-sm font-medium">
+              Score total: {computedProfile.scores.total}/100
+            </p>
+            <div className="grid grid-cols-3 gap-3 mt-4 text-sm">
+              <div className="p-3 bg-background/50 rounded">
+                <span className="text-muted-foreground">Capacité</span>
+                <p className="font-bold">{computedProfile.scores.capacity.score}/35</p>
+              </div>
+              <div className="p-3 bg-background/50 rounded">
+                <span className="text-muted-foreground">Tolérance</span>
+                <p className="font-bold">{computedProfile.scores.tolerance.score}/35</p>
+              </div>
+              <div className="p-3 bg-background/50 rounded">
+                <span className="text-muted-foreground">Objectifs</span>
+                <p className="font-bold">{computedProfile.scores.objectives.score}/30</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <Button onClick={() => setProfileExists(false)} variant="outline" className="flex-1">
+              Modifier mon profil
+            </Button>
+            {returnTo && (
+              <Button onClick={handleReturnToSettings} className="flex-1">
+                <ArrowLeft size={16} className="mr-2" />
+                Retour à Stratégie
+              </Button>
+            )}
+            {!returnTo && (
+              <Button onClick={() => navigate("/settings")} className="flex-1">
+                Voir mes seuils
+                <ArrowRight size={16} className="ml-2" />
+              </Button>
+            )}
+          </div>
+        </div>
+      </Card>
+    </div>
+  ) : (
+    /* Wizard multi-étapes */
+    <div className="space-y-6">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-foreground mb-2">Ton Profil Investisseur</h1>
-        <p className="text-muted-foreground">Complète ce questionnaire pour obtenir une stratégie personnalisée</p>
+        <h2 className="text-xl font-semibold text-foreground mb-1">Ton Profil Investisseur</h2>
+        <p className="text-muted-foreground text-sm">
+          Complète ce questionnaire pour obtenir une stratégie personnalisée
+        </p>
         <div className="mt-4 flex items-center gap-2">
           <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
             <div
@@ -354,13 +375,15 @@ export default function Profile() {
       <Card className="p-8">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(saveProfile)} className="space-y-8">
-            <CurrentStepComponent form={form} />
+            {(() => {
+              const CurrentStepComponent = STEPS[currentStep].component;
+              return <CurrentStepComponent form={form} />;
+            })()}
 
             <div className="flex justify-between pt-6 border-t border-border">
               <Button type="button" variant="outline" onClick={handlePrevious} disabled={currentStep === 0}>
                 Précédent
               </Button>
-
               {currentStep < STEPS.length - 1 ? (
                 <Button type="button" onClick={handleNext}>
                   Suivant
@@ -382,6 +405,11 @@ export default function Profile() {
           </form>
         </Form>
       </Card>
+    </div>
+  )}
+
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
