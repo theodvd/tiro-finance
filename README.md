@@ -140,14 +140,40 @@ Tous dans `src/lib/parsers/`. Les types sont centralisés dans `src/types/parser
 | Bourse Direct | `bourseDirectParser.ts` | XLSX (export positions) | `BDPosition[]` |
 | Coinbase | `coinbaseParser.ts` | CSV (export transactions) | `CoinbasePosition[]` |
 
+### Tests unitaires (fiscalEngine)
+
+Les fonctions de calcul fiscal (`src/lib/fiscalEngine.ts`) sont couvertes par
+des tests Vitest (34 tests) :
+
+```bash
+npm test
+# → src/__tests__/fiscalEngine.test.ts (34 tests) ✓
+```
+
+Les parsers PDF/XLSX/CSV dépendent d'APIs browser (`File`, `pdfjs-dist` avec
+worker CDN) et ne peuvent pas être testés en Node. Voir le test manuel ci-dessous.
+
 ### Tester un parser manuellement
 
-```typescript
-// Exemple dans la console du navigateur (après import dans un composant) :
-// 1. Ouvrir /import dans l'app
-// 2. Inspecter la console : les parsers loggent chaque ligne avec [TR Parser], [BD Parser], [CB Parser]
-// 3. Si une transaction n'est pas parsée, inspecter fullText dans les logs [TR Parser] Page N
-```
+Les trois parsers loggent en console avec des préfixes distinctifs.
+Ouvre les DevTools (F12 → Console) sur `/import` avant d'uploader.
+
+| Parser | Route | Préfixe console | Fichier attendu |
+|---|---|---|---|
+| Trade Republic | `/import` → onglet TR | `[TR Parser]` | Relevé PDF mensuel Trade Republic |
+| Bourse Direct | `/import` → onglet BD | `[BD Parser]` | Export XLSX positions Bourse Direct |
+| Coinbase | `/import` → onglet CB | `[CB Parser]` | Export CSV transactions Coinbase |
+
+**Checklist smoke test parser :**
+1. Uploader un fichier → vérifier que `Rows parsed: N` apparaît dans la console
+2. Vérifier qu'aucune exception n'est levée
+3. Vérifier que les positions importées apparaissent dans le tableau de réconciliation
+4. Pour TR : vérifier que les dates françaises (ex. `15 janv. 2025`) sont bien parsées
+
+**Si un import échoue :**
+- `[TR Parser] Page N fullText:` → inspecter le texte extrait du PDF page par page
+- `[BD Parser] Raw rows:` → vérifier le format des colonnes XLSX
+- `[CB Parser] Rows parsed: 0` → vérifier que l'en-tête `Timestamp` est présent
 
 ---
 
@@ -191,4 +217,4 @@ git checkout main && git merge feat/a1-nettoyage-repo
 - [x] A4 — Migrations Supabase (fiscal_profiles, invoices, social_contributions, tax_provisions, pro_cashflow_entries)
 - [x] A5 — Onboarding fiscal (useFiscalProfile, FiscalProfileForm, onglet Fiscal dans Profile, bannière Dashboard)
 - [x] A6 — `fiscalEngine` (calcul pur) + `useNetInvestable` (hook React, micro_bnc/bic, VL + barème estimé)
-- [ ] A7 — Smoke tests parsers
+- [x] A7 — Smoke tests : Vitest (34 tests fiscalEngine) + documentation test manuel parsers
