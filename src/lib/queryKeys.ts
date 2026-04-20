@@ -8,6 +8,8 @@ export const queryKeys = {
   insights: (userId: string) => ['insights', userId] as const,
   strategy: (userId: string) => ['strategy', userId] as const,
   fiscalProfile: (userId: string) => ['fiscalProfile', userId] as const,
+  invoices: (userId: string) => ['invoices', userId] as const,
+  proCashflow: (userId: string) => ['proCashflow', userId] as const,
 };
 
 // Route to query keys mapping for prefetching
