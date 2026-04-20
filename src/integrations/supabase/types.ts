@@ -14,6 +14,21 @@ export type Database = {
   }
   public: {
     Tables: {
+      _synchro_test: {
+        Row: {
+          created_at: string | null
+          id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
       accounts: {
         Row: {
           created_at: string
