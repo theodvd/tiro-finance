@@ -1,17 +1,26 @@
-import { ArrowRight, Briefcase, TrendingUp, AlertCircle } from "lucide-react";
+import { ArrowRight, Briefcase, TrendingUp, AlertCircle, Info } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useFiscalProfile } from "@/hooks/useFiscalProfile";
+import { useNetInvestable } from "@/hooks/useNetInvestable";
+import { fmtEUR } from "@/lib/format";
+
+/** Nom du mois courant en français (ex. "avril 2026"). */
+const currentMonthLabel = new Intl.DateTimeFormat("fr-FR", {
+  month: "long",
+  year: "numeric",
+}).format(new Date());
 
 /**
  * Page d'accueil unifiée Solvio.
- * Phase A : placeholder qui oriente vers les deux sections.
- * Phase B : sera remplacée par le dashboard pro×perso avec le widget
- * "net investissable".
+ * Phase A : oriente vers les deux sections + widget net investissable
+ *           basé sur le CA cible annuel ÷ 12 (sans factures réelles).
+ * Phase B : le CA mensuel proviendra des encaissements réels.
  */
 export default function Dashboard() {
   const { hasProfile, isLoading } = useFiscalProfile();
+  const { breakdown, usingFallbackRevenue, isReady } = useNetInvestable();
 
   return (
     <div className="space-y-8">
@@ -98,21 +107,93 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Widget à venir */}
-      <Card className="border-2 border-dashed border-muted bg-muted/30">
-        <CardContent className="pt-6 text-center space-y-2">
-          <p className="text-sm font-medium text-muted-foreground">
-            Bientôt disponible
-          </p>
-          <p className="text-2xl font-bold text-muted-foreground/50">
-            Net investissable ce mois-ci : —
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Complétez votre profil fiscal et ajoutez vos factures pour
-            voir ce calcul.
-          </p>
-        </CardContent>
-      </Card>
+      {/* Widget net investissable */}
+      {isReady && breakdown ? (
+        <Card>
+          <CardContent className="pt-6 space-y-4">
+            {/* En-tête */}
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground capitalize">
+                  Net investissable — {currentMonthLabel}
+                </p>
+                <p className="text-3xl font-bold mt-1">
+                  {fmtEUR(breakdown.netAfterDeductions)}
+                </p>
+              </div>
+              {breakdown.isEstimate && (
+                <span className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700 font-medium shrink-0 mt-1">
+                  Estimation
+                </span>
+              )}
+            </div>
+
+            {/* Décomposition */}
+            <div className="space-y-1.5 text-sm border-t pt-4">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">CA brut HT</span>
+                <span className="font-medium">{fmtEUR(breakdown.revenue)}</span>
+              </div>
+              <div className="flex justify-between text-destructive/80">
+                <span>− URSSAF ({Math.round(breakdown.rates.urssaf * 100)} %)</span>
+                <span>− {fmtEUR(breakdown.urssaf)}</span>
+              </div>
+              <div className="flex justify-between text-destructive/80">
+                <span>
+                  − IR{" "}
+                  {breakdown.irMethod === "versement_liberatoire"
+                    ? `VL (${Math.round(breakdown.rates.ir * 100 * 10) / 10} %)`
+                    : "(barème estimé)"}
+                </span>
+                <span>− {fmtEUR(breakdown.ir)}</span>
+              </div>
+              <div className="flex justify-between font-semibold border-t pt-1.5 mt-1">
+                <span>Net après charges</span>
+                <span>{fmtEUR(breakdown.netAfterDeductions)}</span>
+              </div>
+            </div>
+
+            {/* Notes contextuelles */}
+            <div className="space-y-1.5">
+              {usingFallbackRevenue && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Info className="w-3 h-3 shrink-0" />
+                  Basé sur votre CA cible annuel ÷ 12 — les factures réelles seront disponibles en Phase B.
+                </p>
+              )}
+              {breakdown.isEstimate && breakdown.warning && (
+                <p className="text-xs text-amber-700 flex items-start gap-1.5">
+                  <AlertCircle className="w-3 h-3 shrink-0 mt-0.5" />
+                  {breakdown.warning}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                <Info className="w-3 h-3 shrink-0" />
+                Hors dépenses personnelles (loyer, courses…).
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : !isLoading && hasProfile ? (
+        /* Profil fiscal présent mais CA cible non renseigné */
+        <Card className="border-dashed border-muted">
+          <CardContent className="pt-6 text-center space-y-2">
+            <p className="text-sm font-medium text-muted-foreground">
+              Net investissable — {currentMonthLabel}
+            </p>
+            <p className="text-2xl font-bold text-muted-foreground/50">—</p>
+            <p className="text-xs text-muted-foreground">
+              Renseignez un CA cible annuel dans votre profil fiscal pour activer ce calcul.
+            </p>
+            <Button asChild size="sm" variant="outline" className="mt-2">
+              <Link to="/profile?tab=fiscal">
+                Compléter le profil fiscal
+                <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }
