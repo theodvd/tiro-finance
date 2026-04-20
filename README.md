@@ -22,7 +22,7 @@ Solvio connecte la partie **professionnelle** (factures, URSSAF, impôts, régim
 | Backend / DB | Supabase (PostgreSQL + Auth + Edge Functions) |
 | Parsers | pdfjs-dist (PDF), xlsx (XLSX), PapaParse (CSV) |
 | Charts | Recharts |
-| Package manager | bun |
+| Package manager | npm |
 
 ---
 
@@ -39,10 +39,10 @@ cp .env.example .env
 # (disponibles dans Supabase Dashboard > Project Settings > API)
 
 # 3. Installer les dépendances
-bun install
+npm install
 
 # 4. Lancer le serveur de développement
-bun run dev
+npm run dev
 # → http://localhost:8080
 ```
 
