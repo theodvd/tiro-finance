@@ -35,6 +35,13 @@ export interface MonthlyCashflowSummary {
   revenueThisMonth: number;
   /** Nombre de factures payées ce mois. */
   paidInvoicesCount: number;
+  /**
+   * Provisions URSSAF déclarées ce mois (valeur absolue).
+   * Source : entries type 'urssaf' (montants négatifs en base → rendus positifs ici).
+   */
+  urssafThisMonth: number;
+  /** true si au moins une provision URSSAF a été enregistrée ce mois. */
+  hasUrssafDeclaration: boolean;
   /** Toutes les entrées du mois courant. */
   entries: ProCashflowEntry[];
 }
@@ -73,11 +80,15 @@ async function fetchMonthlyCashflow(userId: string): Promise<MonthlyCashflowSumm
 
   const entries = (data ?? []) as ProCashflowEntry[];
   const revenueEntries = entries.filter((e) => e.entry_type === 'revenue');
+  const urssafEntries = entries.filter((e) => e.entry_type === 'urssaf');
 
   return {
     entries,
     revenueThisMonth: revenueEntries.reduce((sum, e) => sum + e.amount, 0),
     paidInvoicesCount: revenueEntries.length,
+    // Les montants URSSAF sont négatifs en base → valeur absolue pour l'affichage
+    urssafThisMonth: urssafEntries.reduce((sum, e) => sum + Math.abs(e.amount), 0),
+    hasUrssafDeclaration: urssafEntries.length > 0,
   };
 }
 
