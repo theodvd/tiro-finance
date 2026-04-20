@@ -34,6 +34,8 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          opened_at: string | null
+          tax_wrapper_notes: string | null
           type: Database["public"]["Enums"]["account_type"]
           updated_at: string
           user_id: string
@@ -42,6 +44,8 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          opened_at?: string | null
+          tax_wrapper_notes?: string | null
           type: Database["public"]["Enums"]["account_type"]
           updated_at?: string
           user_id: string
@@ -50,6 +54,8 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          opened_at?: string | null
+          tax_wrapper_notes?: string | null
           type?: Database["public"]["Enums"]["account_type"]
           updated_at?: string
           user_id?: string
@@ -936,7 +942,14 @@ export type Database = {
       }
     }
     Enums: {
-      account_type: "CTO" | "PEA" | "AV" | "CRYPTO" | "LIVRETS" | "OTHER"
+      account_type:
+        | "CTO"
+        | "PEA"
+        | "AV"
+        | "CRYPTO"
+        | "LIVRETS"
+        | "OTHER"
+        | "PER"
       asset_class: "STOCK" | "ETF" | "CRYPTO" | "BOND" | "REIT" | "CASH"
       pricing_source: "YFINANCE" | "COINGECKO" | "MANUAL"
       transaction_type: "BUY" | "SELL" | "DCA_BUY" | "DIVIDEND" | "TRANSFER"
@@ -1067,7 +1080,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      account_type: ["CTO", "PEA", "AV", "CRYPTO", "LIVRETS", "OTHER"],
+      account_type: ["CTO", "PEA", "AV", "CRYPTO", "LIVRETS", "OTHER", "PER"],
       asset_class: ["STOCK", "ETF", "CRYPTO", "BOND", "REIT", "CASH"],
       pricing_source: ["YFINANCE", "COINGECKO", "MANUAL"],
       transaction_type: ["BUY", "SELL", "DCA_BUY", "DIVIDEND", "TRANSFER"],
