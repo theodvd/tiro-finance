@@ -1,26 +1,10 @@
 import * as XLSX from 'xlsx';
+import type { BDPosition, BDAppHolding } from '@/types/parsers';
 
-export interface BDPosition {
-  name: string;
-  isin: string;
-  currency: string;
-  qtyBD: number;
-  qtyApp: number;
-  diffQty: number;
-  pruBD: number;
-  pruApp: number;
-  diffPRU: number;
-  valorisationBD: number;
-  status: 'ok' | 'ecart' | 'manquant';
-}
-
-export interface AppHolding {
-  isin: string;
-  symbol: string;
-  name: string;
-  quantity: number;
-  pru: number;
-}
+// Re-exports pour compatibilité avec les imports existants
+export type { BDPosition };
+// AppHolding est l'ancien nom de BDAppHolding — conservé pour ne pas casser les consommateurs
+export type { BDAppHolding as AppHolding };
 
 /**
  * Try to match a BD position to an app holding.
@@ -28,7 +12,7 @@ export interface AppHolding {
  * 1. Exact ISIN match (future-proof if ISIN column is added)
  * 2. Name-based fuzzy match (normalize and compare)
  */
-function findMatch(bdIsin: string, bdName: string, appHoldings: AppHolding[]): AppHolding | undefined {
+function findMatch(bdIsin: string, bdName: string, appHoldings: BDAppHolding[]): BDAppHolding | undefined {
   // 1. Exact ISIN match (most reliable)
   if (bdIsin) {
     const isinMatch = appHoldings.find((h) => h.isin && h.isin === bdIsin);
@@ -49,7 +33,7 @@ function findMatch(bdIsin: string, bdName: string, appHoldings: AppHolding[]): A
 
 export async function parseBourseDirectXLSX(
   file: File,
-  appHoldings: AppHolding[] = []
+  appHoldings: BDAppHolding[] = []
 ): Promise<BDPosition[]> {
   const arrayBuffer = await file.arrayBuffer();
   const workbook = XLSX.read(arrayBuffer, { type: 'array' });

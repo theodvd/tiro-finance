@@ -1,18 +1,11 @@
 import * as pdfjsLib from 'pdfjs-dist';
+import type { TRTransaction } from '@/types/parsers';
 
 // Dynamically match worker URL to the installed pdfjs-dist version
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
-export interface TRTransaction {
-  date: string;
-  type: 'Achat' | 'Vente' | 'DCA';
-  isin: string;
-  name: string;
-  quantity: number;
-  amountEur: number;
-  unitPrice: number;
-  account: 'PEA' | 'CTO';
-}
+// Re-export pour compatibilité avec les imports existants
+export type { TRTransaction };
 
 const FRENCH_MONTHS: Record<string, string> = {
   'janv.': '01', 'févr.': '02', 'mars': '03', 'avr.': '04',

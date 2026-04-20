@@ -1,26 +1,14 @@
 import Papa from 'papaparse';
+import type { CoinbasePosition, CBAppHolding } from '@/types/parsers';
 
-export interface CoinbasePosition {
-  asset: string;
-  quantity: number;
-  totalInvested: number;
-  currentValue: number;
-  qtyApp: number;
-  investedApp: number;
-  diffQty: number;
-  diffInvested: number;
-  status: 'ok' | 'ecart' | 'manquant';
-}
-
-export interface AppHolding {
-  symbol: string;
-  quantity: number;
-  amountInvested: number;
-}
+// Re-exports pour compatibilité avec les imports existants
+export type { CoinbasePosition };
+// AppHolding est l'ancien nom de CBAppHolding — conservé pour ne pas casser les consommateurs
+export type { CBAppHolding as AppHolding };
 
 export async function parseCoinbaseCSV(
   file: File,
-  appHoldings: AppHolding[] = []
+  appHoldings: CBAppHolding[] = []
 ): Promise<CoinbasePosition[]> {
   const text = await file.text();
 
