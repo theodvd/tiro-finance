@@ -263,6 +263,45 @@ export type Database = {
           },
         ]
       }
+      fiscal_profiles: {
+        Row: {
+          activity_type: string | null
+          annual_revenue_target: number | null
+          created_at: string
+          id: string
+          regime: string
+          tva_regime: string | null
+          updated_at: string
+          user_id: string
+          versement_liberatoire: boolean
+          year: number
+        }
+        Insert: {
+          activity_type?: string | null
+          annual_revenue_target?: number | null
+          created_at?: string
+          id?: string
+          regime: string
+          tva_regime?: string | null
+          updated_at?: string
+          user_id: string
+          versement_liberatoire?: boolean
+          year?: number
+        }
+        Update: {
+          activity_type?: string | null
+          annual_revenue_target?: number | null
+          created_at?: string
+          id?: string
+          regime?: string
+          tva_regime?: string | null
+          updated_at?: string
+          user_id?: string
+          versement_liberatoire?: boolean
+          year?: number
+        }
+        Relationships: []
+      }
       fx_rates: {
         Row: {
           asof: string
