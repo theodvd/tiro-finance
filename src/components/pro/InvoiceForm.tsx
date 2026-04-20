@@ -17,6 +17,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogBody,
   DialogFooter,
 } from '@/components/ui/dialog';
 import {
@@ -135,51 +136,80 @@ export function InvoiceForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      {/*
+        flex flex-col overflow-hidden : transforme le grid en colonne flex pour que
+        DialogBody (flex-1 overflow-y-auto) prenne l'espace disponible et scroll.
+        sm:max-w-xl : plus large que le défaut max-w-lg pour les grilles 2 colonnes.
+      */}
+      <DialogContent className="sm:max-w-xl flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>
             {isEditing ? 'Modifier la facture' : 'Nouvelle facture'}
           </DialogTitle>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-
-            <FormField
-              control={form.control}
-              name="client_name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Client *</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Nom du client ou entreprise" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="grid grid-cols-2 gap-3">
+        {/* Zone scrollable — tous les champs du formulaire */}
+        <DialogBody>
+          <Form {...form}>
+            {/*
+              id="invoice-form" permet au bouton submit placé dans DialogFooter
+              (hors du <form>) de déclencher la soumission via l'attribut form="invoice-form".
+            */}
+            <form
+              id="invoice-form"
+              onSubmit={form.handleSubmit(handleSubmit)}
+              className="space-y-4"
+            >
               <FormField
                 control={form.control}
-                name="invoice_number"
+                name="client_name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>N° facture</FormLabel>
+                    <FormLabel>Client *</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ex : 2026-001" {...field} />
+                      <Input placeholder="Nom du client ou entreprise" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
+              <div className="grid grid-cols-2 gap-3">
+                <FormField
+                  control={form.control}
+                  name="invoice_number"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>N° facture</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ex : 2026-001" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="issue_date"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Date d'émission *</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
               <FormField
                 control={form.control}
-                name="issue_date"
+                name="due_date"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Date d'émission *</FormLabel>
+                    <FormLabel>Date d'échéance</FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
@@ -187,123 +217,110 @@ export function InvoiceForm({
                   </FormItem>
                 )}
               />
-            </div>
 
-            <FormField
-              control={form.control}
-              name="due_date"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Date d'échéance</FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+              <div className="grid grid-cols-2 gap-3">
+                <FormField
+                  control={form.control}
+                  name="amount_ht"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Montant HT *</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Input
+                            type="number"
+                            min={0}
+                            step={0.01}
+                            placeholder="0"
+                            className="pr-6"
+                            {...field}
+                            onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                            €
+                          </span>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <div className="grid grid-cols-2 gap-3">
+                <FormField
+                  control={form.control}
+                  name="tva_rate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Taux TVA</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            step={0.1}
+                            placeholder="0"
+                            className="pr-6"
+                            {...field}
+                            onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                            %
+                          </span>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* TTC calculé en temps réel */}
+              <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/50 text-sm">
+                <span className="text-muted-foreground">Montant TTC</span>
+                <span className="font-semibold">{fmtEUR(amountTtc)}</span>
+              </div>
+
               <FormField
                 control={form.control}
-                name="amount_ht"
+                name="notes"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Montant HT *</FormLabel>
+                    <FormLabel>Notes</FormLabel>
                     <FormControl>
-                      <div className="relative">
-                        <Input
-                          type="number"
-                          min={0}
-                          step={0.01}
-                          placeholder="0"
-                          className="pr-6"
-                          {...field}
-                          onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                        />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                          €
-                        </span>
-                      </div>
+                      <Input placeholder="Référence, commentaire…" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+            </form>
+          </Form>
+        </DialogBody>
 
-              <FormField
-                control={form.control}
-                name="tva_rate"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Taux TVA</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Input
-                          type="number"
-                          min={0}
-                          max={100}
-                          step={0.1}
-                          placeholder="0"
-                          className="pr-6"
-                          {...field}
-                          onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                        />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                          %
-                        </span>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            {/* TTC calculé en temps réel */}
-            <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/50 text-sm">
-              <span className="text-muted-foreground">Montant TTC</span>
-              <span className="font-semibold">{fmtEUR(amountTtc)}</span>
-            </div>
-
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Notes</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Référence, commentaire…" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <DialogFooter className="pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={isSubmitting}
-              >
-                Annuler
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="animate-spin mr-2 h-4 w-4" />
-                    Enregistrement…
-                  </>
-                ) : isEditing ? (
-                  'Enregistrer'
-                ) : (
-                  'Créer la facture'
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+        {/* Footer sticky en bas — hors du <form>, lié par form="invoice-form" */}
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isSubmitting}
+          >
+            Annuler
+          </Button>
+          <Button type="submit" form="invoice-form" disabled={isSubmitting}>
+            {isSubmitting ? (
+              <>
+                <Loader2 className="animate-spin mr-2 h-4 w-4" />
+                Enregistrement…
+              </>
+            ) : isEditing ? (
+              'Enregistrer'
+            ) : (
+              'Créer la facture'
+            )}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
