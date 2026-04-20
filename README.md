@@ -188,7 +188,7 @@ git checkout main && git merge feat/a1-nettoyage-repo
 - [x] A1 — Nettoyage repo (`.env.example`, types centralisés, README)
 - [x] A2 — Restructuration des routes (`/pro/*`, `/perso/*`, redirects)
 - [x] A3 — Navigation unifiée (toggle Pro/Perso, renommage Solen→Solvio)
-- [ ] A4 — Migrations Supabase (tables pro)
+- [x] A4 — Migrations Supabase (fiscal_profiles, invoices, social_contributions, tax_provisions, pro_cashflow_entries)
 - [ ] A5 — Onboarding fiscal
 - [ ] A6 — Hook `useNetInvestable` (structure)
 - [ ] A7 — Smoke tests parsers
