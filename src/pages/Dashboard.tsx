@@ -1,7 +1,8 @@
-import { ArrowRight, Briefcase, TrendingUp } from "lucide-react";
+import { ArrowRight, Briefcase, TrendingUp, AlertCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useFiscalProfile } from "@/hooks/useFiscalProfile";
 
 /**
  * Page d'accueil unifiée Solvio.
@@ -10,8 +11,30 @@ import { Button } from "@/components/ui/button";
  * "net investissable".
  */
 export default function Dashboard() {
+  const { hasProfile, isLoading } = useFiscalProfile();
+
   return (
     <div className="space-y-8">
+
+      {/* Bannière onboarding fiscal — visible si profil fiscal absent */}
+      {!isLoading && !hasProfile && (
+        <div className="flex items-start gap-3 p-4 rounded-lg border border-amber-200 bg-amber-50 text-amber-900">
+          <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-amber-600" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium">Configurez votre profil fiscal</p>
+            <p className="text-sm text-amber-700 mt-0.5">
+              Indiquez votre régime (micro-entreprise, EI…) pour activer le
+              calcul de votre net investissable mensuel.
+            </p>
+          </div>
+          <Button asChild size="sm" variant="outline" className="border-amber-300 text-amber-800 hover:bg-amber-100 shrink-0">
+            <Link to="/profile?tab=fiscal">
+              Configurer
+              <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+            </Link>
+          </Button>
+        </div>
+      )}
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Tableau de bord</h1>
         <p className="text-muted-foreground mt-1">
