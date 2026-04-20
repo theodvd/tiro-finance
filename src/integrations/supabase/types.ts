@@ -690,6 +690,51 @@ export type Database = {
         }
         Relationships: []
       }
+      tax_provisions: {
+        Row: {
+          created_at: string
+          estimated_taxable_income: number | null
+          id: string
+          ir_method: string | null
+          notes: string | null
+          provision_amount: number
+          provision_type: string
+          quarter: number | null
+          status: string
+          updated_at: string
+          user_id: string
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          estimated_taxable_income?: number | null
+          id?: string
+          ir_method?: string | null
+          notes?: string | null
+          provision_amount: number
+          provision_type: string
+          quarter?: number | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          year: number
+        }
+        Update: {
+          created_at?: string
+          estimated_taxable_income?: number | null
+          id?: string
+          ir_method?: string | null
+          notes?: string | null
+          provision_amount?: number
+          provision_type?: string
+          quarter?: number | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          year?: number
+        }
+        Relationships: []
+      }
       transactions: {
         Row: {
           account_id: string
