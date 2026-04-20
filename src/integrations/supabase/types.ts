@@ -472,6 +472,50 @@ export type Database = {
           },
         ]
       }
+      pro_cashflow_entries: {
+        Row: {
+          amount: number
+          created_at: string
+          entry_date: string
+          entry_type: string
+          id: string
+          invoice_id: string | null
+          label: string | null
+          user_id: string
+          year: number
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          entry_date: string
+          entry_type: string
+          id?: string
+          invoice_id?: string | null
+          label?: string | null
+          user_id: string
+          year?: number
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          entry_date?: string
+          entry_type?: string
+          id?: string
+          invoice_id?: string | null
+          label?: string | null
+          user_id?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pro_cashflow_entries_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       securities: {
         Row: {
           asset_class: Database["public"]["Enums"]["asset_class"]
