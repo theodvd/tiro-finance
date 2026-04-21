@@ -117,7 +117,8 @@ function SliderField({
 
 export default function Projection() {
   // ── Données pré-remplissage ──────────────────────────────
-  const { age: profileAge, loading: profileLoading } = useInvestorProfile();
+  const { rawProfile, loading: profileLoading } = useInvestorProfile();
+  const profileAge = rawProfile?.age ?? null;
   const { totalValue: portfolioValue, loading: portfolioLoading } = usePortfolioData();
   const { breakdown, revenueSource, isLoading: netLoading } = useNetInvestable();
   const { profile } = useFiscalProfile();
