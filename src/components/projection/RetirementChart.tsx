@@ -70,8 +70,8 @@ interface ChartPoint {
 
 interface TooltipProps {
   active?: boolean;
-  payload?: Array<{ dataKey: string; value: number }>;
-  label?: number;
+  payload?: Array<{ dataKey?: string | number; value?: number | string | Array<number | string> }>;
+  label?: number | string;
   targetCapital: number;
   showTarget: boolean;
 }
