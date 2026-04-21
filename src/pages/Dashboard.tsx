@@ -1,10 +1,11 @@
-import { ArrowRight, Briefcase, TrendingUp, AlertCircle, Info, CheckCircle2 } from "lucide-react";
+import { ArrowRight, Briefcase, AlertCircle, Info, CheckCircle2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useFiscalProfile } from "@/hooks/useFiscalProfile";
 import { useNetInvestable } from "@/hooks/useNetInvestable";
 import { fmtEUR } from "@/lib/format";
+import { PatrimoineSnapshot } from "@/components/dashboard/PatrimoineSnapshot";
 
 /** Nom du mois courant en français (ex. "avril 2026"). */
 const currentMonthLabel = new Intl.DateTimeFormat("fr-FR", {
@@ -86,32 +87,8 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Section Perso */}
-        <Card>
-          <CardContent className="pt-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <TrendingUp className="w-5 h-5 text-blue-700" />
-              </div>
-              <div>
-                <p className="font-medium">Section personnelle</p>
-                <p className="text-sm text-muted-foreground">
-                  Patrimoine, investissements, diversification
-                </p>
-              </div>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Suivez votre patrimoine, vos positions et votre score de
-              diversification.
-            </p>
-            <Button asChild size="sm">
-              <Link to="/perso/portfolio">
-                Voir mon patrimoine
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
+        {/* Zone 2 — Snapshot patrimoine perso */}
+        <PatrimoineSnapshot />
       </div>
 
       {/* Widget net investissable */}
