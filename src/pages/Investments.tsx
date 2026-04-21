@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, RefreshCw, TrendingUp } from "lucide-react";
+import { Plus, RefreshCw, TrendingUp, Info } from "lucide-react";
 import { z } from "zod";
 import { ASSET_CLASSES, PRICING_SOURCES, ASSET_CLASS_LABEL, AssetClass, PricingSource } from "@/constants";
 import { PortfolioHero } from "@/components/investments/PortfolioHero";
@@ -27,6 +28,11 @@ const holdingSchema = z.object({
 export default function Investments() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
+
+  // Montant suggéré depuis le Dashboard (net investissable du mois)
+  const suggestParam = searchParams.get('suggest');
+  const suggestAmount = suggestParam ? Number(suggestParam) : null;
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [securities, setSecurities] = useState<Security[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -475,6 +481,20 @@ export default function Investments() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 px-4 sm:px-6 lg:px-8 py-6">
+
+      {/* Bannière contextuelle — affiché si redirigé depuis le Dashboard avec ?suggest */}
+      {suggestAmount !== null && suggestAmount > 0 && (
+        <div className="flex items-start gap-3 p-4 rounded-lg border border-blue-200 bg-blue-50 text-blue-900">
+          <Info className="w-5 h-5 shrink-0 mt-0.5 text-blue-600" />
+          <p className="text-sm">
+            <span className="font-semibold">
+              {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(suggestAmount)}
+            </span>{' '}
+            disponibles depuis vos revenus pro ce mois — allouez ce montant à vos investissements.
+          </p>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Investissements</h1>

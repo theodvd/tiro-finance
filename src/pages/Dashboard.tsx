@@ -1,4 +1,4 @@
-import { ArrowRight, Briefcase, AlertCircle, Info, CheckCircle2 } from "lucide-react";
+import { ArrowRight, AlertCircle, Info, CheckCircle2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { useNetInvestable } from "@/hooks/useNetInvestable";
 import { fmtEUR } from "@/lib/format";
 import { PatrimoineSnapshot } from "@/components/dashboard/PatrimoineSnapshot";
 import { OpportuniteCard } from "@/components/dashboard/OpportuniteCard";
+import { ProKpis } from "@/components/dashboard/ProKpis";
 
 /** Nom du mois courant en français (ex. "avril 2026"). */
 const currentMonthLabel = new Intl.DateTimeFormat("fr-FR", {
@@ -61,32 +62,8 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Section Pro */}
-        <Card className="border-2 border-dashed border-muted">
-          <CardContent className="pt-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-amber-100 rounded-lg">
-                <Briefcase className="w-5 h-5 text-amber-700" />
-              </div>
-              <div>
-                <p className="font-medium">Section professionnelle</p>
-                <p className="text-sm text-muted-foreground">
-                  Factures, URSSAF, provisions fiscales
-                </p>
-              </div>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Connectez vos données professionnelles pour calculer votre revenu
-              net après charges et cotisations.
-            </p>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/pro/invoices">
-                Voir mes factures
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
+        {/* Zone KPIs pro */}
+        <ProKpis />
 
         {/* Zone 2 — Snapshot patrimoine perso */}
         <PatrimoineSnapshot />
