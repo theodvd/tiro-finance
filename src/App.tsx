@@ -27,6 +27,9 @@ const Investments = lazy(() => import("./pages/Investments"));
 const Insights = lazy(() => import("./pages/Insights"));
 const Diversification = lazy(() => import("./pages/Diversification"));
 
+// ─── Pages section /unified ────────────────────────────────────────────────
+const Projection = lazy(() => import("./pages/unified/Projection"));
+
 // ─── Pages section /pro ────────────────────────────────────────────────────
 const Invoices = lazy(() => import("./pages/pro/Invoices"));
 const Charges = lazy(() => import("./pages/pro/Charges"));
@@ -83,6 +86,12 @@ const App = () => (
               <Route
                 path="/perso/diversification"
                 element={<ProtectedPage><Diversification /></ProtectedPage>}
+              />
+
+              {/* ── Section /unified ─────────────────────────────────────── */}
+              <Route
+                path="/unified/projection"
+                element={<ProtectedPage><Projection /></ProtectedPage>}
               />
 
               {/* ── Section /pro ──────────────────────────────────────────── */}
