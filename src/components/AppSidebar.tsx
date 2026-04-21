@@ -7,6 +7,7 @@ import {
   Briefcase,
   BarChart3,
   PieChart,
+  LineChart,
   FileUp,
   Lightbulb,
   Calendar,
@@ -51,6 +52,7 @@ const persoItems = [
   { title: "Investissements", url: "/perso/investments", icon: Briefcase },
   { title: "Insights", url: "/perso/insights", icon: BarChart3 },
   { title: "Diversification", url: "/perso/diversification", icon: PieChart },
+  { title: "Projection retraite", url: "/unified/projection", icon: LineChart },
 ];
 
 const transversalItems = [

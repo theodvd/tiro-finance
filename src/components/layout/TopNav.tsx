@@ -40,6 +40,7 @@ const persoLinks = [
   { label: "Investissements", to: "/perso/investments" },
   { label: "Insights", to: "/perso/insights" },
   { label: "Diversification", to: "/perso/diversification" },
+  { label: "Projection retraite", to: "/unified/projection" },
 ];
 
 const secondaryLinks = [
