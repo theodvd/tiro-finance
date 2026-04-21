@@ -6,6 +6,7 @@ import { useFiscalProfile } from "@/hooks/useFiscalProfile";
 import { useNetInvestable } from "@/hooks/useNetInvestable";
 import { fmtEUR } from "@/lib/format";
 import { PatrimoineSnapshot } from "@/components/dashboard/PatrimoineSnapshot";
+import { OpportuniteCard } from "@/components/dashboard/OpportuniteCard";
 
 /** Nom du mois courant en français (ex. "avril 2026"). */
 const currentMonthLabel = new Intl.DateTimeFormat("fr-FR", {
@@ -174,6 +175,18 @@ export default function Dashboard() {
                 Hors dépenses personnelles (loyer, courses…).
               </p>
             </div>
+
+            {/* CTA Zone 1 → redirection vers /perso/investments avec suggestion */}
+            {breakdown.netAfterDeductions > 0 && (
+              <div className="pt-1 border-t">
+                <Button asChild size="sm" className="w-full sm:w-auto">
+                  <Link to={`/perso/investments?suggest=${Math.round(breakdown.netAfterDeductions)}`}>
+                    Investir {fmtEUR(breakdown.netAfterDeductions)}
+                    <ArrowRight className="w-4 h-4 ml-2" />
+                  </Link>
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       ) : !isLoading && hasProfile ? (
@@ -196,6 +209,11 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       ) : null}
+
+      {/* Zone 3 — Opportunité du mois */}
+      <OpportuniteCard
+        netAfterDeductions={isReady && breakdown ? breakdown.netAfterDeductions : null}
+      />
     </div>
   );
 }
