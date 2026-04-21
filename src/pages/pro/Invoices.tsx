@@ -119,9 +119,9 @@ export default function Invoices() {
     .filter((inv) => inv.status === 'paid')
     .reduce((sum, inv) => sum + inv.amount_ht, 0);
 
-  // "En attente" inclut brouillons + envoyées + en retard (toutes les créances non encaissées)
+  // "En attente" : factures émises non encore encaissées (sent + late, hors brouillons)
   const totalPending = invoices
-    .filter((inv) => inv.status !== 'paid')
+    .filter((inv) => inv.status === 'sent' || inv.status === 'late')
     .reduce((sum, inv) => sum + inv.amount_ht, 0);
 
   return (
