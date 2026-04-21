@@ -79,8 +79,10 @@ interface TooltipProps {
 function CustomTooltip({ active, payload, label, targetCapital, showTarget }: TooltipProps) {
   if (!active || !payload?.length || label == null) return null;
 
-  const get = (key: string) =>
-    payload.find((p) => p.dataKey === key)?.value ?? null;
+  const get = (key: string): number | null => {
+    const v = payload.find((p) => p.dataKey === key)?.value;
+    return typeof v === 'number' ? v : null;
+  };
 
   const prudent  = get('prudent');
   const balanced = get('balanced');
