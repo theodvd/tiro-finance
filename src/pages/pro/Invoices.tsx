@@ -11,7 +11,7 @@
  */
 
 import { useState } from 'react';
-import { Plus, Loader2, CheckCircle2, FileText } from 'lucide-react';
+import { Plus, Loader2, CheckCircle2, FileText, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -119,8 +119,9 @@ export default function Invoices() {
     .filter((inv) => inv.status === 'paid')
     .reduce((sum, inv) => sum + inv.amount_ht, 0);
 
+  // "En attente" inclut brouillons + envoyées + en retard (toutes les créances non encaissées)
   const totalPending = invoices
-    .filter((inv) => inv.status === 'sent' || inv.status === 'late')
+    .filter((inv) => inv.status !== 'paid')
     .reduce((sum, inv) => sum + inv.amount_ht, 0);
 
   return (
@@ -200,6 +201,7 @@ export default function Invoices() {
               {invoices.map((invoice) => {
                 const isThisMarkingPaid =
                   isMarkingPaid && markingPaidId === invoice.id;
+                const canSend = invoice.status === 'draft';
                 const canMarkPaid =
                   invoice.status === 'sent' || invoice.status === 'late';
                 const canEdit = invoice.status !== 'paid';
@@ -237,6 +239,17 @@ export default function Invoices() {
                             disabled={isUpdating}
                           >
                             Modifier
+                          </Button>
+                        )}
+                        {canSend && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => updateInvoice(invoice.id, { status: 'sent' })}
+                            disabled={isUpdating}
+                          >
+                            <Send className="w-3.5 h-3.5 mr-1.5" />
+                            Envoyer
                           </Button>
                         )}
                         {canMarkPaid && (
