@@ -6,10 +6,8 @@ import {
   TrendingUp,
   Briefcase,
   BarChart3,
-  PieChart,
   LineChart,
   FileUp,
-  Lightbulb,
   Calendar,
   LogOut,
   Settings,
@@ -48,17 +46,14 @@ const proItems = [
 ];
 
 const persoItems = [
-  { title: "Patrimoine", url: "/perso/portfolio", icon: TrendingUp },
-  { title: "Investissements", url: "/perso/investments", icon: Briefcase },
+  { title: "Patrimoine", url: "/perso/patrimoine", icon: TrendingUp },
   { title: "Insights", url: "/perso/insights", icon: BarChart3 },
-  { title: "Diversification", url: "/perso/diversification", icon: PieChart },
-  { title: "Projection retraite", url: "/unified/projection", icon: LineChart },
 ];
 
 const transversalItems = [
-  { title: "Import", url: "/import", icon: FileUp },
-  { title: "Décisions", url: "/decisions", icon: Lightbulb },
   { title: "Revue mensuelle", url: "/monthly-review", icon: Calendar },
+  { title: "Projection retraite", url: "/unified/projection", icon: LineChart },
+  { title: "Import", url: "/import", icon: FileUp },
   { title: "Paramètres", url: "/settings", icon: Settings },
 ];
 
