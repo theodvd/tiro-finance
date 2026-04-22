@@ -8,6 +8,7 @@ import { fmtEUR } from "@/lib/format";
 import { PatrimoineSnapshot } from "@/components/dashboard/PatrimoineSnapshot";
 import { OpportuniteCard } from "@/components/dashboard/OpportuniteCard";
 import { ProKpis } from "@/components/dashboard/ProKpis";
+import { ProjectionWidget } from "@/components/dashboard/ProjectionWidget";
 
 /** Nom du mois courant en français (ex. "avril 2026"). */
 const currentMonthLabel = new Intl.DateTimeFormat("fr-FR", {
@@ -68,6 +69,9 @@ export default function Dashboard() {
         {/* Zone 2 — Snapshot patrimoine perso */}
         <PatrimoineSnapshot />
       </div>
+
+      {/* Widget Projection retraite */}
+      <ProjectionWidget />
 
       {/* Widget net investissable */}
       {isReady && breakdown ? (
@@ -157,7 +161,7 @@ export default function Dashboard() {
             {breakdown.netAfterDeductions > 0 && (
               <div className="pt-1 border-t">
                 <Button asChild size="sm" className="w-full sm:w-auto">
-                  <Link to={`/perso/investments?suggest=${Math.round(breakdown.netAfterDeductions)}`}>
+                  <Link to={`/perso/patrimoine?suggest=${Math.round(breakdown.netAfterDeductions)}`}>
                     Investir {fmtEUR(breakdown.netAfterDeductions)}
                     <ArrowRight className="w-4 h-4 ml-2" />
                   </Link>
