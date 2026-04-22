@@ -137,6 +137,49 @@ function Row({
 }
 
 // ─────────────────────────────────────────────────────────────
+// Label objectif
+// ─────────────────────────────────────────────────────────────
+
+function TargetCapitalLabel({
+  viewBox,
+  value,
+}: {
+  viewBox?: { x?: number; y?: number };
+  value?: string;
+}) {
+  if (!viewBox || !value) return null;
+
+  const labelWidth = Math.max(128, value.length * 6.6 + 18);
+  const labelHeight = 22;
+  const x = (viewBox.x ?? 0) + 10;
+  const y = Math.max(labelHeight + 4, (viewBox.y ?? 0) - 10);
+
+  return (
+    <g>
+      <rect
+        x={x}
+        y={y - labelHeight}
+        width={labelWidth}
+        height={labelHeight}
+        rx={6}
+        fill="hsl(var(--background))"
+        stroke={COLORS.goal}
+        strokeWidth={1}
+      />
+      <text
+        x={x + 9}
+        y={y - 7}
+        fill={COLORS.goal}
+        fontSize={11}
+        fontWeight={600}
+      >
+        {value}
+      </text>
+    </g>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // Légende custom
 // ─────────────────────────────────────────────────────────────
 
