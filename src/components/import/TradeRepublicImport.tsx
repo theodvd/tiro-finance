@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { FileDropzone } from "./FileDropzone";
-import { parseTradeRepublicPDF, type TRTransaction } from "@/lib/parsers/tradeRepublicParser";
+import { parseTradeRepublicCSV, type TRTransaction } from "@/lib/parsers/tradeRepublicParser";
 import { persistTradeRepublicTransactions } from "@/lib/persistTradeRepublicImport";
 import { computeTradeRepublicDiff, type ImportDiff } from "@/lib/computeTradeRepublicDiff";
 import { fmtEUR } from "@/lib/format";
@@ -19,9 +19,9 @@ export function TradeRepublicImport() {
   const [diff, setDiff] = useState<ImportDiff | null>(null);
 
   const handleFile = async (file: File) => {
-    if (!file.name.toLowerCase().endsWith(".pdf")) {
+    if (!file.name.toLowerCase().endsWith(".csv")) {
       setStatus("error");
-      setErrorMsg("Seuls les fichiers PDF sont acceptés.");
+      setErrorMsg("Seuls les fichiers CSV sont acceptés.");
       return;
     }
     setStatus("parsing");
@@ -29,7 +29,7 @@ export function TradeRepublicImport() {
     setDiff(null);
     setImportResult(null);
     try {
-      const result = await parseTradeRepublicPDF(file);
+      const result = await parseTradeRepublicCSV(file);
       setTransactions(result);
       // Automatically compute diff
       setStatus("analyzing");
@@ -39,7 +39,7 @@ export function TradeRepublicImport() {
     } catch (err) {
       console.error('[TR Import] Error:', err);
       setStatus("error");
-      setErrorMsg(err instanceof Error ? err.message : "Impossible de lire ce PDF.");
+      setErrorMsg(err instanceof Error ? err.message : "Impossible de lire ce CSV.");
     }
   };
 
@@ -71,10 +71,10 @@ export function TradeRepublicImport() {
     <Card>
       <CardHeader>
         <CardTitle>Trade Republic — Import des transactions</CardTitle>
-        <CardDescription>Importe ton relevé de compte PDF pour synchroniser tes transactions.</CardDescription>
+        <CardDescription>Importe ton export CSV de transactions pour synchroniser ton portefeuille.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <FileDropzone accept=".pdf" label="Glisse ton PDF Trade Republic ici, ou clique pour sélectionner" status={dropzoneStatus} errorMessage={errorMsg} onFile={handleFile} />
+        <FileDropzone accept=".csv" label="Glisse ton export CSV Trade Republic ici, ou clique pour sélectionner" status={dropzoneStatus} errorMessage={errorMsg} onFile={handleFile} />
 
         {status === "analyzing" && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -146,7 +146,7 @@ export function TradeRepublicImport() {
             {diff.newTransactions.length === 0 && (
               <div className="rounded-lg bg-muted p-3 text-sm flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-green-600" />
-                Toutes les transactions de ce PDF sont déjà importées. Rien à faire.
+                Toutes les transactions de ce CSV sont déjà importées. Rien à faire.
               </div>
             )}
 
