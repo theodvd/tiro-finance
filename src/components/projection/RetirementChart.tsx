@@ -308,7 +308,7 @@ export function RetirementChart({ result }: RetirementChartProps) {
             />
           )}
 
-          {/* ── Objectif (ligne rouge à droite) ──────── */}
+          {/* ── Objectif (ligne rouge horizontale) ──────── */}
           <ReferenceLine
             y={result.targetCapital}
             stroke={COLORS.goal}
@@ -318,9 +318,10 @@ export function RetirementChart({ result }: RetirementChartProps) {
               value: `Objectif : ${fmtK(result.targetCapital)}`,
               fill: COLORS.goal,
               fontSize: 11,
-              position: 'right',
-              dx: 10,
-              dy: -10,
+              fontWeight: 600,
+              position: 'insideTopLeft',
+              dy: -8,
+              dx: 8,
             }}
           />
 
