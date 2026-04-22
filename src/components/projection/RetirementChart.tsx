@@ -357,15 +357,7 @@ export function RetirementChart({ result }: RetirementChartProps) {
             stroke={COLORS.goal}
             strokeDasharray="6 3"
             strokeWidth={2}
-            label={{
-              value: `Objectif : ${fmtK(result.targetCapital)}`,
-              fill: COLORS.goal,
-              fontSize: 11,
-              fontWeight: 600,
-              position: 'insideTopLeft',
-              dy: -8,
-              dx: 8,
-            }}
+            label={<TargetCapitalLabel value={`Objectif : ${fmtK(result.targetCapital)}`} />}
           />
 
           {/* ── Tooltip ──────────────────────────────────── */}
