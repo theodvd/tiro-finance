@@ -70,9 +70,6 @@ export default function Dashboard() {
         <PatrimoineSnapshot />
       </div>
 
-      {/* Widget Projection retraite */}
-      <ProjectionWidget />
-
       {/* Widget net investissable */}
       {isReady && breakdown ? (
         <Card>
@@ -190,6 +187,9 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       ) : null}
+
+      {/* Widget Projection retraite */}
+      <ProjectionWidget />
 
       {/* Zone 3 — Opportunité du mois */}
       <OpportuniteCard
