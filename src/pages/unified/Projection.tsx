@@ -9,7 +9,7 @@
  * Calcul synchrone à chaque keystroke via useMemo (retirementEngine pur TS).
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Info, AlertCircle, CheckCircle2, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -117,6 +117,7 @@ function SliderField({
 
 export default function Projection() {
   // ── Données pré-remplissage ──────────────────────────────
+  // Bug fix: useInvestorProfile ne retourne pas `age` à la racine — il est dans rawProfile.
   const { rawProfile, loading: profileLoading } = useInvestorProfile();
   const profileAge = rawProfile?.age ?? null;
   const { totalValue: portfolioValue, loading: portfolioLoading } = usePortfolioData();
@@ -131,27 +132,40 @@ export default function Projection() {
   const [monthlyInvestment, setMonthlyInvestment] = useState(500);
   const [targetMonthlyIncome, setTargetMonthlyIncome] = useState(3_000);
 
-  // ── Pré-remplissage (une seule fois chaque) ──────────────
+  // ── Pré-remplissage — guards "une seule fois" via useRef ─
+  // Sans ces refs, une invalidation de cache TanStack Query (ex : mutation sur
+  // un autre composant) ferait re-déclencher les effects et écraserait les
+  // valeurs que l'utilisateur a modifiées manuellement.
+  const agePrefilled = useRef(false);
+  const wealthPrefilled = useRef(false);
+  const investPrefilled = useRef(false);
+
   useEffect(() => {
-    if (!profileLoading && profileAge != null) {
+    if (!agePrefilled.current && !profileLoading && profileAge != null) {
       setCurrentAge(profileAge);
+      // Auto-ajuster retirementAge si profileAge le dépasse (Bug #3 prévention)
+      setRetirementAge((prev) => (profileAge >= prev ? Math.min(75, profileAge + 5) : prev));
+      agePrefilled.current = true;
     }
   }, [profileAge, profileLoading]);
 
   useEffect(() => {
-    if (!portfolioLoading && portfolioValue > 0) {
+    if (!wealthPrefilled.current && !portfolioLoading && portfolioValue > 0) {
       setCurrentWealth(Math.round(portfolioValue));
+      wealthPrefilled.current = true;
     }
   }, [portfolioValue, portfolioLoading]);
 
   useEffect(() => {
-    if (!netLoading) {
+    if (!investPrefilled.current && !netLoading) {
       if (breakdown && breakdown.netAfterDeductions > 0) {
         setMonthlyInvestment(Math.max(1, Math.round(breakdown.netAfterDeductions * 0.3)));
+        investPrefilled.current = true;
       } else if (profile?.annual_revenue_target) {
         setMonthlyInvestment(
           Math.max(1, Math.round((profile.annual_revenue_target / 12) * 0.3))
         );
+        investPrefilled.current = true;
       }
     }
   }, [breakdown, profile, netLoading]);
@@ -209,7 +223,14 @@ export default function Projection() {
                 max={70}
                 step={1}
                 unit=" ans"
-                onChange={setCurrentAge}
+                onChange={(v) => {
+                  setCurrentAge(v);
+                  // Bug fix #3 : si currentAge dépasse retirementAge, on bumpe
+                  // automatiquement retirementAge pour éviter result = null.
+                  if (retirementAge <= v) {
+                    setRetirementAge(Math.min(75, v + 5));
+                  }
+                }}
               />
             </CardContent>
           </Card>
@@ -239,8 +260,8 @@ export default function Projection() {
                 label="Patrimoine actuel"
                 value={currentWealth}
                 min={0}
-                max={500_000}
-                step={1_000}
+                max={2_000_000}
+                step={5_000}
                 unit=" €"
                 hint={portfolioValue > 0 ? '← depuis votre portefeuille' : undefined}
                 onChange={setCurrentWealth}
