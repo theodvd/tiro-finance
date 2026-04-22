@@ -6,7 +6,7 @@ import {
   MoreHorizontal,
   Menu,
   FileUp,
-  Lightbulb,
+  LineChart,
   Settings,
   User,
   LogOut,
@@ -36,18 +36,16 @@ const proLinks = [
 ];
 
 const persoLinks = [
-  { label: "Patrimoine", to: "/perso/portfolio" },
-  { label: "Investissements", to: "/perso/investments" },
+  { label: "Patrimoine", to: "/perso/patrimoine" },
   { label: "Insights", to: "/perso/insights" },
-  { label: "Diversification", to: "/perso/diversification" },
-  { label: "Projection retraite", to: "/unified/projection" },
 ];
 
 const secondaryLinks = [
-  { label: "Import", to: "/import", icon: FileUp },
-  { label: "Décisions", to: "/decisions", icon: Lightbulb },
   { label: "Revue mensuelle", to: "/monthly-review", icon: Calendar },
+  { label: "Projection retraite", to: "/unified/projection", icon: LineChart },
+  { label: "Import", to: "/import", icon: FileUp },
   { label: "Paramètres", to: "/settings", icon: Settings },
+  { label: "Profil", to: "/profile", icon: User },
 ];
 
 // ─────────────────────────────────────────────────────────────

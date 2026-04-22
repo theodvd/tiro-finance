@@ -71,6 +71,12 @@ const App = () => (
               />
 
               {/* ── Section /perso ────────────────────────────────────────── */}
+              {/* /perso/patrimoine : URL canonique (fusion Portfolio + Investments en étape 2) */}
+              <Route
+                path="/perso/patrimoine"
+                element={<ProtectedPage><Portfolio /></ProtectedPage>}
+              />
+              {/* /perso/portfolio conservé temporairement — redirigé en étape 5 */}
               <Route
                 path="/perso/portfolio"
                 element={<ProtectedPage><Portfolio /></ProtectedPage>}
@@ -137,10 +143,14 @@ const App = () => (
               {/* ── Redirects depuis les anciennes URLs ───────────────────── */}
               {/* / → /dashboard (nouvelle page d'accueil) */}
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              {/* Anciennes routes perso → nouvelles URLs */}
-              <Route path="/investments" element={<Navigate to="/perso/investments" replace />} />
+              {/* Redirects vers la nouvelle URL canonique /perso/patrimoine */}
+              <Route path="/investments" element={<Navigate to="/perso/patrimoine" replace />} />
+              <Route path="/perso/investments" element={<Navigate to="/perso/patrimoine" replace />} />
+              {/* Redirects vers /perso/insights (fusion étape 3) */}
               <Route path="/insights" element={<Navigate to="/perso/insights" replace />} />
-              <Route path="/diversification" element={<Navigate to="/perso/diversification" replace />} />
+              <Route path="/diversification" element={<Navigate to="/perso/insights" replace />} />
+              <Route path="/perso/diversification" element={<Navigate to="/perso/insights" replace />} />
+              <Route path="/decisions" element={<Navigate to="/perso/insights" replace />} />
 
               {/* ── 404 ───────────────────────────────────────────────────── */}
               <Route path="*" element={<NotFound />} />
