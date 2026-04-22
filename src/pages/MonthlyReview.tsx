@@ -11,6 +11,16 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts';
+import {
   Briefcase,
   TrendingUp,
   TrendingDown,
@@ -36,6 +46,7 @@ import {
 } from '@/components/ui/select';
 import { useMonthlyReviewPro } from '@/hooks/useMonthlyReviewPro';
 import { useMonthlyReviewPerso } from '@/hooks/useMonthlyReviewPerso';
+import { useMonthlyHistory } from '@/hooks/useMonthlyHistory';
 import { useInvoices } from '@/hooks/useInvoices';
 import { usePortfolioData } from '@/hooks/usePortfolioData';
 import { useFiscalProfile } from '@/hooks/useFiscalProfile';
@@ -161,6 +172,54 @@ function ChargeRow({
   );
 }
 
+// ─────────────────────────────────────────────────────────────
+// Bilan narratif — string template (pas d'IA)
+// ─────────────────────────────────────────────────────────────
+
+function buildNarrative({
+  periodLabel,
+  revenue,
+  totalCharges,
+  netAfterCharges,
+  invested,
+  delta,
+}: {
+  periodLabel: string;
+  revenue: number;
+  totalCharges: number;
+  netAfterCharges: number;
+  invested: number;
+  delta: number;
+}): string {
+  const monthCap = periodLabel.charAt(0).toUpperCase() + periodLabel.slice(1);
+
+  if (revenue === 0) {
+    return `${monthCap} : aucun encaissement enregistré. Pensez à marquer vos factures comme payées.`;
+  }
+
+  const investRate = netAfterCharges > 0 ? Math.round((invested / netAfterCharges) * 100) : 0;
+
+  if (delta <= 0) {
+    return (
+      `${monthCap}, vous avez encaissé ${fmtEUR(revenue)} HT. ` +
+      (totalCharges > 0
+        ? `Après ${fmtEUR(totalCharges)} de charges, votre net était de ${fmtEUR(netAfterCharges)}. `
+        : '') +
+      `Vous avez investi ${fmtEUR(invested)} ce mois — excellent, objectif atteint !`
+    );
+  }
+
+  return (
+    `${monthCap}, vous avez encaissé ${fmtEUR(revenue)} HT. ` +
+    (totalCharges > 0
+      ? `Après ${fmtEUR(totalCharges)} de charges, votre net était de ${fmtEUR(netAfterCharges)}. `
+      : '') +
+    `Vous avez investi ${fmtEUR(invested)} ce mois` +
+    (investRate > 0 ? ` — soit ${investRate}% de votre net` : '') +
+    `. Il vous restait ${fmtEUR(delta)} non investis.`
+  );
+}
+
 function SectionSkeleton() {
   return (
     <Card>
@@ -195,6 +254,7 @@ export default function MonthlyReview() {
   // ── Données ─────────────────────────────────────────────────
   const { data: proData, isLoading: proLoading } = useMonthlyReviewPro(year, month);
   const { data: persoData, isLoading: persoLoading } = useMonthlyReviewPerso(year, month);
+  const { points: historyPoints, isLoading: historyLoading } = useMonthlyHistory();
   const { invoices, isLoading: invoicesLoading } = useInvoices();
   const { totalValue, pnl, pnlPct, loading: portfolioLoading } = usePortfolioData();
   const { profile } = useFiscalProfile();
@@ -523,14 +583,125 @@ export default function MonthlyReview() {
       )}
 
       {/* ══════════════════════════════════════════════════════════
-          SECTION 3 — BILAN DU MOIS (à venir)
+          SECTION 3 — BILAN DU MOIS
       ══════════════════════════════════════════════════════════ */}
-      <Card className="border-dashed opacity-50">
-        <CardContent className="pt-5 flex items-center gap-3 text-muted-foreground text-sm">
-          <Wallet className="h-4 w-4 shrink-0" />
-          <span>Bilan narratif du mois — en cours de construction</span>
-        </CardContent>
-      </Card>
+      {proData && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Wallet className="h-4 w-4 text-primary" />
+              Bilan du mois
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Bilan narratif */}
+            <p className="text-sm leading-relaxed text-foreground">
+              {buildNarrative({
+                periodLabel,
+                revenue: proData.revenueEncaisse,
+                totalCharges: proData.totalCharges,
+                netAfterCharges: proData.netAfterCharges,
+                invested: persoData?.investedThisMonth ?? 0,
+                delta: Math.max(0, delta ?? 0),
+              })}
+            </p>
+
+            {/* CTA si delta > 0 */}
+            {delta !== null && delta > 0 && (
+              <Button asChild size="sm">
+                <Link to={`/perso/investments?suggest=${Math.round(delta)}`}>
+                  Investir les {fmtEUR(delta)} restants
+                  <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
+                </Link>
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════
+          SECTION 4 — GRAPHIQUE 6 DERNIERS MOIS
+      ══════════════════════════════════════════════════════════ */}
+      {historyLoading ? (
+        <Card>
+          <CardContent className="pt-5">
+            <Skeleton className="h-4 w-40 mb-4" />
+            <Skeleton className="h-48" />
+          </CardContent>
+        </Card>
+      ) : historyPoints.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              {historyPoints[historyPoints.length - 1]?.netInvestable >= 0
+                ? <TrendingUp className="h-4 w-4 text-primary" />
+                : <TrendingDown className="h-4 w-4 text-destructive" />}
+              Tendance sur 6 mois
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart
+                data={historyPoints}
+                margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
+                barCategoryGap="25%"
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="hsl(var(--border))"
+                  opacity={0.5}
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis
+                  tickFormatter={(v) =>
+                    v >= 1000 ? `${Math.round(v / 1000)}k` : String(v)
+                  }
+                  tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={40}
+                />
+                <Tooltip
+                  formatter={(value: number, name: string) => [
+                    fmtEUR(value),
+                    name === 'netInvestable' ? 'Net investissable' : 'Investi',
+                  ]}
+                  contentStyle={{
+                    fontSize: 12,
+                    borderRadius: 8,
+                    border: '1px solid hsl(var(--border))',
+                    background: 'hsl(var(--background))',
+                  }}
+                />
+                <Legend
+                  formatter={(value) =>
+                    value === 'netInvestable' ? 'Net investissable' : 'Investi'
+                  }
+                  wrapperStyle={{ fontSize: 11 }}
+                />
+                <Bar
+                  dataKey="netInvestable"
+                  fill="#2563eb"
+                  radius={[3, 3, 0, 0]}
+                  name="netInvestable"
+                />
+                <Bar
+                  dataKey="invested"
+                  fill="#16a34a"
+                  radius={[3, 3, 0, 0]}
+                  name="invested"
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
 
     </div>
   );
