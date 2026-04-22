@@ -166,7 +166,6 @@ function ChartLegend({ showTarget }: { showTarget: boolean }) {
           {item.label}
         </div>
       ))}
-      {/* Cône */}
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <span
           className="inline-block w-5 h-3 rounded-sm"
@@ -189,7 +188,6 @@ interface RetirementChartProps {
 export function RetirementChart({ result }: RetirementChartProps) {
   const showTarget = result.gapAtRetirement > 0;
 
-  // Construction des données graphique
   const data: ChartPoint[] = result.years.map((age, i) => {
     const p = result.scenarios.prudent[i];
     const d = result.scenarios.dynamic[i];
@@ -204,19 +202,30 @@ export function RetirementChart({ result }: RetirementChartProps) {
     };
   });
 
-  // Ticks X : tous les 5 ans + dernier
   const yearsCount = result.years.length;
   const xTicks = result.years.filter((age, i) => {
     if (i === 0 || i === yearsCount - 1) return true;
     return age % 5 === 0;
   });
 
-  // Domaine Y : du bas à max(dynamic_final, targetCapital) × 1.05
   const dynamicFinal = result.scenarios.dynamic[yearsCount - 1];
   const yMax = Math.max(dynamicFinal, result.targetCapital) * 1.08;
 
   return (
-    <div>
+    <div className="space-y-2">
+      <div className="flex justify-end">
+        <div className="inline-flex items-center gap-2 rounded-md border border-border bg-background/95 px-3 py-1.5 text-xs shadow-sm">
+          <span
+            className="inline-block h-2 w-2 rounded-full shrink-0"
+            style={{ backgroundColor: COLORS.goal }}
+          />
+          <span className="text-muted-foreground">Objectif</span>
+          <span className="font-semibold tabular-nums text-foreground">
+            {fmtK(result.targetCapital)}
+          </span>
+        </div>
+      </div>
+
       <ResponsiveContainer width="100%" height={340}>
         <ComposedChart data={data} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
           <CartesianGrid
@@ -241,7 +250,6 @@ export function RetirementChart({ result }: RetirementChartProps) {
             domain={[0, yMax]}
           />
 
-          {/* ── Cône (stacked areas) ──────────────────────── */}
           <Area
             type="monotone"
             dataKey="coneLow"
@@ -263,7 +271,6 @@ export function RetirementChart({ result }: RetirementChartProps) {
             activeDot={false}
           />
 
-          {/* ── Lignes scénarios ─────────────────────────── */}
           <Line
             type="monotone"
             dataKey="prudent"
@@ -294,7 +301,6 @@ export function RetirementChart({ result }: RetirementChartProps) {
             legendType="none"
           />
 
-          {/* ── Trajectoire cible (verte) ─────────────────── */}
           {showTarget && (
             <Line
               type="monotone"
@@ -308,24 +314,13 @@ export function RetirementChart({ result }: RetirementChartProps) {
             />
           )}
 
-          {/* ── Objectif (ligne rouge horizontale) ──────── */}
           <ReferenceLine
             y={result.targetCapital}
             stroke={COLORS.goal}
             strokeDasharray="6 3"
             strokeWidth={2}
-            label={{
-              value: `Objectif : ${fmtK(result.targetCapital)}`,
-              fill: COLORS.goal,
-              fontSize: 11,
-              fontWeight: 600,
-              position: 'insideTopLeft',
-              dy: -8,
-              dx: 8,
-            }}
           />
 
-          {/* ── Tooltip ──────────────────────────────────── */}
           <Tooltip
             content={(props) => (
               <CustomTooltip
