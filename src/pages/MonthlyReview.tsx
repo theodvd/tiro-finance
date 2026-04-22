@@ -1,440 +1,407 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  Target, 
-  CheckCircle2, 
-  AlertTriangle,
-  PieChart,
-  Wallet,
+/**
+ * Page /monthly-review — Revue mensuelle Pro × Perso.
+ *
+ * Sections :
+ *   1. Sélecteur de période (mois/année)
+ *   2. Revenus pro   — CA, charges, net investissable réel
+ *   3. Épargne       — patrimoine, investi vs disponible (à venir)
+ *   4. Bilan narratif + graphique 6 mois (à venir)
+ */
+
+import { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import {
+  Briefcase,
+  TrendingUp,
+  AlertCircle,
+  CheckCircle2,
   ArrowRight,
-  Calendar,
-  Loader2,
-  Settings,
-  ChevronDown,
-  ChevronUp
+  Receipt,
+  Wallet,
+  FileText,
 } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Progress } from '@/components/ui/progress';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { useMonthlyReview, MonthlyAction } from '@/hooks/useMonthlyReview';
-import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import CountUp from 'react-countup';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { useMonthlyReviewPro } from '@/hooks/useMonthlyReviewPro';
+import { useInvoices } from '@/hooks/useInvoices';
+import { fmtEUR } from '@/lib/format';
 
-export default function MonthlyReview() {
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  const data = useMonthlyReview();
-  const [isCreatingCheckpoint, setIsCreatingCheckpoint] = useState(false);
-  const [checkpointCreated, setCheckpointCreated] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [dismissedActions, setDismissedActions] = useState<Set<string>>(new Set());
+// ─────────────────────────────────────────────────────────────
+// Helpers période
+// ─────────────────────────────────────────────────────────────
 
-  // Local state for editable thresholds
-  const [editableThresholds, setEditableThresholds] = useState({
-    cashTargetPct: data.thresholds.cashTargetPct,
-    maxPositionPct: data.thresholds.maxPositionPct,
-    maxAssetClassPct: data.thresholds.maxAssetClassPct,
-  });
+interface Period {
+  year: number;
+  month: number; // 1-12
+}
 
-  const handleCreateCheckpoint = async () => {
-    if (!user) return;
-    
-    setIsCreatingCheckpoint(true);
-    try {
-      // Call take-snapshot with monthly type
-      const { data: result, error } = await supabase.functions.invoke('take-snapshot', {
-        body: { snapshot_type: 'monthly' }
-      });
-
-      if (error) throw error;
-
-      setCheckpointCreated(true);
-      toast.success('Point mensuel validé !', {
-        description: 'Votre checkpoint a été enregistré.',
-      });
-    } catch (e: any) {
-      console.error('Error creating checkpoint:', e);
-      toast.error('Erreur lors de la création du checkpoint', {
-        description: e.message,
-      });
-    } finally {
-      setIsCreatingCheckpoint(false);
-    }
-  };
-
-  const handleSaveThresholds = async () => {
-    if (!user) return;
-
-    try {
-      const { error } = await supabase
-        .from('user_profile')
-        .update({
-          cash_target_pct: editableThresholds.cashTargetPct,
-          max_position_pct: editableThresholds.maxPositionPct,
-          max_asset_class_pct: editableThresholds.maxAssetClassPct,
-        })
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-
-      toast.success('Objectifs enregistrés');
-    } catch (e: any) {
-      toast.error('Erreur lors de la sauvegarde');
-    }
-  };
-
-  const handleActionClick = (action: MonthlyAction) => {
-    if (action.ctaAction === 'add-investment') {
-      navigate('/investments');
-    } else if (action.ctaAction === 'view-decision') {
-      navigate('/decisions');
-    } else {
-      setDismissedActions(prev => new Set([...prev, action.id]));
-    }
-  };
-
-  const getEffortBadge = (effort: MonthlyAction['effort']) => {
-    switch (effort) {
-      case 'low':
-        return <Badge variant="secondary" className="text-xs">Effort faible</Badge>;
-      case 'medium':
-        return <Badge variant="outline" className="text-xs">Effort moyen</Badge>;
-      case 'high':
-        return <Badge variant="destructive" className="text-xs">Effort élevé</Badge>;
-    }
-  };
-
-  if (data.loading) {
-    return (
-      <div className="container mx-auto p-4 md:p-6 space-y-6 max-w-3xl">
-        <Skeleton className="h-8 w-64" />
-        <Skeleton className="h-48" />
-        <Skeleton className="h-48" />
-        <Skeleton className="h-48" />
-        <Skeleton className="h-24" />
-      </div>
-    );
+/**
+ * Retourne le mois par défaut :
+ *   - Avant le 15 du mois courant → mois précédent (données complètes)
+ *   - À partir du 15 → mois courant
+ */
+function defaultPeriod(): Period {
+  const now = new Date();
+  if (now.getDate() < 15) {
+    const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    return { year: d.getFullYear(), month: d.getMonth() + 1 };
   }
+  return { year: now.getFullYear(), month: now.getMonth() + 1 };
+}
 
-  const visibleActions = data.actions.filter(a => !dismissedActions.has(a.id));
+/** Génère la liste des 13 derniers mois (courant inclus). */
+function buildMonthOptions(): Array<Period & { label: string; value: string }> {
+  const now = new Date();
+  return Array.from({ length: 13 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const year = d.getFullYear();
+    const month = d.getMonth() + 1;
+    return {
+      year,
+      month,
+      label: format(d, 'MMMM yyyy', { locale: fr }),
+      value: `${year}-${month}`,
+    };
+  });
+}
+
+/** Bornes ISO pour filtrage côté client des factures. */
+function monthBoundsISO(year: number, month: number) {
+  const start = new Date(year, month - 1, 1).toISOString().slice(0, 10);
+  const end = new Date(year, month, 1).toISOString().slice(0, 10);
+  return { start, end };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Sub-composants
+// ─────────────────────────────────────────────────────────────
+
+function KpiCard({
+  label,
+  value,
+  sub,
+  color,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  color?: 'blue' | 'green' | 'amber' | 'red';
+}) {
+  const colorMap = {
+    blue: 'text-blue-700',
+    green: 'text-green-700',
+    amber: 'text-amber-700',
+    red: 'text-red-600',
+  };
+  const textClass = color ? colorMap[color] : 'text-foreground';
+  return (
+    <div className="space-y-1">
+      <p className="text-xs text-muted-foreground uppercase tracking-wide">{label}</p>
+      <p className={`text-xl font-bold tabular-nums ${textClass}`}>{value}</p>
+      {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
+    </div>
+  );
+}
+
+function ChargeRow({
+  label,
+  value,
+  sub,
+  bold,
+  separator,
+  positive,
+}: {
+  label: string;
+  value: number;
+  sub?: string;
+  bold?: boolean;
+  separator?: boolean;
+  positive?: boolean;
+}) {
+  const className = [
+    'flex items-center justify-between py-1.5 text-sm',
+    separator ? 'border-t border-border mt-1 pt-2.5' : '',
+  ].join(' ');
+
+  const valueClass = [
+    'tabular-nums shrink-0',
+    bold ? 'font-semibold text-base' : 'text-muted-foreground',
+    positive ? 'text-green-700' : '',
+  ].join(' ');
 
   return (
-    <div className="container mx-auto p-4 md:p-6 space-y-6 max-w-3xl">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+    <div className={className}>
+      <span className={bold ? 'font-medium' : 'text-muted-foreground'}>
+        {label}
+        {sub && (
+          <span className="ml-1.5 text-xs text-muted-foreground/70">{sub}</span>
+        )}
+      </span>
+      <span className={valueClass}>
+        {positive && value > 0 ? '+' : ''}
+        {fmtEUR(value)}
+      </span>
+    </div>
+  );
+}
+
+function SectionSkeleton() {
+  return (
+    <Card>
+      <CardContent className="pt-5 space-y-3">
+        <Skeleton className="h-4 w-32" />
+        <div className="grid grid-cols-3 gap-4">
+          <Skeleton className="h-12" />
+          <Skeleton className="h-12" />
+          <Skeleton className="h-12" />
+        </div>
+        <Skeleton className="h-px" />
+        <Skeleton className="h-4" />
+        <Skeleton className="h-4" />
+        <Skeleton className="h-4" />
+        <Skeleton className="h-4 w-3/4" />
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Page principale
+// ─────────────────────────────────────────────────────────────
+
+export default function MonthlyReview() {
+  const monthOptions = useMemo(() => buildMonthOptions(), []);
+  const def = defaultPeriod();
+
+  const [period, setPeriod] = useState<Period>(def);
+  const { year, month } = period;
+
+  // ── Données ─────────────────────────────────────────────────
+  const { data: proData, isLoading: proLoading } = useMonthlyReviewPro(year, month);
+  const { invoices, isLoading: invoicesLoading } = useInvoices();
+
+  // Factures en attente (status 'sent'|'late') émises durant le mois sélectionné.
+  // Calculé côté client depuis useInvoices — pas de doublon de requête Supabase.
+  const pendingInvoices = useMemo(() => {
+    if (!invoices) return [];
+    const { start, end } = monthBoundsISO(year, month);
+    return invoices.filter(
+      (inv) =>
+        (inv.status === 'sent' || inv.status === 'late') &&
+        inv.issue_date >= start &&
+        inv.issue_date < end,
+    );
+  }, [invoices, year, month]);
+
+  const pendingTotal = pendingInvoices.reduce((s, inv) => s + inv.amount_ht, 0);
+
+  // ── Période affichée ─────────────────────────────────────────
+  const periodLabel = format(new Date(year, month - 1, 1), 'MMMM yyyy', { locale: fr });
+
+  // ── Handler sélecteur ────────────────────────────────────────
+  const handlePeriodChange = (value: string) => {
+    const [y, m] = value.split('-').map(Number);
+    setPeriod({ year: y, month: m });
+  };
+
+  return (
+    <div className="space-y-6 max-w-3xl mx-auto">
+
+      {/* ── En-tête ──────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Point mensuel</h1>
-          <p className="text-sm text-muted-foreground">
-            {format(new Date(), 'MMMM yyyy', { locale: fr })}
+          <h1 className="text-2xl font-semibold tracking-tight">Revue mensuelle</h1>
+          <p className="text-muted-foreground mt-0.5 text-sm">
+            Boucle complète : revenus → charges → épargne déployée.
           </p>
         </div>
-        {data.lastCheckpointDate && (
-          <Badge variant="outline" className="text-xs w-fit">
-            <Calendar className="h-3 w-3 mr-1" />
-            Dernier point : {format(new Date(data.lastCheckpointDate), 'dd MMM yyyy', { locale: fr })}
-          </Badge>
-        )}
+
+        {/* Sélecteur mois/année */}
+        <Select
+          value={`${year}-${month}`}
+          onValueChange={handlePeriodChange}
+        >
+          <SelectTrigger className="w-48">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {monthOptions.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════════════
-          BLOC A – RÉSUMÉ DU MOIS
-      ═══════════════════════════════════════════════════════════════════════ */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-primary" />
-            Résumé du mois
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            {/* Total Value */}
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground uppercase tracking-wide">Patrimoine total</p>
-              <p className="text-xl font-bold tabular-nums">
-                <CountUp end={data.totalValue} duration={0.8} decimals={0} separator=" " suffix=" €" />
-              </p>
-            </div>
-
-            {/* Monthly P/L */}
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground uppercase tracking-wide">P/L latent</p>
-              <p className={`text-xl font-bold tabular-nums ${data.monthlyPnl >= 0 ? 'text-[hsl(var(--success))]' : 'text-destructive'}`}>
-                {data.monthlyPnl >= 0 ? '+' : ''}{data.monthlyPnl.toLocaleString('fr-FR')} €
-              </p>
-              <p className={`text-xs ${data.monthlyPnl >= 0 ? 'text-[hsl(var(--success))]' : 'text-destructive'}`}>
-                {data.monthlyPnlPct >= 0 ? '+' : ''}{data.monthlyPnlPct.toFixed(1)}%
-              </p>
-            </div>
-          </div>
-
-          {/* Variation vs previous */}
-          {data.variationVsPrevious !== null && (
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50">
-              {data.variationVsPrevious >= 0 ? (
-                <TrendingUp className="h-4 w-4 text-[hsl(var(--success))]" />
-              ) : (
-                <TrendingDown className="h-4 w-4 text-destructive" />
-              )}
-              <span className="text-sm">
-                <span className={`font-medium ${data.variationVsPrevious >= 0 ? 'text-[hsl(var(--success))]' : 'text-destructive'}`}>
-                  {data.variationVsPrevious >= 0 ? '+' : ''}{data.variationVsPrevious.toFixed(1)}%
-                </span>
-                {' '}vs période précédente
-              </span>
-            </div>
-          )}
-
-          {/* Top contributors */}
-          {data.topContributors.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs text-muted-foreground">Top 3 positions</p>
-              <div className="flex flex-wrap gap-2">
-                {data.topContributors.map((c, i) => (
-                  <Badge key={i} variant="secondary" className="font-mono">
-                    {c.name} ({c.contribution.toFixed(1)}%)
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ═══════════════════════════════════════════════════════════════════════
-          BLOC B – SITUATION VS OBJECTIFS
-      ═══════════════════════════════════════════════════════════════════════ */}
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
+      {/* ══════════════════════════════════════════════════════════
+          SECTION 1 — REVENUS PRO
+      ══════════════════════════════════════════════════════════ */}
+      {proLoading || invoicesLoading ? (
+        <SectionSkeleton />
+      ) : (
+        <Card>
+          <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
-              <Target className="h-4 w-4 text-primary" />
-              Situation vs objectifs
+              <Briefcase className="h-4 w-4 text-primary" />
+              Revenus pro — {periodLabel}
             </CardTitle>
-            <Collapsible open={settingsOpen} onOpenChange={setSettingsOpen}>
-              <CollapsibleTrigger asChild>
-                <Button variant="ghost" size="sm" className="text-xs">
-                  <Settings className="h-3 w-3 mr-1" />
-                  Modifier
-                  {settingsOpen ? <ChevronUp className="h-3 w-3 ml-1" /> : <ChevronDown className="h-3 w-3 ml-1" />}
-                </Button>
-              </CollapsibleTrigger>
-            </Collapsible>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Settings panel */}
-          <Collapsible open={settingsOpen} onOpenChange={setSettingsOpen}>
-            <CollapsibleContent>
-              <div className="p-4 rounded-lg bg-muted/50 space-y-4 mb-4">
-                <p className="text-xs font-medium text-muted-foreground uppercase">Vos objectifs personnalisés</p>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-1">
-                    <Label htmlFor="cashTarget" className="text-xs">Cash cible (%)</Label>
-                    <Input
-                      id="cashTarget"
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={editableThresholds.cashTargetPct}
-                      onChange={(e) => setEditableThresholds(prev => ({ ...prev, cashTargetPct: Number(e.target.value) }))}
-                      className="h-8"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="maxPosition" className="text-xs">Max position (%)</Label>
-                    <Input
-                      id="maxPosition"
-                      type="number"
-                      min={1}
-                      max={100}
-                      value={editableThresholds.maxPositionPct}
-                      onChange={(e) => setEditableThresholds(prev => ({ ...prev, maxPositionPct: Number(e.target.value) }))}
-                      className="h-8"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="maxAssetClass" className="text-xs">Max classe (%)</Label>
-                    <Input
-                      id="maxAssetClass"
-                      type="number"
-                      min={1}
-                      max={100}
-                      value={editableThresholds.maxAssetClassPct}
-                      onChange={(e) => setEditableThresholds(prev => ({ ...prev, maxAssetClassPct: Number(e.target.value) }))}
-                      className="h-8"
-                    />
-                  </div>
-                </div>
-                <Button size="sm" onClick={handleSaveThresholds}>Enregistrer</Button>
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
+          </CardHeader>
+          <CardContent className="space-y-4">
 
-          {/* Cash vs target */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="flex items-center gap-2">
-                <Wallet className="h-4 w-4 text-muted-foreground" />
-                Liquidités
-              </span>
-              <span className="font-medium tabular-nums">
-                {data.currentCashPct.toFixed(0)}% / {data.thresholds.cashTargetPct}% cible
-              </span>
+            {/* KPIs */}
+            <div className="grid grid-cols-3 gap-4 pb-3 border-b border-border">
+              <KpiCard
+                label="CA encaissé"
+                value={fmtEUR(proData?.revenueEncaisse ?? 0)}
+                sub={
+                  proData && proData.paidInvoicesCount > 0
+                    ? `${proData.paidInvoicesCount} facture${proData.paidInvoicesCount > 1 ? 's' : ''}`
+                    : 'Aucun encaissement'
+                }
+                color="blue"
+              />
+              <KpiCard
+                label="Factures payées"
+                value={String(proData?.paidInvoicesCount ?? 0)}
+                sub={`ce mois`}
+              />
+              <KpiCard
+                label="En attente"
+                value={
+                  pendingInvoices.length > 0
+                    ? fmtEUR(pendingTotal)
+                    : '—'
+                }
+                sub={
+                  pendingInvoices.length > 0
+                    ? `${pendingInvoices.length} facture${pendingInvoices.length > 1 ? 's' : ''}`
+                    : 'Aucune en attente'
+                }
+                color={pendingInvoices.length > 0 ? 'amber' : undefined}
+              />
             </div>
-            <Progress 
-              value={Math.min(data.currentCashPct, 100)} 
-              className="h-2"
-            />
-            {data.currentCashPct > data.thresholds.cashTargetPct + 5 && (
-              <p className="text-xs text-muted-foreground">
-                +{(data.currentCashPct - data.thresholds.cashTargetPct).toFixed(0)}% au-dessus de la cible
+
+            {/* Breakdown charges */}
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <Receipt className="h-3 w-3" />
+                Détail des charges
               </p>
+
+              {proData ? (
+                <div className="space-y-0.5">
+                  <ChargeRow
+                    label="URSSAF payée"
+                    value={proData.urssafPaid}
+                  />
+                  <ChargeRow
+                    label="Provision IR"
+                    sub={`T${proData.quarter}`}
+                    value={proData.irProvision}
+                  />
+                  {proData.otherExpenses > 0 && (
+                    <ChargeRow
+                      label="Autres dépenses"
+                      value={proData.otherExpenses}
+                    />
+                  )}
+                  <ChargeRow
+                    label="Total charges"
+                    value={proData.totalCharges}
+                    bold
+                    separator
+                  />
+                  <ChargeRow
+                    label="Net après charges"
+                    value={proData.netAfterCharges}
+                    bold
+                    positive={proData.netAfterCharges > 0}
+                  />
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground py-2">
+                  Aucune donnée pro pour cette période.
+                </p>
+              )}
+            </div>
+
+            {/* Factures en attente — détail */}
+            {pendingInvoices.length > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 space-y-2">
+                <p className="text-xs font-semibold text-amber-700 flex items-center gap-1.5">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  {pendingInvoices.length} facture{pendingInvoices.length > 1 ? 's' : ''} en attente de paiement
+                </p>
+                <div className="space-y-1">
+                  {pendingInvoices.slice(0, 3).map((inv) => (
+                    <div key={inv.id} className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">{inv.client_name}</span>
+                      <span className="font-medium tabular-nums">{fmtEUR(inv.amount_ht)}</span>
+                    </div>
+                  ))}
+                  {pendingInvoices.length > 3 && (
+                    <p className="text-xs text-muted-foreground">
+                      +{pendingInvoices.length - 3} autre{pendingInvoices.length - 3 > 1 ? 's' : ''}…
+                    </p>
+                  )}
+                </div>
+                <Link
+                  to="/pro/invoices"
+                  className="inline-flex items-center gap-1 text-xs text-amber-700 hover:text-amber-800 font-medium"
+                >
+                  Gérer les factures <ArrowRight className="h-3 w-3" />
+                </Link>
+              </div>
             )}
-          </div>
 
-          {/* Concentrations */}
-          {data.mainConcentrations.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-sm font-medium flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-accent" />
-                Concentrations détectées
-              </p>
-              {data.mainConcentrations.map((c, i) => (
-                <div key={i} className="flex items-center justify-between text-sm p-2 rounded bg-accent/10">
-                  <span>{c.name}</span>
-                  <span className="font-medium tabular-nums text-accent-foreground">
-                    {c.pct.toFixed(1)}% ({c.type === 'position' ? `seuil ${data.thresholds.maxPositionPct}%` : `seuil ${data.thresholds.maxAssetClassPct}%`})
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Diversification score */}
-          <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-            <div className="flex items-center gap-2">
-              <PieChart className="h-4 w-4 text-primary" />
-              <span className="text-sm">Score de diversification</span>
-            </div>
-            <div className={`text-lg font-bold ${
-              data.diversificationScore >= 60 ? 'text-[hsl(var(--success))]' : 
-              data.diversificationScore >= 40 ? 'text-accent' : 'text-destructive'
-            }`}>
-              {data.diversificationScore}/100
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ═══════════════════════════════════════════════════════════════════════
-          BLOC C – PLAN D'ACTION
-      ═══════════════════════════════════════════════════════════════════════ */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-primary" />
-            Plan d'action
-          </CardTitle>
-          <CardDescription>
-            {visibleActions.length === 0 
-              ? 'Aucune action recommandée ce mois-ci'
-              : `${visibleActions.length} action${visibleActions.length > 1 ? 's' : ''} suggérée${visibleActions.length > 1 ? 's' : ''}`
-            }
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {visibleActions.length === 0 ? (
-            <div className="flex items-center gap-3 p-4 rounded-lg bg-[hsl(var(--success))]/10 text-[hsl(var(--success))]">
-              <CheckCircle2 className="h-5 w-5" />
-              <p className="text-sm">Votre portefeuille est bien équilibré. Continuez ainsi !</p>
-            </div>
-          ) : (
-            visibleActions.map((action) => (
-              <div key={action.id} className="p-4 rounded-lg border space-y-3">
-                <div className="flex items-start justify-between gap-2">
-                  <h4 className="text-sm font-medium">{action.title}</h4>
-                  {getEffortBadge(action.effort)}
-                </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  {action.reason}
-                </p>
-                <div className="flex gap-2">
-                  <Button 
-                    size="sm" 
-                    onClick={() => handleActionClick(action)}
-                    className="flex-1"
-                  >
-                    {action.ctaLabel}
-                    <ArrowRight className="h-3 w-3 ml-1" />
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    variant="ghost"
-                    onClick={() => setDismissedActions(prev => new Set([...prev, action.id]))}
-                  >
-                    Ignorer
-                  </Button>
-                </div>
+            {/* État vide — pas de CA encaissé */}
+            {!proLoading && proData && proData.revenueEncaisse === 0 && proData.totalCharges === 0 && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/40 text-sm text-muted-foreground">
+                <FileText className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>
+                  Aucune entrée pro enregistrée pour {periodLabel}.
+                  Marquez vos factures comme payées dans{' '}
+                  <Link to="/pro/invoices" className="text-foreground underline underline-offset-2">
+                    la section Factures
+                  </Link>.
+                </span>
               </div>
-            ))
-          )}
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════
+          SECTION 2 — ÉPARGNE & INVESTISSEMENT (à venir)
+      ══════════════════════════════════════════════════════════ */}
+      <Card className="border-dashed opacity-50">
+        <CardContent className="pt-5 flex items-center gap-3 text-muted-foreground text-sm">
+          <TrendingUp className="h-4 w-4 shrink-0" />
+          <span>Section Épargne & investissement — en cours de construction</span>
         </CardContent>
       </Card>
 
-      {/* ═══════════════════════════════════════════════════════════════════════
-          BLOC D – CHECKPOINT MENSUEL
-      ═══════════════════════════════════════════════════════════════════════ */}
-      <Card className="border-primary/20 bg-primary/5">
-        <CardContent className="py-6">
-          {checkpointCreated ? (
-            <div className="text-center space-y-2">
-              <CheckCircle2 className="h-10 w-10 text-[hsl(var(--success))] mx-auto" />
-              <p className="font-medium text-[hsl(var(--success))]">Point mensuel validé</p>
-              <p className="text-sm text-muted-foreground">
-                Enregistré le {format(new Date(), 'dd MMMM yyyy à HH:mm', { locale: fr })}
-              </p>
-            </div>
-          ) : (
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div>
-                <p className="font-medium">Valider mon point mensuel</p>
-                <p className="text-sm text-muted-foreground">
-                  Créer un checkpoint pour suivre votre progression
-                </p>
-              </div>
-              <Button 
-                onClick={handleCreateCheckpoint} 
-                disabled={isCreatingCheckpoint}
-                className="w-full sm:w-auto"
-              >
-                {isCreatingCheckpoint ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Création...
-                  </>
-                ) : (
-                  <>
-                    <Calendar className="h-4 w-4 mr-2" />
-                    Valider le checkpoint
-                  </>
-                )}
-              </Button>
-            </div>
-          )}
+      {/* ══════════════════════════════════════════════════════════
+          SECTION 3 — BILAN DU MOIS (à venir)
+      ══════════════════════════════════════════════════════════ */}
+      <Card className="border-dashed opacity-50">
+        <CardContent className="pt-5 flex items-center gap-3 text-muted-foreground text-sm">
+          <Wallet className="h-4 w-4 shrink-0" />
+          <span>Bilan narratif du mois — en cours de construction</span>
         </CardContent>
       </Card>
+
     </div>
   );
 }
