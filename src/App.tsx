@@ -22,6 +22,7 @@ const Profile = lazy(() => import("./pages/Profile"));
 const Settings = lazy(() => import("./pages/Settings"));
 
 // ─── Pages section /perso ──────────────────────────────────────────────────
+const Patrimoine = lazy(() => import("./pages/Patrimoine"));
 const Portfolio = lazy(() => import("./pages/Portfolio"));
 const Investments = lazy(() => import("./pages/Investments"));
 const Insights = lazy(() => import("./pages/Insights"));
@@ -71,10 +72,10 @@ const App = () => (
               />
 
               {/* ── Section /perso ────────────────────────────────────────── */}
-              {/* /perso/patrimoine : URL canonique (fusion Portfolio + Investments en étape 2) */}
+              {/* /perso/patrimoine : URL canonique — fusion Portfolio + Investments */}
               <Route
                 path="/perso/patrimoine"
-                element={<ProtectedPage><Portfolio /></ProtectedPage>}
+                element={<ProtectedPage><Patrimoine /></ProtectedPage>}
               />
               {/* /perso/portfolio conservé temporairement — redirigé en étape 5 */}
               <Route
