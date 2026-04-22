@@ -13,18 +13,20 @@ import { Link } from 'react-router-dom';
 import {
   Briefcase,
   TrendingUp,
+  TrendingDown,
   AlertCircle,
   CheckCircle2,
   ArrowRight,
   Receipt,
   Wallet,
   FileText,
+  PiggyBank,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -33,7 +35,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useMonthlyReviewPro } from '@/hooks/useMonthlyReviewPro';
+import { useMonthlyReviewPerso } from '@/hooks/useMonthlyReviewPerso';
 import { useInvoices } from '@/hooks/useInvoices';
+import { usePortfolioData } from '@/hooks/usePortfolioData';
+import { useFiscalProfile } from '@/hooks/useFiscalProfile';
+import { computeNetInvestable } from '@/lib/fiscalEngine';
 import { fmtEUR } from '@/lib/format';
 
 // ─────────────────────────────────────────────────────────────
@@ -188,7 +194,10 @@ export default function MonthlyReview() {
 
   // ── Données ─────────────────────────────────────────────────
   const { data: proData, isLoading: proLoading } = useMonthlyReviewPro(year, month);
+  const { data: persoData, isLoading: persoLoading } = useMonthlyReviewPerso(year, month);
   const { invoices, isLoading: invoicesLoading } = useInvoices();
+  const { totalValue, pnl, pnlPct, loading: portfolioLoading } = usePortfolioData();
+  const { profile } = useFiscalProfile();
 
   // Factures en attente (status 'sent'|'late') émises durant le mois sélectionné.
   // Calculé côté client depuis useInvoices — pas de doublon de requête Supabase.
@@ -204,6 +213,25 @@ export default function MonthlyReview() {
   }, [invoices, year, month]);
 
   const pendingTotal = pendingInvoices.reduce((s, inv) => s + inv.amount_ht, 0);
+
+  // ── Net investissable calculé pour le mois sélectionné ──────
+  // On réutilise computeNetInvestable (fiscalEngine) avec le CA du mois
+  // sélectionné — aucune requête supplémentaire.
+  const netInvestable = useMemo(() => {
+    if (!profile || !proData) return null;
+    const breakdown = computeNetInvestable({
+      monthlyRevenue: proData.revenueEncaisse,
+      regime: profile.regime,
+      versement_liberatoire: profile.versement_liberatoire,
+      personalExpenses: 0,
+    });
+    return breakdown.netAfterDeductions;
+  }, [profile, proData]);
+
+  // Delta = net investissable − réellement investi
+  const delta = netInvestable !== null && persoData !== null
+    ? netInvestable - persoData.investedThisMonth
+    : null;
 
   // ── Période affichée ─────────────────────────────────────────
   const periodLabel = format(new Date(year, month - 1, 1), 'MMMM yyyy', { locale: fr });
@@ -383,14 +411,116 @@ export default function MonthlyReview() {
       )}
 
       {/* ══════════════════════════════════════════════════════════
-          SECTION 2 — ÉPARGNE & INVESTISSEMENT (à venir)
+          SECTION 2 — ÉPARGNE & INVESTISSEMENT
       ══════════════════════════════════════════════════════════ */}
-      <Card className="border-dashed opacity-50">
-        <CardContent className="pt-5 flex items-center gap-3 text-muted-foreground text-sm">
-          <TrendingUp className="h-4 w-4 shrink-0" />
-          <span>Section Épargne & investissement — en cours de construction</span>
-        </CardContent>
-      </Card>
+      {portfolioLoading || persoLoading ? (
+        <SectionSkeleton />
+      ) : (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <PiggyBank className="h-4 w-4 text-primary" />
+              Épargne & investissement — {periodLabel}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+
+            {/* KPIs patrimoine */}
+            <div className="grid grid-cols-2 gap-4 pb-3 border-b border-border">
+              <KpiCard
+                label="Patrimoine actuel"
+                value={fmtEUR(totalValue)}
+                sub="valeur de marché"
+              />
+              <KpiCard
+                label="P&L total"
+                value={`${pnl >= 0 ? '+' : ''}${fmtEUR(pnl)}`}
+                sub={`${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%`}
+                color={pnl >= 0 ? 'green' : 'red'}
+              />
+            </div>
+
+            {/* Analyse épargne */}
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <Wallet className="h-3 w-3" />
+                Analyse épargne du mois
+              </p>
+
+              <div className="space-y-0.5">
+                <ChargeRow
+                  label="Net investissable (calculé)"
+                  value={netInvestable ?? 0}
+                />
+                <ChargeRow
+                  label="Réellement investi"
+                  value={persoData?.investedThisMonth ?? 0}
+                  sub={
+                    persoData && persoData.investmentCount > 0
+                      ? `${persoData.investmentCount} position${persoData.investmentCount > 1 ? 's' : ''}`
+                      : undefined
+                  }
+                />
+                <ChargeRow
+                  label="Épargne non déployée"
+                  value={Math.max(0, delta ?? 0)}
+                  bold
+                  separator
+                />
+              </div>
+            </div>
+
+            {/* Card delta — amber si non déployé, verte si objectif atteint */}
+            {delta !== null && (
+              delta > 0 ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-4 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                    <p className="text-sm font-medium text-amber-800">
+                      {fmtEUR(delta)} non investis ce mois
+                    </p>
+                  </div>
+                  <p className="text-xs text-amber-700/80">
+                    Vous avez encaissé et dégagé un net de {fmtEUR(netInvestable ?? 0)},
+                    mais seulement {fmtEUR(persoData?.investedThisMonth ?? 0)} ont été déployés.
+                  </p>
+                  <Button asChild size="sm" variant="outline" className="border-amber-300 text-amber-800 hover:bg-amber-100">
+                    <Link to={`/perso/investments?suggest=${Math.round(delta)}`}>
+                      Investir les {fmtEUR(delta)} restants
+                      <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
+                    </Link>
+                  </Button>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-green-200 bg-green-50/40 p-4 flex items-start gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-green-800">
+                      Objectif d'épargne atteint ✓
+                    </p>
+                    <p className="text-xs text-green-700/80 mt-0.5">
+                      Vous avez investi l'intégralité de votre net disponible ce mois.
+                    </p>
+                  </div>
+                </div>
+              )
+            )}
+
+            {/* État vide — pas de données portfolio */}
+            {!portfolioLoading && totalValue === 0 && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/40 text-sm text-muted-foreground">
+                <TrendingUp className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>
+                  Aucune position enregistrée.{' '}
+                  <Link to="/perso/investments" className="text-foreground underline underline-offset-2">
+                    Ajoutez vos investissements
+                  </Link>.
+                </span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* ══════════════════════════════════════════════════════════
           SECTION 3 — BILAN DU MOIS (à venir)
