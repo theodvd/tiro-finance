@@ -198,7 +198,7 @@ npx supabase db push --project-ref <VITE_SUPABASE_PROJECT_ID>
 # Créer une branche pour chaque étape de la Phase A
 git checkout -b feat/a1-nettoyage-repo
 
-# Commits atomiques — une chose par commit
+# Commits atomiques : une chose par commit
 git commit -m "feat(types): centralisation types parsers dans src/types/parsers.ts"
 git commit -m "chore(env): ajout .env.example"
 git commit -m "docs: mise à jour README structure repo"
@@ -211,18 +211,18 @@ git checkout main && git merge feat/a1-nettoyage-repo
 
 ## Roadmap Phase A (en cours)
 
-- [x] A1 — Nettoyage repo (`.env.example`, types centralisés, README)
-- [x] A2 — Restructuration des routes (`/pro/*`, `/perso/*`, redirects)
-- [x] A3 — Navigation unifiée (toggle Pro/Perso, renommage Solen→Solvio)
-- [x] A4 — Migrations Supabase (fiscal_profiles, invoices, social_contributions, tax_provisions, pro_cashflow_entries)
-- [x] A5 — Onboarding fiscal (useFiscalProfile, FiscalProfileForm, onglet Fiscal dans Profile, bannière Dashboard)
-- [x] A6 — `fiscalEngine` (calcul pur) + `useNetInvestable` (hook React, micro_bnc/bic, VL + barème estimé)
-- [x] A7 — Smoke tests : Vitest (34 tests fiscalEngine) + documentation test manuel parsers
+- [x] A1 : Nettoyage repo (`.env.example`, types centralisés, README)
+- [x] A2 : Restructuration des routes (`/pro/*`, `/perso/*`, redirects)
+- [x] A3 : Navigation unifiée (toggle Pro/Perso, renommage Solen→Solvio)
+- [x] A4 : Migrations Supabase (fiscal_profiles, invoices, social_contributions, tax_provisions, pro_cashflow_entries)
+- [x] A5 : Onboarding fiscal (useFiscalProfile, FiscalProfileForm, onglet Fiscal dans Profile, bannière Dashboard)
+- [x] A6 : `fiscalEngine` (calcul pur) + `useNetInvestable` (hook React, micro_bnc/bic, VL + barème estimé)
+- [x] A7 : Smoke tests : Vitest (34 tests fiscalEngine) + documentation test manuel parsers
 
 ## Roadmap Phase B (en cours)
 
-- [x] B1 — CRUD Factures
-  - [x] B1.1 — `useInvoices` (hook CRUD + `markAsPaid` → cashflow entry)
-  - [x] B1.2 — `InvoiceForm` (dialog modal Zod, TTC temps réel)
-  - [x] B1.3 — Page `/pro/invoices` (tableau, badges statut, actions)
-  - [x] B1.4 — `useProCashflow` + `useNetInvestable` branché sur CA réel
+- [x] B1 : CRUD Factures
+  - [x] B1.1 : `useInvoices` (hook CRUD + `markAsPaid` → cashflow entry)
+  - [x] B1.2 : `InvoiceForm` (dialog modal Zod, TTC temps réel)
+  - [x] B1.3 : Page `/pro/invoices` (tableau, badges statut, actions)
+  - [x] B1.4 : `useProCashflow` + `useNetInvestable` branché sur CA réel
